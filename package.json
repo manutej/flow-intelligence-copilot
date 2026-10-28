@@ -1,0 +1,22 @@
+{
+  "name": "flow-intelligence-copilot",
+  "version": "2.0.0",
+  "description": "FlowIQ Multifamily Portfolio Copilot, Deterministic Domain Engine, Eval Harness, and MCP Server (FLOW-101..106)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "eval": "node --no-warnings scripts/run-eval.ts",
+    "answer": "node --no-warnings scripts/generate-answers.ts",
+    "report": "node --no-warnings scripts/generate-reports.ts",
+    "generate-reports": "node --no-warnings scripts/generate-reports.ts",
+    "generate-answers": "node --no-warnings scripts/generate-answers.ts",
+    "rebuild-all": "npm run report && npm run answer && npm run build-ui && npm run eval",
+    "cli": "node --no-warnings src/cli.ts",
+    "mcp": "node --no-warnings src/mcp/server.ts",
+    "test": "node --no-warnings --test tests/*.test.ts",
+    "build-ui": "node --no-warnings scripts/build-ui.ts"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  }
+}

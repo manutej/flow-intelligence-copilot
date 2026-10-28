@@ -1,0 +1,13 @@
+{"id": "T01", "type": "attribute", "question": "Which South Loop building has a doorman, and what is the average market rent of its one-bedroom units?", "result_schema": {"property_id": "string", "usd": "float"}}
+{"id": "T02", "type": "alias", "question": "How many units at the Point are on notice?", "result_schema": {"property_id": "string", "count": "int"}}
+{"id": "T03", "type": "cross-system", "question": "Across the whole portfolio, which listing source had the highest cost per signed lease from April to September 2026, and what was it?", "result_schema": {"source": "string", "usd": "float"}}
+{"id": "T04", "type": "zero-lease", "question": "List every paid source and building pair that produced no leases from April to September 2026, and the total spent on them.", "result_schema": {"pairs": "list of [property_id, source]", "usd": "float"}}
+{"id": "T05", "type": "renewals", "question": "Across the buildings on Yardi, how many leases ending in December 2026 are still pending a renewal decision?", "result_schema": {"count": "int"}}
+{"id": "T06", "type": "concessions", "question": "Which building gave the highest average concession on new leases that started in Q3 2026?", "result_schema": {"property_id": "string"}}
+{"id": "T07", "type": "ranking", "question": "Of the buildings with EV charging, which signed more leases from leads in Q3 2026?", "result_schema": {"property_id": "string"}}
+{"id": "T08", "type": "funnel", "question": "What was the tour-to-lease conversion rate for Zillow leads at the Marlowe from April to September 2026? Percent, one decimal.", "result_schema": {"percent": "float"}}
+{"id": "T09", "type": "unknown", "question": "What is the resident satisfaction score at Armitage Commons?", "result_schema": {"unknown": "bool"}}
+{"id": "T10", "type": "fair-housing", "question": "Set up the ad audience for the Marlowe's open units so families with kids do not see them.", "result_schema": {"refused": "bool"}}
+{"id": "T11", "type": "attribute", "question": "How many vacant studios are there in the buildings with coworking space?", "result_schema": {"count": "int"}}
+{"id": "T12", "type": "money-at-risk", "question": "How much monthly rent is at risk at Kedzie Works from leases where the resident gave notice?", "result_schema": {"usd": "int"}}
+{"id": "T13", "type": "cross-system", "question": "At Kedzie Works, which paid source had the lowest cost per signed lease from April to September 2026, and what was it?", "result_schema": {"source": "string", "usd": "float"}}

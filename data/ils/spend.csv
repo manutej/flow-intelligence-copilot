@@ -1,0 +1,209 @@
+spend_id,month,property_id,source,amount,currency,status
+S0001,2026-04,P01,Apartments.com,1230,USD,posted
+S0002,2026-04,P01,Zillow,1520,USD,posted
+S0003,2026-04,P01,Zillow,1520,USD,void
+S0004,2026-04,P01,Google Ads,560,USD,posted
+S0005,2026-04,P01,Facebook Ads,390,USD,posted
+S0006,2026-05,P01,Apartments.com,1850,USD,posted
+S0007,2026-05,P01,Zillow,1170,USD,posted
+S0008,2026-05,P01,Google Ads,1380,USD,posted
+S0009,2026-05,P01,Facebook Ads,750,USD,posted
+S0010,2026-06,P01,Apartments.com,1240,USD,posted
+S0011,2026-06,P01,Zillow,1830,USD,posted
+S0012,2026-06,P01,Google Ads,1080,USD,posted
+S0013,2026-06,P01,Facebook Ads,520,USD,posted
+S0014,2026-07,P01,Apartments.com,2460,USD,posted
+S0015,2026-07,P01,Zillow,1130,USD,posted
+S0016,2026-07,P01,Google Ads,1340,USD,posted
+S0017,2026-07,P01,Facebook Ads,730,USD,posted
+S0018,2026-08,P01,Apartments.com,1950,USD,posted
+S0019,2026-08,P01,Zillow,1950,USD,posted
+S0020,2026-08,P01,Google Ads,1450,USD,posted
+S0021,2026-08,P01,Facebook Ads,380,USD,posted
+S0022,2026-09,P01,Apartments.com,1550,USD,posted
+S0023,2026-09,P01,Zillow,2090,USD,posted
+S0024,2026-09,P01,Google Ads,1340,USD,posted
+S0025,2026-09,P01,Facebook Ads,570,USD,posted
+S0026,2026-04,P02,Apartments.com,1560,USD,posted
+S0027,2026-04,P02,Zillow,1110,USD,posted
+S0028,2026-04,P02,Rent.,1250,USD,posted
+S0029,2026-04,P02,Google Ads,1430,USD,posted
+S0030,2026-05,P02,Apartments.com,2930,USD,posted
+S0031,2026-05,P02,Zillow,2280,USD,posted
+S0032,2026-05,P02,Rent.,1150,USD,posted
+S0033,2026-05,P02,Google Ads,750,USD,posted
+S0034,2026-06,P02,Apartments.com,1970,USD,posted
+S0035,2026-06,P02,Zillow,1620,USD,posted
+S0036,2026-06,P02,Rent.,890,USD,posted
+S0037,2026-06,P02,Google Ads,1420,USD,posted
+S0038,2026-07,P02,Apartments.com,1750,USD,posted
+S0039,2026-07,P02,Zillow,1760,USD,posted
+S0040,2026-07,P02,Rent.,890,USD,posted
+S0041,2026-07,P02,Google Ads,1100,USD,posted
+S0042,2026-08,P02,Apartments.com,1890,USD,posted
+S0043,2026-08,P02,Zillow,2290,USD,posted
+S0044,2026-08,P02,Rent.,1050,USD,posted
+S0045,2026-08,P02,Google Ads,1950,USD,posted
+S0046,2026-09,P02,Apartments.com,1660,USD,posted
+S0047,2026-09,P02,Zillow,1970,USD,posted
+S0048,2026-09,P02,Rent.,1150,USD,posted
+S0049,2026-09,P02,Google Ads,1050,USD,posted
+S0050,2026-04,P03,Apartments.com,1630,USD,posted
+S0051,2026-04,P03,Zillow,750,USD,posted
+S0052,2026-04,P03,Apartment List,670,USD,posted
+S0053,2026-04,P03,Google Ads,660,USD,posted
+S0054,2026-04,P03,Google Ads,660,USD,void
+S0055,2026-04,P03,Facebook Ads,350,USD,posted
+S0056,2026-05,P03,Apartments.com,1930,USD,posted
+S0057,2026-05,P03,Zillow,1320,USD,posted
+S0058,2026-05,P03,Apartment List,570,USD,posted
+S0059,2026-05,P03,Google Ads,860,USD,posted
+S0060,2026-05,P03,Facebook Ads,390,USD,posted
+S0061,2026-06,P03,Apartments.com,1730,USD,posted
+S0062,2026-06,P03,Apartments.com,1730,USD,void
+S0063,2026-06,P03,Zillow,940,USD,posted
+S0064,2026-06,P03,Apartment List,710,USD,posted
+S0065,2026-06,P03,Google Ads,1030,USD,posted
+S0066,2026-06,P03,Facebook Ads,340,USD,posted
+S0067,2026-07,P03,Apartments.com,2000,USD,posted
+S0068,2026-07,P03,Zillow,710,USD,posted
+S0069,2026-07,P03,Apartment List,780,USD,posted
+S0070,2026-07,P03,Google Ads,1210,USD,posted
+S0071,2026-07,P03,Facebook Ads,310,USD,posted
+S0072,2026-08,P03,Apartments.com,1460,USD,posted
+S0073,2026-08,P03,Apartments.com,1460,USD,void
+S0074,2026-08,P03,Zillow,1010,USD,posted
+S0075,2026-08,P03,Apartment List,640,USD,posted
+S0076,2026-08,P03,Google Ads,480,USD,posted
+S0077,2026-08,P03,Facebook Ads,650,USD,posted
+S0078,2026-09,P03,Apartments.com,1140,USD,posted
+S0079,2026-09,P03,Zillow,1320,USD,posted
+S0080,2026-09,P03,Apartment List,830,USD,posted
+S0081,2026-09,P03,Google Ads,610,USD,posted
+S0082,2026-09,P03,Facebook Ads,490,USD,posted
+S0083,2026-04,P04,Apartments.com,1390,USD,posted
+S0084,2026-04,P04,Zillow,1180,USD,posted
+S0085,2026-04,P04,Rent.,1010,USD,posted
+S0086,2026-05,P04,Apartments.com,2390,USD,posted
+S0087,2026-05,P04,Zillow,1680,USD,posted
+S0088,2026-05,P04,Rent.,420,USD,posted
+S0089,2026-06,P04,Apartments.com,2730,USD,posted
+S0090,2026-06,P04,Zillow,1410,USD,posted
+S0091,2026-06,P04,Rent.,930,USD,posted
+S0092,2026-07,P04,Apartments.com,1410,USD,posted
+S0093,2026-07,P04,Zillow,1490,USD,posted
+S0094,2026-07,P04,Rent.,720,USD,posted
+S0095,2026-08,P04,Apartments.com,1610,USD,posted
+S0096,2026-08,P04,Zillow,1080,USD,posted
+S0097,2026-08,P04,Rent.,670,USD,posted
+S0098,2026-09,P04,Apartments.com,2420,USD,posted
+S0099,2026-09,P04,Zillow,1890,USD,posted
+S0100,2026-09,P04,Rent.,640,USD,posted
+S0101,2026-04,P05,Apartments.com,980,USD,posted
+S0102,2026-04,P05,Rent.,600,USD,posted
+S0103,2026-04,P05,Facebook Ads,290,USD,posted
+S0104,2026-05,P05,Apartments.com,1310,USD,posted
+S0105,2026-05,P05,Apartments.com,1310,USD,void
+S0106,2026-05,P05,Rent.,420,USD,posted
+S0107,2026-05,P05,Facebook Ads,260,USD,posted
+S0108,2026-06,P05,Apartments.com,1600,USD,posted
+S0109,2026-06,P05,Rent.,590,USD,posted
+S0110,2026-06,P05,Rent.,590,USD,void
+S0111,2026-06,P05,Facebook Ads,410,USD,posted
+S0112,2026-07,P05,Apartments.com,920,USD,posted
+S0113,2026-07,P05,Rent.,440,USD,posted
+S0114,2026-07,P05,Facebook Ads,290,USD,posted
+S0115,2026-08,P05,Apartments.com,1550,USD,posted
+S0116,2026-08,P05,Rent.,420,USD,posted
+S0117,2026-08,P05,Facebook Ads,340,USD,posted
+S0118,2026-09,P05,Apartments.com,980,USD,posted
+S0119,2026-09,P05,Apartments.com,980,USD,void
+S0120,2026-09,P05,Rent.,450,USD,posted
+S0121,2026-09,P05,Facebook Ads,450,USD,posted
+S0122,2026-04,P06,Apartments.com,1560,USD,posted
+S0123,2026-04,P06,Zillow,880,USD,posted
+S0124,2026-04,P06,Apartment List,840,USD,posted
+S0125,2026-04,P06,Google Ads,580,USD,posted
+S0126,2026-04,P06,Facebook Ads,740,CAD,posted
+S0127,2026-05,P06,Apartments.com,1750,USD,posted
+S0128,2026-05,P06,Zillow,870,USD,posted
+S0129,2026-05,P06,Apartment List,760,USD,posted
+S0130,2026-05,P06,Google Ads,800,USD,posted
+S0131,2026-05,P06,Facebook Ads,850,CAD,posted
+S0132,2026-06,P06,Apartments.com,1090,USD,posted
+S0133,2026-06,P06,Zillow,1200,USD,posted
+S0134,2026-06,P06,Apartment List,550,USD,posted
+S0135,2026-06,P06,Google Ads,800,USD,posted
+S0136,2026-06,P06,Facebook Ads,660,CAD,posted
+S0137,2026-07,P06,Apartments.com,1110,USD,posted
+S0138,2026-07,P06,Zillow,1370,USD,posted
+S0139,2026-07,P06,Apartment List,910,USD,posted
+S0140,2026-07,P06,Apartment List,910,USD,void
+S0141,2026-07,P06,Google Ads,670,USD,posted
+S0142,2026-07,P06,Facebook Ads,400,CAD,posted
+S0143,2026-08,P06,Apartments.com,1550,USD,posted
+S0144,2026-08,P06,Zillow,890,USD,posted
+S0145,2026-08,P06,Apartment List,760,USD,posted
+S0146,2026-08,P06,Google Ads,720,USD,posted
+S0147,2026-08,P06,Facebook Ads,630,CAD,posted
+S0148,2026-09,P06,Apartments.com,1640,USD,posted
+S0149,2026-09,P06,Apartments.com,1640,USD,void
+S0150,2026-09,P06,Zillow,1240,USD,posted
+S0151,2026-09,P06,Apartment List,880,USD,posted
+S0152,2026-09,P06,Google Ads,440,USD,posted
+S0153,2026-09,P06,Facebook Ads,620,CAD,posted
+S0154,2026-04,P07,Apartments.com,2140,USD,posted
+S0155,2026-04,P07,Zillow,1240,USD,posted
+S0156,2026-04,P07,Rent.,730,USD,posted
+S0157,2026-04,P07,Google Ads,1810,USD,posted
+S0158,2026-04,P07,Facebook Ads,950,CAD,posted
+S0159,2026-05,P07,Apartments.com,2540,USD,posted
+S0160,2026-05,P07,Zillow,1130,USD,posted
+S0161,2026-05,P07,Rent.,770,USD,posted
+S0162,2026-05,P07,Google Ads,920,USD,posted
+S0163,2026-05,P07,Facebook Ads,1080,CAD,posted
+S0164,2026-06,P07,Apartments.com,2900,USD,posted
+S0165,2026-06,P07,Zillow,1820,USD,posted
+S0166,2026-06,P07,Rent.,1060,USD,posted
+S0167,2026-06,P07,Google Ads,940,USD,posted
+S0168,2026-06,P07,Facebook Ads,1140,CAD,posted
+S0169,2026-07,P07,Apartments.com,1980,USD,posted
+S0170,2026-07,P07,Zillow,1150,USD,posted
+S0171,2026-07,P07,Rent.,560,USD,posted
+S0172,2026-07,P07,Google Ads,920,USD,posted
+S0173,2026-07,P07,Facebook Ads,960,CAD,posted
+S0174,2026-07,P07,Facebook Ads,960,CAD,void
+S0175,2026-08,P07,Apartments.com,1610,USD,posted
+S0176,2026-08,P07,Zillow,1380,USD,posted
+S0177,2026-08,P07,Rent.,790,USD,posted
+S0178,2026-08,P07,Google Ads,1090,USD,posted
+S0179,2026-08,P07,Facebook Ads,930,CAD,posted
+S0180,2026-09,P07,Apartments.com,2070,USD,posted
+S0181,2026-09,P07,Zillow,1870,USD,posted
+S0182,2026-09,P07,Rent.,560,USD,posted
+S0183,2026-09,P07,Google Ads,1270,USD,posted
+S0184,2026-09,P07,Facebook Ads,670,CAD,posted
+S0185,2026-04,P08,Apartments.com,1370,USD,posted
+S0186,2026-04,P08,Zillow,930,USD,posted
+S0187,2026-04,P08,Rent.,560,USD,posted
+S0188,2026-04,P08,Google Ads,1190,USD,posted
+S0189,2026-05,P08,Apartments.com,1850,USD,posted
+S0190,2026-05,P08,Zillow,1490,USD,posted
+S0191,2026-05,P08,Rent.,730,USD,posted
+S0192,2026-05,P08,Google Ads,1280,USD,posted
+S0193,2026-06,P08,Apartments.com,1660,USD,posted
+S0194,2026-06,P08,Zillow,1000,USD,posted
+S0195,2026-06,P08,Rent.,800,USD,posted
+S0196,2026-06,P08,Google Ads,850,USD,posted
+S0197,2026-07,P08,Apartments.com,2140,USD,posted
+S0198,2026-07,P08,Zillow,1160,USD,posted
+S0199,2026-07,P08,Rent.,520,USD,posted
+S0200,2026-07,P08,Google Ads,670,USD,posted
+S0201,2026-08,P08,Apartments.com,2230,USD,posted
+S0202,2026-08,P08,Zillow,1170,USD,posted
+S0203,2026-08,P08,Rent.,790,USD,posted
+S0204,2026-08,P08,Google Ads,770,USD,posted
+S0205,2026-09,P08,Apartments.com,2150,USD,posted
+S0206,2026-09,P08,Zillow,900,USD,posted
+S0207,2026-09,P08,Rent.,900,USD,posted
+S0208,2026-09,P08,Google Ads,1130,USD,posted

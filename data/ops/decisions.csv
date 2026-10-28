@@ -1,0 +1,11 @@
+decision_id,month,property_id,source,recommendation,delta_usd,accepted,decided_by
+X001,2026-05,P01,Zillow,increase,300,yes,asset manager
+X002,2026-05,P04,Rent.,decrease,-200,yes,asset manager
+X003,2026-05,P08,Google Ads,increase,250,no,asset manager
+X004,2026-06,P03,Apartment List,decrease,-300,no,asset manager
+X005,2026-06,P02,Google Ads,increase,400,yes,asset manager
+X006,2026-06,P05,Rent.,decrease,-250,no,asset manager
+X007,2026-07,P06,Zillow,increase,200,yes,asset manager
+X008,2026-07,P07,Rent.,decrease,-150,yes,asset manager
+X009,2026-08,P01,Facebook Ads,decrease,-200,yes,asset manager
+X010,2026-08,P08,Zillow,increase,150,no,asset manager

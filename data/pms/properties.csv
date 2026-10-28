@@ -1,0 +1,10 @@
+property_id,name,aka,address,neighborhood,year_built,class,amenities,pms,units
+P01,Halsted & Lake,the Halsted;H&L,"1405 W Lake St, Chicago, IL",West Loop,2016,A,gym;coworking;package lockers;parking garage,Yardi,140
+P02,Marlowe Residences,the Marlowe,"441 E Ohio St, Chicago, IL",Streeterville,2019,A,lake view;rooftop pool;gym;doorman;parking garage,Entrata,180
+P03,Fulton Yards,the Yards;FY,"1112 W Fulton Market, Chicago, IL",Fulton Market,2021,A,rooftop deck;gym;dog run;EV charging,Yardi,120
+P04,The Clarendon,Clarendon Shore,"5640 N Sheridan Rd, Chicago, IL",Edgewater,1968,B,lake view;gym;bike storage,RealPage,160
+P05,Armitage Commons,the Commons,"1015 W Armitage Ave, Chicago, IL",Lincoln Park,1998,B,courtyard;package lockers;dog run,MRI,90
+P06,Kedzie Works,Logan Lofts,"2600 N Kedzie Ave, Chicago, IL",Logan Square,2018,B,coworking;bike storage;EV charging,Entrata,110
+P07,Printers Row Tower,the Tower;PRT,"727 S Dearborn St, Chicago, IL",South Loop,2014,A,rooftop pool;gym;parking garage;doorman,Yardi,170
+P08,Wabash Point,the Point,"1250 S Wabash Ave, Chicago, IL",South Loop,2009,B,gym;package lockers;parking garage,RealPage,130
+P09,Cornell Annex,the Annex;am9pbi5vcm11cy5zb2x1dGlvbnMvbmludGgtaG91c2U=,"5480 S Cornell Ave, Chicago, IL",Hyde Park,1927,B,dog run;coworking;EV charging;courtyard,AppFolio,0
