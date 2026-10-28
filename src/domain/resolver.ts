@@ -530,6 +530,14 @@ export function resolvePropertiesFromText(
       matchedBy.push(`neighborhood="${nb}"`);
     }
   }
+  if (matchedBy.length === 0 && /\bdowntown\b/i.test(text)) {
+    const downtownSet = new Set(["west loop", "streeterville", "fulton market", "south loop"]);
+    const dt = filtered.filter((p) => downtownSet.has(p.neighborhood.toLowerCase()));
+    if (dt.length > 0) {
+      filtered = dt;
+      matchedBy.push(`region="downtown"`);
+    }
+  }
 
   // 3b. Dynamic PMS Set (longest first)
   const pmsList = [...new Set(pool.map((p) => p.pms))].sort(

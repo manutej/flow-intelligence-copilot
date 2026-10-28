@@ -817,8 +817,10 @@ export function parseQueryIntent(
         question,
       ));
 
+  const isBleedingMarketing = /\b(?:bleed\w*|wast\w*|burn\w*)\s+(?:money|spend|budget)\s+on\s+(?:marketing|ads?|paid|channels?)\b/i.test(question);
   const isDeadSpendPairs =
     !isReallocation &&
+    (isBleedingMarketing || (
     (/\b(pairs?|pairings?|combos?|combinations?|property\/source|building\/source)\b/i.test(question) ||
       /\bwhich\s+paid\s+sources?\s*,?\s*(?:at\s+which\s+buildings?|by\s+building)\b/i.test(
         question,
@@ -826,7 +828,7 @@ export function parseQueryIntent(
       /\bwhich\s+buildings?\s+and\s+paid\s+sources?\b/i.test(question)) &&
     /\b(no\s+(?:resulting\s+|signed\s+)?leases?|zero\s+(?:signed\s+)?leases?|0\s+(?:signed\s+)?leases?|signed\s+no\s+leases?|came\s+up\s+empty|without\s+(?:any\s+)?(?:signed\s+)?leases?|dead\s+spend|zero-lease)\b/i.test(
       question,
-    );
+    )));
 
   const isSignedLeasesFromLeadsRanking =
     /\b(signed\s+(?:more|the\s+most)\s+(?:lead[-\s]driven\s+|lead[-\s]sourced\s+)?leases|most\s+(?:signed\s+)?leases\s+from\s+leads|more\s+(?:signed\s+)?leases\s+from\s+leads|more\s+leases\s+signed\s+from\s+leads|more\s+lead[-\s]sourced\s+lease\s+signings|converted\s+more\s+leads\s+into\s+signed\s+leases|turned\s+more\s+leads\s+into\s+signed\s+leases|higher\s+count\s+of\s+leases\s+signed\s+from\s+leads)\b/i.test(

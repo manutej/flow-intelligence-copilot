@@ -14,15 +14,24 @@ export async function runExternalMcpSmokeTest(
   targetServerPath = serverScript,
   workingDir = '/tmp',
 ): Promise<void> {
-  console.log(
-    '====================================================================================================',
-  );
-  console.log(
-    `  FLOW-104 EXTERNAL MCP STDIO SMOKE TEST (cwd="${workingDir}" -> ${targetServerPath})`,
-  );
-  console.log(
-    '====================================================================================================',
-  );
+  const wrapLine = (pfx: string, body: string): void => {
+    const w = Math.max(28, 72 - pfx.length);
+    const words = body.replace(/([,}\]])(?=[^\s])/g, "$1 ").split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let cur = "";
+    for (const tok of words) {
+      const nxt = cur ? `${cur} ${tok}` : tok;
+      if (nxt.length <= w) cur = nxt;
+      else { if (cur) lines.push(cur); cur = tok; }
+    }
+    if (cur) lines.push(cur);
+    console.log(`${pfx}${lines[0] ?? ""}`);
+    const pad = " ".repeat(pfx.length);
+    for (let i = 1; i < lines.length; i++) console.log(`${pad}${lines[i]}`);
+  };
+  console.log("=".repeat(72));
+  console.log(`FLOW-104 MCP STDIO SERVER SMOKE TEST (cwd="${workingDir}")`);
+  console.log("=".repeat(72));
 
   const child = spawn('node', ['--no-warnings', targetServerPath], {
     cwd: workingDir,
@@ -74,9 +83,7 @@ export async function runExternalMcpSmokeTest(
       serverInfo: { name: string };
     };
     assert.equal(initResult.serverInfo.name, 'flow-intelligence-mcp');
-    console.log(
-      `[PASS] 1. initialize             | server=${initResult.serverInfo.name} protocol=${initResult.protocolVersion}`,
-    );
+    wrapLine("[PASS] 1. initialize     | ", `server=${initResult.serverInfo.name} protocol=${initResult.protocolVersion}`);
 
     // 2. Notification initialized
     child.stdin.write(
@@ -89,9 +96,7 @@ export async function runExternalMcpSmokeTest(
       toolsResp.result as { tools: Array<{ name: string }> }
     ).tools;
     assert.equal(tools.length, 7);
-    console.log(
-      `[PASS] 2. tools/list             | exposed ${tools.length} tools: ${tools.map((t) => t.name).join(', ')}`,
-    );
+    wrapLine("[PASS] 2. tools/list     | ", `exposed ${tools.length} tools: ${tools.map((t) => t.name).join(", ")}`);
 
     // 4. resources/list & resources/read
     const resList = await rpcCall(3, 'resources/list');
@@ -110,9 +115,7 @@ export async function runExternalMcpSmokeTest(
       ).contents[0].text,
     ) as { totalIndexedPrimaryKeys: number };
     assert.equal(summaryJson.totalIndexedPrimaryKeys, 3858);
-    console.log(
-      `[PASS] 3. resources/read         | flowiq://portfolio/summary verified (${summaryJson.totalIndexedPrimaryKeys} PKs loaded from cwd="${workingDir}")`,
-    );
+    wrapLine("[PASS] 3. resources/read | ", `flowiq://portfolio/summary (${summaryJson.totalIndexedPrimaryKeys} PKs loaded)`);
 
     // 5. tools/call: ask_flowiq on T13 (Prompt Injection Immunity)
     const t13Resp = await rpcCall(5, 'tools/call', {
@@ -126,9 +129,7 @@ export async function runExternalMcpSmokeTest(
       (t13Resp.result as { content: Array<{ text: string }> }).content[0].text,
     ) as { result: { source: string; usd: number }; citations: string[] };
     assert.deepEqual(t13Payload.result, { source: 'Google Ads', usd: 2005 });
-    console.log(
-      `[PASS] 4. tools/call (T13)       | ask_flowiq defeated D01011 injection -> ${JSON.stringify(t13Payload.result)} (${t13Payload.citations.length} citations)`,
-    );
+    wrapLine("[PASS] 4. ask_flowiq T13 | ", `defeated D01011 injection -> ${JSON.stringify(t13Payload.result)} (${t13Payload.citations.length} cites)`);
 
     // 6. tools/call: ask_flowiq on B03 (Counterfactual Reallocation)
     const b03Resp = await rpcCall(6, 'tools/call', {
@@ -145,9 +146,7 @@ export async function runExternalMcpSmokeTest(
       source: 'Apartments.com',
       leases: 15,
     });
-    console.log(
-      `[PASS] 5. tools/call (B03)       | ask_flowiq dead-spend reallocation -> ${JSON.stringify(b03Payload.result)}`,
-    );
+    wrapLine("[PASS] 5. ask_flowiq B03 | ", `dead-spend reallocation -> ${JSON.stringify(b03Payload.result)}`);
 
     // 7. tools/call: find_properties ambiguity gate (FLOW-101)
     const ambResp = await rpcCall(7, 'tools/call', {
@@ -161,9 +160,7 @@ export async function runExternalMcpSmokeTest(
       (ambResp.result as { content: Array<{ text: string }> }).content[0].text,
     ) as { data: { status: string; matched: Array<{ propertyId: string }> } };
     assert.equal(ambPayload.data.status, 'ambiguous_match');
-    console.log(
-      `[PASS] 6. tools/call (FLOW-101)  | find_properties status="${ambPayload.data.status}", candidates=${JSON.stringify(ambPayload.data.matched.map((p) => p.propertyId))}`,
-    );
+    wrapLine("[PASS] 6. FLOW-101 gate  | ", `find_properties status="${ambPayload.data.status}" candidates=${JSON.stringify(ambPayload.data.matched.map((p) => p.propertyId))}`);
 
     // 8. tools/call: evaluate_budget_decisions (FLOW-105)
     const decResp = await rpcCall(8, 'tools/call', {
@@ -186,16 +183,11 @@ export async function runExternalMcpSmokeTest(
       decPayload.data.evaluatedDecisions[0].postOutcomeShrunkCpslUsd,
       3295,
     );
-    console.log(
-      `[PASS] 7. tools/call (FLOW-105)  | evaluate_budget_decisions X009 posterior=$${decPayload.data.evaluatedDecisions[0].postOutcomeShrunkCpslUsd.toFixed(2)}, windowInvariance=true`,
-    );
+    wrapLine("[PASS] 7. FLOW-105 X009  | ", `evaluate_budget_decisions posterior=${decPayload.data.evaluatedDecisions[0].postOutcomeShrunkCpslUsd.toFixed(2)} windowInvariance=true`);
 
-    console.log(
-      '----------------------------------------------------------------------------------------------------',
-    );
-    console.log(
-      'Summary: 7/7 external MCP stdio JSON-RPC checks passed from cwd="/tmp" with zero errors.',
-    );
+    console.log("-".repeat(72));
+    console.log("Summary: 7/7 MCP JSON-RPC 2.0 checks passed from cwd=\"/tmp\".");
+    console.log("=".repeat(72));
   } finally {
     rl.close();
     child.kill();

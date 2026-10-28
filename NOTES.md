@@ -1,6 +1,7 @@
 # Engineering Notes, Decision Log & Onboarding Plan (`FLOW-101`–`FLOW-106`)
 
 > **Second Seal & Verification Links:**
+> - **Screen Recording Walkthrough (3 Live Questions + `FLOW-104` MCP Server + `FLOW-106` Finale):** [**Watch Interactive Player (`demo.html`)**](https://repo-sigma-one-80.vercel.app/demo.html) · [**Direct 1080p MP4 (`demo-walkthrough.mp4`)**](https://repo-sigma-one-80.vercel.app/demo-walkthrough.mp4) · Local: [`public/demo-walkthrough.mp4`](public/demo-walkthrough.mp4)
 > - **Submission Answers (`17` lines: `T01..T13, B01..B03, EGGS`):** [`answers.jsonl`](answers.jsonl)
 > - **Full 27-Item Provenance, Clean-Room Python & Blind Red-Team Audit:** [`docs/PROVENANCE_VERIFICATION.md`](docs/PROVENANCE_VERIFICATION.md)
 > - **Architectural Changelog (`v2.1` Dynamic Column-Set Refactor & TUI):** [`CHANGELOG.md`](CHANGELOG.md)

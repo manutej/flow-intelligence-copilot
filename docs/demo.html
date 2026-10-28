@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en" style="color-scheme: dark;">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlowIQ Screen Recording · Ormus × FLOW</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ormus-deep: #0e1830;
+      --ormus-midnight: #14213d;
+      --ormus-gold: #d29e3d;
+      --ormus-gold-bright: #f0be59;
+      --ormus-ink: #eceae3;
+      --ormus-ink-muted: #b8b5ab;
+      --ormus-muted: #7d8597;
+      --ormus-hairline: rgba(210, 158, 61, 0.24);
+      --radius: 3px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 85% 8%, rgba(210, 158, 61, 0.08), transparent 42%), var(--ormus-deep);
+      color: var(--ormus-ink);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.55;
+    }
+    .topbar {
+      border-bottom: 1px solid var(--ormus-hairline);
+      background: rgba(14, 24, 48, 0.94);
+      padding: 14px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .mono-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ormus-ink-muted);
+    }
+    .mono-label::before { content: "/ "; color: var(--ormus-gold); }
+    .mono-label--gold { color: var(--ormus-gold); }
+    .nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.84rem;
+      padding: 8px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--ormus-hairline);
+      background: var(--ormus-midnight);
+      color: var(--ormus-ink);
+      text-decoration: none;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .btn:hover { border-color: var(--ormus-gold-bright); color: var(--ormus-gold-bright); }
+    .btn--gold {
+      background: var(--ormus-gold);
+      color: var(--ormus-deep);
+      border-color: var(--ormus-gold);
+      font-weight: 600;
+    }
+    .btn--gold:hover { background: var(--ormus-gold-bright); color: var(--ormus-deep); }
+    .container { max-width: 1360px; margin: 0 auto; padding: 36px 32px 72px; }
+    h1, h2, h3 {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-weight: 300;
+      letter-spacing: -0.01em;
+      margin: 0;
+    }
+    h1 { font-size: 2.65rem; line-height: 1.12; margin-top: 8px; }
+    h2 { font-size: 1.85rem; margin-bottom: 12px; }
+    .lede {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 1.3rem;
+      color: var(--ormus-ink-muted);
+      max-width: 960px;
+      margin: 10px 0 24px;
+    }
+    .player-grid {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 24px;
+      align-items: start;
+      margin-bottom: 36px;
+    }
+    @media (max-width: 1080px) {
+      .player-grid { grid-template-columns: 1fr; }
+    }
+    .video-card {
+      background: var(--ormus-midnight);
+      border: 1px solid var(--ormus-hairline);
+      border-top: 2px solid var(--ormus-gold);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    video {
+      width: 100%;
+      display: block;
+      aspect-ratio: 16 / 9;
+      background: #091022;
+    }
+    .video-footer {
+      padding: 12px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--ormus-hairline);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--ormus-ink-muted);
+    }
+    .chapters-card {
+      background: var(--ormus-midnight);
+      border: 1px solid var(--ormus-hairline);
+      border-top: 2px solid var(--ormus-gold);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+    .chapter-btn {
+      width: 100%;
+      text-align: left;
+      background: rgba(14, 24, 48, 0.65);
+      border: 1px solid var(--ormus-hairline);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      margin-top: 8px;
+      color: var(--ormus-ink);
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .chapter-btn:hover {
+      border-color: var(--ormus-gold-bright);
+      transform: translateY(-1px);
+    }
+    .chapter-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--ormus-gold);
+      display: block;
+      margin-bottom: 3px;
+    }
+    .chapter-title {
+      font-size: 0.86rem;
+      font-weight: 500;
+      display: block;
+    }
+    .chapter-desc {
+      font-size: 0.76rem;
+      color: var(--ormus-ink-muted);
+      display: block;
+      margin-top: 2px;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--ormus-midnight);
+      border: 1px solid var(--ormus-hairline);
+      border-top: 2px solid var(--ormus-gold);
+      border-radius: var(--radius);
+      margin-top: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid rgba(210, 158, 61, 0.14);
+      vertical-align: top;
+    }
+    th {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ormus-gold);
+      background: rgba(14, 24, 48, 0.6);
+    }
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--ormus-gold-bright);
+      background: rgba(210, 158, 61, 0.12);
+      padding: 2px 5px;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="mono-label mono-label--gold">ORMUS × FLOW · PORTFOLIO INTELLIGENCE COPILOT (FLOW-101..106)</div>
+    <nav class="nav-links">
+      <a class="btn btn--gold" href="/demo-walkthrough.mp4" download>Download MP4 (1080p)</a>
+      <a class="btn" href="/field-notebook.html">Field Notebook (Architecture &amp; Celestial Map)</a>
+      <a class="btn" href="/">Interactive Copilot Dashboard</a>
+      <a class="btn" href="https://github.com/manutej/flow-intelligence-copilot" target="_blank" rel="noopener">GitHub Repo</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="mono-label mono-label--gold">OFFICIAL SCREEN RECORDING WALKTHROUGH · 3 LIVE QUESTIONS + FLOW-104 MCP SERVER + FLOW-106</div>
+    <h1>FlowIQ Portfolio Intelligence Copilot — Screen Walkthrough</h1>
+    <p class="lede">
+      Walkthrough of the 4-stage architecture and 28-node celestial constellation, the agent answering three questions live (including one over the FLOW-104 JSON-RPC 2.0 MCP server on stdio), the 3-stage policy ablation harness (30% → 80% → 100%), and the FLOW-106 Ninth House onboarding blueprint.
+    </p>
+
+    <div class="player-grid">
+      <div class="video-card">
+        <video id="walkthrough-video" controls autoplay muted playsinline preload="metadata" poster="/demo-poster.png">
+          <source src="/demo-walkthrough.mp4" type="video/mp4" />
+          Your browser does not support HTML5 MP4 video.
+        </video>
+        <div class="video-footer">
+          <span>1920×1080 · 30 FPS · H.264 (yuv420p) · Recorded via Vibium</span>
+          <span>✓ 27/27 answers.jsonl · ✓ 7/7 MCP JSON-RPC</span>
+        </div>
+      </div>
+
+      <aside class="chapters-card">
+        <div class="mono-label mono-label--gold">INTERACTIVE CHAPTER MARKERS</div>
+        <button class="chapter-btn" onclick="seekTo(0)">
+          <span class="chapter-time">00:00 · BEAT 01</span>
+          <span class="chapter-title">Architecture SVG &amp; 28-Node Celestial Map</span>
+          <span class="chapter-desc">4-stage pipeline, interactive constellation &amp; 27-item validator in field-notebook.html</span>
+        </button>
+        <button class="chapter-btn" onclick="seekTo(16.5)">
+          <span class="chapter-time">00:16 · BEAT 02 (QUESTION 1 OF 3)</span>
+          <span class="chapter-title">Unique Building Resolution &amp; Row Citations</span>
+          <span class="chapter-desc">Printers Row Tower (P07) → 4.7% vacancy (8/170 units) with verified units:U08xx PKs</span>
+        </button>
+        <button class="chapter-btn" onclick="seekTo(28.0)">
+          <span class="chapter-time">00:28 · BEAT 03 (QUESTION 2 OF 3)</span>
+          <span class="chapter-title">FLOW-101 Ambiguity Gate &amp; Safety Guards</span>
+          <span class="chapter-desc">"the South Loop building" (P07 vs P08) &amp; "the downtown building" → clarification_needed: true</span>
+        </button>
+        <button class="chapter-btn" onclick="seekTo(40.0)">
+          <span class="chapter-time">00:40 · BEAT 04 (QUESTION 3 VIA FLOW-104 MCP)</span>
+          <span class="chapter-title">Live MCP Server over JSON-RPC 2.0 Stdio</span>
+          <span class="chapter-desc">Spawns src/mcp/server.ts: T13 injection quarantine (Google Ads $2,005) &amp; $46,599.90 dead spend</span>
+        </button>
+        <button class="chapter-btn" onclick="seekTo(58.0)">
+          <span class="chapter-time">00:58 · BEAT 05</span>
+          <span class="chapter-title">generate:answers (17 Lines) &amp; 3-Stage Eval</span>
+          <span class="chapter-desc">Clean-clone answers.jsonl with citations + ablation v0 (3/10) → v1 (8/10) → v2 (10/10)</span>
+        </button>
+        <button class="chapter-btn" onclick="seekTo(75.0)">
+          <span class="chapter-time">01:15 · BEAT 06 (FINALE)</span>
+          <span class="chapter-title">FLOW-106: The Ninth House (P09 Cornell Annex)</span>
+          <span class="chapter-desc">npm run flow-106 · AppFolio Week-1 exports, status/amenity mapping &amp; Asset Manager question</span>
+        </button>
+      </aside>
+    </div>
+
+    <section>
+      <div class="mono-label mono-label--gold">THREE LIVE QUESTIONS &amp; FLOW-104 MCP VERIFICATION MATRIX</div>
+      <h2>Summary of Questions Answered in the Recording</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Ticket &amp; Surface</th>
+              <th>Question / Command Executed</th>
+              <th>Schema Result &amp; Verified Row Citations</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Q1</strong></td>
+              <td><code>FLOW-101</code> + <code>FLOW-103</code><br/>CLI (<code>npm run ask</code>)</td>
+              <td><code>"What is the vacancy rate at Printers Row Tower?"</code><br/>(Also resolves nicknames: <em>"the Tower"</em>, <em>"PRT"</em>, <em>"Logan Lofts"</em>)</td>
+              <td><code>{"percent": 4.7}</code> (8 vacant / 170 units at P07)<br/>Citations: <code>properties:P07, units:U0801..U0805</code> (Verified PASS)</td>
+            </tr>
+            <tr>
+              <td><strong>Q2</strong></td>
+              <td><code>FLOW-101</code> Ambiguity Gate<br/>CLI (<code>npm run ask</code>)</td>
+              <td><code>"What is the vacancy rate at the South Loop building?"</code><br/><code>"How many vacant units at the downtown building?"</code></td>
+              <td><code>{"clarification_needed": true, "candidates": ["P07", "P08"]}</code> (and <code>["P01","P02","P03","P07","P08"]</code> for downtown) — refuses to guess &amp; names distinguishing traits</td>
+            </tr>
+            <tr>
+              <td><strong>Q3</strong></td>
+              <td><code>FLOW-104</code> MCP Server + <code>FLOW-102</code> + <code>FLOW-105</code><br/>JSON-RPC 2.0 over stdio (<code>npm run mcp:demo</code>) &amp; Web Dashboard</td>
+              <td>
+                1. <code>tools/call ask_flowiq</code> on <strong>T13</strong> (Kedzie Works lowest CPSL with <code>leads:D01011</code> prompt injection)<br/>
+                2. <code>tools/call query_marketing_spend_and_funnel</code> &amp; <code>ask_flowiq</code> on <em>"Which of my buildings is bleeding money on marketing right now, and why?"</em> (<strong>T04 / B03</strong>)<br/>
+                3. <code>tools/call evaluate_budget_decisions</code> on <strong>X009</strong> (<strong>FLOW-105</strong>)
+              </td>
+              <td>
+                1. <strong>T13:</strong> <code>{"source": "Google Ads", "usd": 2005}</code> (D01011 injection quarantined)<br/>
+                2. <strong>T04/B03:</strong> <code>$46,599.90</code> dead spend across 9 zero-lease pairs → <code>Apartments.com (+15 leases)</code><br/>
+                3. <strong>FLOW-105:</strong> <code>X009</code> posterior CPSL <code>$3,295.00</code> (<code>windowInvariance: true</code>)
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function seekTo(sec) {
+      const v = document.getElementById('walkthrough-video');
+      if (!v) return;
+      v.currentTime = sec;
+      v.play().catch(() => {});
+    }
+  </script>
+</body>
+</html>

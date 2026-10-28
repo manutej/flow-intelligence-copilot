@@ -24,6 +24,12 @@
 
 # FlowIQ (`flow-intelligence-copilot`)
 
+> 🎥 **Official Screen Recording Walkthrough (3 Questions + `FLOW-104` MCP Server + `FLOW-106` Ninth House):**
+> - **Interactive Video Player (with Chapter Markers):** [**https://repo-sigma-one-80.vercel.app/demo.html**](https://repo-sigma-one-80.vercel.app/demo.html)
+> - **Direct 1080p MP4 Stream / Download:** [**https://repo-sigma-one-80.vercel.app/demo-walkthrough.mp4**](https://repo-sigma-one-80.vercel.app/demo-walkthrough.mp4) *(also committed at [`public/demo-walkthrough.mp4`](public/demo-walkthrough.mp4))*
+> - **Interactive Field Notebook (4-Stage Architecture SVG & 28-Node Celestial Chart):** [**https://repo-sigma-one-80.vercel.app/field-notebook.html**](https://repo-sigma-one-80.vercel.app/field-notebook.html)
+> - **Live Copilot Dashboard:** [**https://repo-sigma-one-80.vercel.app**](https://repo-sigma-one-80.vercel.app)
+
 **FlowIQ is a portfolio and marketing copilot for an eight-building Chicago apartment portfolio (`P01`–`P08`, `1,100` units, plus `P09 Cornell Annex` on onboarding hold).** It connects six disconnected exports—property records, unit directories, lease rolls, CRM leads, ad-spend bills, and historical budget decisions—so operators and executives can ask natural-language questions and get exact, row-cited answers.
 
 When an unguarded language model reads raw property exports directly, it trips over real operational mess: cancelled ad invoices, un-converted Canadian-dollar bills, duplicate phone leads, cross-month lease signing lags, a zero-unit onboarding building (`P09`), and an adversarial prompt injection hidden inside a CRM lead note (`leads:D01011`).
