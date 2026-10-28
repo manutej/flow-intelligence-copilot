@@ -1,8 +1,17 @@
 {
   "mcpServers": {
-    "flowiq": {
+    "flowiq-portfolio-copilot": {
       "command": "node",
-      "args": ["--no-warnings", "src/mcp/server.ts"]
+      "args": [
+        "--no-warnings",
+        "/workspace/ormus-flow-challenge/repo/src/mcp/server.ts"
+      ],
+      "env": {
+        "FLOW_CAD_RATE": "0.73",
+        "FLOW_OCCUPIED_INCLUDES_NOTICE": "true",
+        "FLOW_LEASE_BUCKET_BY": "lease_start_date",
+        "FLOW_PRIOR_BETA0": "3250"
+      }
     }
   }
 }

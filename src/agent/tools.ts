@@ -14,13 +14,21 @@ import {
   type PropertyFilterCriteria,
   resolveProperties,
 } from '../domain/resolver.ts';
+import {
+  evaluateSheafCoboundary,
+  FLOW_PORTFOLIO_SHEAF_EDGES,
+  portfolioStoreToGenericTables,
+  verifySheafConsistency,
+} from '../domain/sheaf.ts';
+import { FLOW_PORTFOLIO_SCHEMA } from '../schema.ts';
 
 export type AgentToolName =
   | 'find_properties'
   | 'query_units_and_occupancy'
   | 'query_leases_and_renewals'
   | 'query_marketing_spend_and_funnel'
-  | 'evaluate_budget_decisions';
+  | 'evaluate_budget_decisions'
+  | 'audit_sheaf_consistency';
 
 export interface ToolDefinition {
   readonly name: AgentToolName;
@@ -334,6 +342,20 @@ export const FLOWIQ_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       },
     },
   },
+  {
+    name: 'audit_sheaf_consistency',
+    description:
+      'Cellular Sheaf Coboundary & Quarantine Audit: Evaluates all 6 restriction edges (E1..E6) and stalk quarantine functors across properties, units, leases, leads, spend, and decisions in O(N) time, returning exact primary-key citations for every coboundary residual ||delta_s||.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        includeGenericReport: {
+          type: 'boolean',
+          description: 'Include generic schema-driven consistency report',
+        },
+      },
+    },
+  },
 ];
 
 export function executeAgentTool(
@@ -557,6 +579,20 @@ export function executeAgentTool(
             true,
           ),
         },
+      };
+    }
+
+    case 'audit_sheaf_consistency': {
+      const coboundary = evaluateSheafCoboundary(store, FLOW_PORTFOLIO_SHEAF_EDGES);
+      const generic = args.includeGenericReport
+        ? verifySheafConsistency(FLOW_PORTFOLIO_SCHEMA, portfolioStoreToGenericTables(store))
+        : undefined;
+      return {
+        toolName,
+        args,
+        outputSummary: `isGlobalSection=${coboundary.isGlobalSection}, blockingResiduals=${coboundary.blockingResidualCount}, totalResiduals=${coboundary.totalResidualCount}`,
+        citations: coboundary.citations.slice(0, 16),
+        rawOutput: generic ? { coboundary, generic } : coboundary,
       };
     }
   }

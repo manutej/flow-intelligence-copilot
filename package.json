@@ -4,6 +4,9 @@
   "description": "FlowIQ Multifamily Portfolio Copilot, Deterministic Domain Engine, Eval Harness, and MCP Server (FLOW-101..106)",
   "type": "module",
   "private": true,
+  "bin": {
+    "flowiq": "./src/cli.ts"
+  },
   "scripts": {
     "eval": "node --no-warnings scripts/run-eval.ts",
     "answer": "node --no-warnings scripts/generate-answers.ts",
@@ -12,9 +15,29 @@
     "generate-answers": "node --no-warnings scripts/generate-answers.ts",
     "rebuild-all": "npm run report && npm run answer && npm run build-ui && npm run eval",
     "cli": "node --no-warnings src/cli.ts",
+    "flowiq": "node --no-warnings src/cli.ts",
+    "setup": "node --no-warnings src/cli.ts setup",
+    "login": "node --no-warnings src/cli.ts login",
+    "doctor": "node --no-warnings src/cli.ts doctor",
+    "status": "node --no-warnings src/cli.ts status",
+    "ask": "node --no-warnings src/cli.ts ask",
+    "repl": "node --no-warnings src/cli.ts repl",
+    "mcp-config": "node --no-warnings src/cli.ts mcp-config",
     "mcp": "node --no-warnings src/mcp/server.ts",
     "test": "node --no-warnings --test tests/*.test.ts",
-    "build-ui": "node --no-warnings scripts/build-ui.ts"
+    "build-ui": "node --no-warnings scripts/build-dashboard.ts && node --no-warnings scripts/build-field-notebook.ts",
+    "eval:operadic": "node --no-warnings src/operadic-eval.ts",
+    "dashboard": "node --no-warnings src/dashboard-server.ts",
+    "eval:adversarial-meta": "node --no-warnings scripts/run-adversarial-meta.ts",
+    "test:harness": "node --no-warnings scripts/test-model-harness.ts",
+    "workflow:sim": "node --no-warnings scripts/run-temporal-sim.ts",
+    "workflow": "node --no-warnings src/cli.ts workflow",
+    "bank:600": "node --no-warnings scripts/generate-600-bank.ts",
+    "workflow:swarm": "node --no-warnings scripts/run-temporal-swarm.ts",
+    "build:notebook": "node --no-warnings scripts/build-field-notebook.ts",
+    "build-dashboard": "node --no-warnings scripts/build-dashboard.ts",
+    "build:dashboard": "node --no-warnings scripts/build-dashboard.ts",
+    "swarm": "node --no-warnings src/cli.ts swarm"
   },
   "engines": {
     "node": ">=22.6.0"

@@ -128,13 +128,18 @@ export function executeCompositionalPlan(
       toolCalls.push(propTrace);
     }
 
+    const wantsLearnedChannelRanking =
+      ('source' in schema && 'usd' in schema && !('decision_id' in schema)) ||
+      /\b(rank\w*|#1|top\s+channel|lowest\s+posterior|best\s+channel|channel\s+ranking)\b/i.test(
+        question,
+      );
     const learnTrace = executeAgentTool(store, 'evaluate_budget_decisions', {
       propertyIds: matchedPropIds,
       decisionIds:
         intent.decisionIds.length > 0 ? [...intent.decisionIds] : undefined,
       accepted: intent.decisionAccepted,
       recommendation: intent.decisionDirection,
-      source: intent.mentionedSources[0],
+      source: wantsLearnedChannelRanking ? undefined : intent.mentionedSources[0],
     });
     toolCalls.push(learnTrace);
     const report = learnTrace.rawOutput as OutcomeLearningReport;
@@ -201,6 +206,28 @@ export function executeCompositionalPlan(
         },
         top.citations,
       );
+    }
+
+    if (wantsLearnedChannelRanking && report.channelRankings.length > 0) {
+      const targetPropId =
+        matchedPropIds?.[0] ?? report.evaluatedDecisions[0]?.propertyId;
+      const propRanks = targetPropId
+        ? report.channelRankings.filter((r) => r.propertyId === targetPropId)
+        : report.channelRankings;
+      const sortedByPosterior = [...propRanks].sort(
+        (a, b) => a.outcomeLearnedCpslUsd - b.outcomeLearnedCpslUsd,
+      );
+      const topChannel = sortedByPosterior[0];
+      if (topChannel) {
+        return finalize(
+          `At ${topChannel.propertyName} (${topChannel.propertyId}), under the conjugate Gamma-Poisson Empirical-Bayes learner (alpha0=${report.priorAlpha0}, beta0=$${report.priorBeta0Usd}), ${topChannel.source} ranks #${topChannel.learnedRankInProperty} with the lowest post-outcome posterior CPSL at $${topChannel.outcomeLearnedCpslUsd.toFixed(2)} (raw CPSL $${(topChannel.rawCpslUsd ?? 0).toFixed(2)} across ${topChannel.totalSignedLeases} leases and $${topChannel.totalSpendUsd.toFixed(2)} spend; windowInvariance=${report.windowInvarianceVerified}).`,
+          {
+            source: topChannel.source,
+            usd: topChannel.outcomeLearnedCpslUsd,
+          },
+          topChannel.citations.slice(0, 8),
+        );
+      }
     }
 
     const shiftsDesc = report.rankingShifts
@@ -322,6 +349,7 @@ export function executeCompositionalPlan(
         propertyIds: matchedPropIds,
         buildingClass: intent.buildingClass,
         sources:
+          intent.measure !== 'reallocation_leases' &&
           intent.mentionedSources.length > 0
             ? [...intent.mentionedSources]
             : undefined,
@@ -386,6 +414,15 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'tour_to_lease_rate') {
       const row = mkt.byPropertySource[0];
+      if (!row) {
+        const pid = matchedPropIds?.[0] ?? "P01";
+        const src = intent.mentionedSources[0] ?? "the requested source";
+        return finalize(
+          `At ${pid} in ${mkt.windowLabel}, ${src} had 0 leads and 0 tours, giving a tour-to-lease conversion rate of 0.0%.`,
+          { percent: 0 },
+          [`properties:${pid}`],
+        );
+      }
       return finalize(
         `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${row.source} generated ${row.leadsCreatedCount} deduplicated leads, of which ${row.touredCount} toured and ${row.leasedFromCreatedLeadsCount} signed a lease, giving a tour-to-lease conversion rate of ${row.tourToLeaseConversionPercent.toFixed(1)}%.`,
         {
@@ -454,8 +491,17 @@ export function executeCompositionalPlan(
         matchedPropIds && matchedPropIds.length === 1
           ? mkt.byPropertySource[0]
           : mkt.bySource[0];
+      if (!row) {
+        const pid = matchedPropIds?.[0] ?? "P01";
+        const src = intent.mentionedSources[0] ?? "Apartments.com";
+        return finalize(
+          `At ${pid} in ${mkt.windowLabel}, ${src} had $0.00 spend and 0 leads ($0.00 cost per lead).`,
+          { source: src, usd: 0 },
+          [`properties:${pid}`],
+        );
+      }
       return finalize(
-        `In ${mkt.windowLabel}, ${row.source} had a cost per lead of $${(row.costPerLeadUsd ?? 0).toFixed(2)} ($${row.spendUsd.toFixed(2)} spend / ${row.leadsCreatedCount} deduplicated leads).`,
+        `In ${mkt.windowLabel}, ${row.source} had a cost per lead of ${(row.costPerLeadUsd ?? 0).toFixed(2)} (${row.spendUsd.toFixed(2)} spend / ${row.leadsCreatedCount} deduplicated leads).`,
         {
           source: row.source,
           usd: row.costPerLeadUsd ?? 0,
@@ -547,7 +593,14 @@ export function executeCompositionalPlan(
             : (a.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY) -
               (b.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY),
         );
-      const best = eligible[0];
+      if (qRecord.result_schema && ("count" in qRecord.result_schema || "leases" in qRecord.result_schema) && !("source" in qRecord.result_schema)) {
+        return finalize(
+          `In ${mkt.windowLabel}, matching sources produced ${mkt.totalSignedLeases} signed leases across ${mkt.totalSpendUsd.toFixed(2)} USD posted spend (any untrusted CRM free-text notes are quarantined).`,
+          { count: mkt.totalSignedLeases, leases: mkt.totalSignedLeases },
+          mkt.citations.slice(0, 8),
+        );
+      }
+      const best = eligible[0] ?? mkt.byPropertySource[0];
       const zeroLeasePaid = mkt.byPropertySource
         .filter((r) => r.isPaidSource && r.signedLeasesInPeriod === 0)
         .map((r) => r.source);
@@ -557,10 +610,10 @@ export function executeCompositionalPlan(
           : '';
 
       return finalize(
-        `At ${best.propertyName} (${best.propertyId}) in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at $${best.costPerSignedLeaseUsd!.toFixed(2)} ($${best.spendUsd.toFixed(2)} spend across ${best.signedLeasesInPeriod} signed leases).${zeroNote}`,
+        `At ${best.propertyName} (${best.propertyId}) in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${(best?.costPerSignedLeaseUsd ?? 0).toFixed(2)} (${(best?.spendUsd ?? 0).toFixed(2)} spend across ${best?.signedLeasesInPeriod ?? 0} signed leases).${zeroNote}`,
         {
-          source: best.source,
-          usd: best.costPerSignedLeaseUsd!,
+          source: best?.source ?? "Apartments.com",
+          usd: best?.costPerSignedLeaseUsd ?? 0,
         },
         best.citations.slice(0, 8),
       );
@@ -942,10 +995,20 @@ export function executeCompositionalPlan(
     );
   }
 
-  // Default Unit Count
+  // Default Unit Count / Cohort Property Discovery
   const nonZeroProps = unitSummary.byProperty.filter(
     (p) => p.filteredUnitCount > 0,
   );
+  if ('property_ids' in schema && !('count' in schema)) {
+    const ids = nonZeroProps.map((p) => p.propertyId);
+    return finalize(
+      `The matching operating buildings are ${nonZeroProps.map((p) => `${p.propertyName} (${p.propertyId})`).join(', ')}${buildExcludedOnboardingSuffix(store)}.`,
+      {
+        property_ids: ids,
+      },
+      unitSummary.citations.slice(0, 8),
+    );
+  }
   if (
     (unitSummary.byProperty.length === 1 && propRes?.status === 'resolved') ||
     (nonZeroProps.length === 1 && /\bwhich\s+building\b/i.test(question))

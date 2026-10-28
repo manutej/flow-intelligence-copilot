@@ -311,6 +311,16 @@ export function parseDateWindowFromText(
   if (/\b(end(s|ing)?\s+in\s+2026)\b/i.test(question)) {
     return DATE_WINDOWS.YEAR_2026;
   }
+  const isoSingleMonth = question.match(/\b(202[67]-\d{2})(?:-\d{2})?\b/);
+  if (isoSingleMonth && !/\bto\b/i.test(question)) {
+    const ym = isoSingleMonth[1];
+    const match = Object.values(DATE_WINDOWS).find(
+      (w) => w.months.length === 1 && w.months[0] === ym,
+    );
+    if (match) {
+      return match;
+    }
+  }
   return DATE_WINDOWS.APR_SEP_2026;
 }
 
@@ -356,14 +366,20 @@ export function parseQueryIntent(
     : undefined;
 
   const decisionIdMatches = [
-    ...question.matchAll(/\b(X0(?:0[1-9]|10))\b/gi),
+    ...question.matchAll(/\b(X\d{3,4})\b/gi),
   ].map((m) => m[1].toUpperCase());
   const decisionIds = [...new Set(decisionIdMatches)];
 
+  const hasExplicitPropertyCohort =
+    /\bP0[1-9]\b/i.test(question) ||
+    /\b(between|among\s+the\s+buildings|of\s+the\s+buildings)\b/i.test(question);
+
   const isWholePortfolioExplicit =
-    /\b(across\s+the\s+(whole\s+)?portfolio|whole\s+portfolio|portfolio\s+total|every\s+paid\s+source\s+and\s+building\s+pair|which\s+operating\s+building|which\s+building\s+gave\s+the\s+(highest|lowest)|which\s+building\s+has\s+the\s+(highest|lowest))\b/i.test(
+    /\b(across\s+the\s+(whole\s+)?portfolio|whole\s+portfolio|portfolio\s+total|every\s+paid\s+source\s+and\s+building\s+pair|which\s+building\s+gave\s+the\s+(highest|lowest))\b/i.test(
       question,
-    );
+    ) ||
+    (!hasExplicitPropertyCohort &&
+      /\bwhich\s+building\s+has\s+the\s+(highest|lowest)\b/i.test(question));
 
   const aggregation: IntentAggregation = isClassComparison
     ? 'compare'
@@ -426,7 +442,12 @@ export function parseQueryIntent(
       /\b(list\s+every|sum\s+the\s+absolute)\b/i.test(question)
     ) {
       measure = 'decision_cohort_rejected';
-    } else if (decisionIds.length === 1) {
+    } else if (
+      decisionIds.length === 1 &&
+      !/\b(rank\w*|#1|top\s+channel|lowest\s+posterior|best\s+channel|channel\s+ranking)\b/i.test(
+        question,
+      )
+    ) {
       measure = 'decision_lookup';
     }
 
@@ -448,13 +469,15 @@ export function parseQueryIntent(
 
   // 3. Marketing, Spend, Funnel, CPSL, CPL, CPT, Dead Spend, Reallocation
   const isMarketingOrFunnel =
-    /\b(cost\s+per\s+(signed\s+lease|lead|tour)|cpsl\b|cpl\b|cpt\b|paid\s+sources?|listing\s+source|brought\s+no\s+leases|produced\s+no\s+leases|signed\s+no\s+lease|tour-to-lease|conversion\s+rate|apply\s+rate|applied\s*=\s*true|applied\s+in\s+\w+|signed\s+more\s+leases\s+from\s+leads|how\s+many\s+more\s+leases\s+would\s+it\s+buy|posted\s+spend|h1\s+spend\s+versus\s+q3\s+spend)\b/i.test(
+    /\b(cost\s+per\s+(signed\s+lease|lead|tour)|cpsl\b|cpl\b|cpt\b|paid\s+sources?|listing\s+source|brought\s+no\s+leases|produced\s+no\s+leases|signed\s+no\s+lease|dead\s+spend|tour-to-lease|conversion\s+rate|apply\s+rate|applied\s*=\s*true|applied\s+in\s+\w+|signed\s+more\s+leases\s+from\s+leads|how\s+many\s+more\s+leases\s+would\s+(it|that)\s+buy|posted\s+spend|h1\s+spend\s+versus\s+q3\s+spend)\b/i.test(
       question,
-    );
+    ) ||
+    (mentionedSources.length > 0 &&
+      /\b(cost|spend|spent|paid|leases?|leads?|cpsl|cpl)\b/i.test(question));
 
   if (isMarketingOrFunnel) {
     let measure: IntentMeasure = 'cost_per_signed_lease';
-    if (/\bhow\s+many\s+more\s+leases\s+would\s+it\s+buy\b/i.test(question)) {
+    if (/\bhow\s+many\s+more\s+leases\s+would\s+(it|that)\s+buy\b/i.test(question)) {
       measure = 'reallocation_leases';
     } else if (
       /\blist\s+every\s+paid\s+source\s+and\s+building\s+pair\s+that\s+produced\s+no\s+leases\b/i.test(
@@ -495,9 +518,10 @@ export function parseQueryIntent(
     ) {
       measure = 'spend_h1_vs_q3';
     } else if (
-      /\b(posted\s+spend|total\s+spend|what\s+did\s+we\s+spend)\b/i.test(
+      /\b(posted\s+(?:[\w.]+\s+){0,3}spend|total\s+(?:[\w.]+\s+){0,3}spend|what\s+did\s+we\s+spend|what\s+did\s+.*\bcost\b|how\s+much\s+did\s+.*\b(cost|spend)\b)\b/i.test(
         question,
-      )
+      ) &&
+      !/\bcost\s+per\b/i.test(question)
     ) {
       measure = 'spend_total';
     } else if (/\bsigned\s+more\s+leases\s+from\s+leads\b/i.test(question)) {
