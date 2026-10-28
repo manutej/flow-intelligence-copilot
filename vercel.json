@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "functions": {
+    "api/*.js": {
+      "includeFiles": "{data/**,src/**,questions/**,scripts/**,AGENTS.md,llms.txt,.flowiq-vault.json,.toq/**}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/ask",
+      "destination": "/api/ask.js"
+    },
+    {
+      "source": "/api/state",
+      "destination": "/api/state.js"
+    },
+    {
+      "source": "/api/workflow",
+      "destination": "/api/workflow.js"
+    },
+    {
+      "source": "/api/swarm",
+      "destination": "/api/swarm.js"
+    },
+    {
+      "source": "/field-notebook.html",
+      "destination": "/field-notebook.html"
+    },
+    {
+      "source": "/AGENTS.md",
+      "destination": "/AGENTS.md"
+    },
+    {
+      "source": "/llms.txt",
+      "destination": "/llms.txt"
+    },
+    {
+      "source": "/",
+      "destination": "/index.html"
+    }
+  ]
+}

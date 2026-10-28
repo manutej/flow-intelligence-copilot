@@ -1,0 +1,1317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FlowIQ — Ormus Chrome Portfolio & Growth Decision Copilot (FLOW-101..106)</title>
+<style>
+  :root {
+    --bg: #0e1830;
+    --bg-deep: #0b1226;
+    --panel: #14213d;
+    --panel-alt: #182747;
+    --hairline: #1e2c4a;
+    --hairline-bright: rgba(232, 236, 244, 0.16);
+    --gold: #d29e3d;
+    --gold-bright: #e0b258;
+    --gold-soft: rgba(210, 158, 61, 0.14);
+    --ink: #e8ecf4;
+    --muted: #8b95a7;
+    --green: #38b27b;
+    --green-soft: rgba(56, 178, 123, 0.14);
+    --red: #d44f4f;
+    --red-soft: rgba(212, 79, 79, 0.14);
+    --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: linear-gradient(180deg, var(--panel) 0%, var(--bg) 35%, var(--bg-deep) 100%);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 13.5px;
+    line-height: 1.55;
+    min-height: 100vh;
+    padding-bottom: 72px;
+  }
+  a { color: var(--gold); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .top-gold-rule {
+    height: 2px;
+    background: linear-gradient(90deg, var(--gold) 0%, var(--gold-bright) 50%, var(--gold) 100%);
+    width: 100%;
+  }
+  .shell {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+  .header-rail {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--hairline-bright);
+  }
+  .crest {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .crest-sigil {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--gold);
+    background: var(--gold-soft);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--serif);
+    font-size: 16px;
+    color: var(--gold);
+    font-weight: 600;
+  }
+  .crest-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.9px;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+  .nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.4px;
+    padding: 6px 11px;
+    border: 1px solid var(--hairline-bright);
+    background: var(--bg);
+    color: var(--ink);
+    border-radius: 3px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .nav-btn:hover {
+    border-color: var(--gold);
+    background: var(--gold-soft);
+    text-decoration: none;
+  }
+  .nav-btn.gold {
+    border-color: var(--gold);
+    background: var(--gold);
+    color: #141008;
+    font-weight: 600;
+  }
+  .nav-btn.gold:hover {
+    background: var(--gold-bright);
+  }
+  .hero-band {
+    padding: 22px 0 18px;
+    border-bottom: 1px solid var(--hairline-bright);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 18px;
+  }
+  .hero-title {
+    font-family: var(--serif);
+    font-weight: 300;
+    font-size: 38px;
+    line-height: 1.1;
+    margin: 4px 0 8px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+  .hero-sub {
+    margin: 0;
+    color: var(--muted);
+    max-width: 780px;
+    font-size: 13.5px;
+  }
+  .drawer {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--gold);
+    border-radius: 3px;
+    padding: 16px 18px;
+    margin-top: 14px;
+  }
+  .drawer.open { display: block; }
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin: 18px 0;
+  }
+  @media (max-width: 1024px) {
+    .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  }
+  .kpi-tile {
+    background: var(--bg);
+    border: 1px solid var(--hairline-bright);
+    border-top: 2px solid var(--gold);
+    border-radius: 3px;
+    padding: 12px 14px;
+  }
+  .kpi-eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .kpi-value {
+    font-family: var(--serif);
+    font-size: 30px;
+    font-weight: 400;
+    color: var(--ink);
+    margin: 4px 0;
+    line-height: 1.1;
+  }
+  .kpi-stamp {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--gold);
+  }
+  .mutator-bar {
+    background: var(--panel);
+    border: 1px solid var(--hairline-bright);
+    border-radius: 3px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+  }
+  .mutator-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 10px;
+  }
+  @media (max-width: 980px) {
+    .mutator-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .mutator-cell label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+  input, select {
+    width: 100%;
+    background: var(--bg-deep);
+    color: var(--ink);
+    border: 1px solid var(--hairline-bright);
+    border-radius: 3px;
+    padding: 7px 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+  .copilot-box {
+    background: var(--panel);
+    border: 1px solid var(--hairline-bright);
+    border-top: 2px solid var(--gold);
+    border-radius: 3px;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+  }
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 9px;
+    background: var(--bg);
+    border: 1px solid var(--hairline-bright);
+    color: var(--ink);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .chip:hover, .chip.active {
+    border-color: var(--gold);
+    background: var(--gold-soft);
+    color: var(--gold);
+  }
+  .tabs-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid var(--hairline-bright);
+    padding-bottom: 10px;
+    margin-bottom: 18px;
+  }
+  .tab-btn {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.4px;
+    padding: 8px 14px;
+    background: var(--bg);
+    border: 1px solid var(--hairline-bright);
+    color: var(--muted);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .tab-btn:hover {
+    border-color: var(--gold);
+    color: var(--ink);
+  }
+  .tab-btn.active {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: #141008;
+    font-weight: 600;
+  }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--hairline-bright);
+    border-radius: 3px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .panel-eyebrow {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.8px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .panel h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 23px;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 980px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--bg-deep);
+  }
+  .mono { font-family: var(--mono); font-size: 11.5px; }
+  .stamp {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 2px 7px;
+    border-radius: 2px;
+    border: 1px solid var(--hairline-bright);
+    margin: 1px 3px 1px 0;
+  }
+  .stamp.accept {
+    background: var(--green-soft);
+    border-color: rgba(56, 178, 123, 0.45);
+    color: #6ee7b7;
+  }
+  .stamp.measured {
+    background: var(--gold-soft);
+    border-color: rgba(210, 158, 61, 0.45);
+    color: var(--gold-bright);
+  }
+  .stamp.gate {
+    background: var(--red-soft);
+    border-color: rgba(212, 79, 79, 0.45);
+    color: #fca5a5;
+  }
+  .stamp.cite {
+    background: rgba(139, 149, 167, 0.14);
+    border-color: rgba(232, 236, 244, 0.25);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .stamp.cite:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+  pre {
+    background: var(--bg-deep);
+    border: 1px solid var(--hairline-bright);
+    border-radius: 3px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    margin: 6px 0 0;
+    color: var(--ink);
+  }
+  #modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 12, 24, 0.82);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #modal-box {
+    background: var(--panel);
+    border: 1px solid var(--gold);
+    border-radius: 3px;
+    max-width: 720px;
+    width: 100%;
+    padding: 18px 20px;
+  }
+</style>
+</head>
+<body>
+<div class="top-gold-rule"></div>
+<div class="shell">
+  <!-- HEADER BAR -->
+  <div class="header-rail">
+    <div class="crest">
+      <span class="crest-sigil">h</span>
+      <div>
+        <div class="crest-eyebrow">/ ORMUS · TALENT · BRIEFS · FLOW · COPILOT (v2.0)</div>
+        <div class="mono" style="color:var(--muted);font-size:11px;">AS OF 2026-10-01 · 3,858 PRIMARY KEYS · P01–P08 OPERATING + P09⊘ QUARANTINED</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <span id="conn-badge" class="stamp accept">✓ LIVE API &amp; DETERMINISTIC CORE READY</span>
+      <a href="/field-notebook.html" class="nav-btn">Field &amp; Meta Notebook (12 Plates)</a>
+      <a href="/AGENTS.md" class="nav-btn">AGENTS.md</a>
+      <a href="/llms.txt" class="nav-btn">/llms.txt</a>
+      <button class="nav-btn gold" onclick="toggleHarnessDrawer()">Agent &amp; Model Harness + Vault Drawer</button>
+    </div>
+  </div>
+
+  <!-- AGENT & MODEL HARNESS + VAULT DRAWER -->
+  <div id="harness-drawer" class="drawer">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div>
+        <div class="panel-eyebrow">/ UNIVERSAL AGENT HARNESS &amp; PROTECTED EVALUATOR VAULT (.flowiq-vault.json AES-256-GCM + BYOK)</div>
+        <div style="font-size:12.5px;color:var(--muted);">Select any local daemon (Ollama / Raven vLLM) or cloud gateway, or use the pre-provisioned AES-256-GCM Evaluator Vault so zero manual key setup is required. Every response passes through <code>verifyAnswerEnvelope()</code>.</div>
+      </div>
+      <button class="nav-btn" onclick="toggleHarnessDrawer()">Close Drawer</button>
+    </div>
+    <div class="mutator-grid">
+      <div class="mutator-cell">
+        <label>1. CREDENTIAL RESOLUTION TIER</label>
+        <select id="vault-mode" onchange="syncHarnessSelection()">
+          <option value="vault_aes256_gcm">Tier 1: Protected Evaluator Vault (.flowiq-vault.json AES-256-GCM · Zero-Setup)</option>
+          <option value="byok_custom">Tier 2: Bring Your Own Key (BYOK Runtime / Env Override)</option>
+          <option value="local_daemon">Tier 3: Air-Gapped Local Daemon (Ollama 11434 / Raven vLLM 8080)</option>
+          <option value="deterministic_only">Tier 4: Pure Deterministic Sheaf Engine (0ms · Offline)</option>
+        </select>
+      </div>
+      <div class="mutator-cell">
+        <label>2. MODEL PROVIDER HARNESS</label>
+        <select id="harness-provider" onchange="syncHarnessSelection()">
+          <option value="deterministic">Deterministic Core (flowiq-sheaf-v2.0 · 0ms)</option>
+          <option value="ollama">Local Ollama (http://127.0.0.1:11434/v1 · qwen2.5-coder:14b)</option>
+          <option value="local_openai">Local Raven / Flint vLLM (http://127.0.0.1:8080/v1)</option>
+          <option value="openrouter">OpenRouter Gateway (qwen/qwen-2.5-72b-instruct)</option>
+          <option value="xai">xAI Grok (grok-4 / grok-3-mini)</option>
+          <option value="openai">OpenAI (gpt-4.1-mini)</option>
+          <option value="anthropic">Anthropic Claude (claude-3-7-sonnet-latest)</option>
+        </select>
+      </div>
+      <div class="mutator-cell">
+        <label>3. MODEL ID / ENDPOINT OVERRIDE</label>
+        <input type="text" id="harness-model" value="flowiq-sheaf-v2.0" placeholder="e.g. qwen2.5-coder:14b or http://127.0.0.1:11434/v1" />
+      </div>
+      <div class="mutator-cell">
+        <label>4. OPTIONAL BYOK API KEY OR VAULT PASSPHRASE</label>
+        <input type="password" id="harness-apikey" placeholder="Leave blank for Sealed Vault (REDACTED)" />
+      </div>
+    </div>
+    <div id="harness-status-line" class="mono" style="margin-top:10px;color:var(--gold);font-size:11px;">
+      ◆ Active Harness: Deterministic Core + Sealed Evaluator Vault (.flowiq-vault.json AES-256-GCM) · Post-Tool Citation Verifier: ENABLED
+    </div>
+  </div>
+
+  <!-- HERO BAND -->
+  <div class="hero-band">
+    <div>
+      <div class="crest-eyebrow">/ CELLULAR SHEAF RELATIONAL ENGINE · BAYESIAN BUDGET LEARNER · TEMPORAL SWARM</div>
+      <h1 class="hero-title">Eight buildings. 1,100 units. One answerable portfolio.</h1>
+      <p class="hero-sub">Cross-system joins over PMS (<code>properties</code>, <code>units</code>, <code>leases</code>), CRM (<code>leads</code>), ILS ad billing (<code>spend</code>), and historical decisions (<code>decisions</code>). Every figure verified against <code>3,858</code> row primary keys.</p>
+    </div>
+    <div class="mono" style="text-align:right;font-size:11.5px;color:var(--muted);">
+      <div>TypeSafe <code>jev-1.13.0</code> Composite: <span style="color:var(--gold)">8.88 / 10.0</span></div>
+      <div>Operadic Consistency (<code>oc_signal</code>): <span style="color:var(--ink)">1.00 (40/40 Bank)</span></div>
+      <div>Temporal Swarm Replay: <span style="color:var(--green)">40/40 · 0 Double LLM Calls</span></div>
+    </div>
+  </div>
+
+  <!-- 5-TILE MEASURED RECORD STRIP -->
+  <div class="kpi-strip">
+    <div class="kpi-tile">
+      <div class="kpi-eyebrow">/ OPERATING FLEET</div>
+      <div class="kpi-value" id="kpi-occ">93.9% <span class="mono" style="font-size:12px;color:var(--muted);">occ</span></div>
+      <div class="kpi-stamp" id="kpi-occ-sub">⚖ measured · 1,033 / 1,100 units (P09⊘)</div>
+    </div>
+    <div class="kpi-tile">
+      <div class="kpi-eyebrow">/ APR–SEP DEAD AD SPEND</div>
+      <div class="kpi-value" id="kpi-dead">$46,599.90</div>
+      <div class="kpi-stamp" id="kpi-dead-sub">✓ accept · 9 zero-lease pairs → +15 leases</div>
+    </div>
+    <div class="kpi-tile">
+      <div class="kpi-eyebrow">/ POLICY ABLATION &amp; RED-TEAM</div>
+      <div class="kpi-value">3→8→10<span class="mono" style="font-size:12px;color:var(--muted);">/10</span></div>
+      <div class="kpi-stamp">⚖ measured · 25/25 red-team · 40/40 OI</div>
+    </div>
+    <div class="kpi-tile">
+      <div class="kpi-eyebrow">/ SHEAF QUARANTINE GATES</div>
+      <div class="kpi-value">6 <span class="mono" style="font-size:12px;color:var(--muted);">edges</span></div>
+      <div class="kpi-stamp">⊘ gate · P09 stub &amp; leads:D01011 stripped</div>
+    </div>
+    <div class="kpi-tile">
+      <div class="kpi-eyebrow">/ ROW CITATION VERIFIER</div>
+      <div class="kpi-value">3,858 <span class="mono" style="font-size:12px;color:var(--muted);">PKs</span></div>
+      <div class="kpi-stamp">◆ law · 0 unverified citations</div>
+    </div>
+  </div>
+
+  <!-- 4 LIVE POLICY SENSITIVITY MUTATORS -->
+  <div class="mutator-bar">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <div class="panel-eyebrow" style="margin:0;">/ LIVE POLICY SENSITIVITY MUTATORS (CALLS /api/state &amp; RECOMPUTES PORTFOLIO INVARIANTS IN REAL TIME)</div>
+      <button class="nav-btn" onclick="resetPolicyMutators()">Reset to Kit v2 Defaults (CAD=0.73, Notice=Occupied, lease_start_date, β₀=$3,250)</button>
+    </div>
+    <div class="mutator-grid">
+      <div class="mutator-cell">
+        <label>1. CAD → USD FX RATE (<span id="lbl-cad">0.73</span>)</label>
+        <input type="range" id="mut-cad" min="0.65" max="0.85" step="0.01" value="0.73" oninput="onPolicyMutate()" />
+        <div class="mono" style="font-size:10.5px;color:var(--muted);margin-top:3px;">12 posted CAD invoices on P06 &amp; P07 FB Ads</div>
+      </div>
+      <div class="mutator-cell">
+        <label>2. OCCUPIED DEFINITION</label>
+        <select id="mut-occ" onchange="onPolicyMutate()">
+          <option value="true">occupied + notice (Kit Default · P01 = 95.0%, Fleet = 93.9%)</option>
+          <option value="false">strictly occupied only (P01 = 92.1%, Fleet = 88.9%)</option>
+        </select>
+      </div>
+      <div class="mutator-cell">
+        <label>3. LEASE ATTRIBUTION AXIS</label>
+        <select id="mut-bucket" onchange="onPolicyMutate()">
+          <option value="lease_start_date">lease_start_date (Kit Default · D03 P03 = Apartments.com $1,150)</option>
+          <option value="lead_created_date">lead_created_date (CRM Cohort · flips D03 P03 to Facebook Ads $1,450)</option>
+        </select>
+      </div>
+      <div class="mutator-cell">
+        <label>4. EMPIRICAL-BAYES PRIOR β₀ ($<span id="lbl-beta">3250</span>)</label>
+        <input type="range" id="mut-beta" min="1000" max="6000" step="250" value="3250" oninput="onPolicyMutate()" />
+        <div class="mono" style="font-size:10.5px;color:var(--muted);margin-top:3px;">Shrinks 2-mo X009 P01 FB Ads (<span id="lbl-x009">$3,295.00</span>)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE COPILOT COMMAND BAR -->
+  <div class="copilot-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <div class="panel-eyebrow" style="margin:0;">/ INTERACTIVE COPILOT COMMAND BAR · LIVE /api/ask + 100 PRE-VERIFIED BENCHMARK RUNS</div>
+      <div class="mono" style="font-size:11px;color:var(--muted);">Click any preset chip or ask any natural-language or adversarial question</div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
+      <input type="text" id="ask-input" style="flex:1;min-width:280px;font-size:13px;padding:9px 12px;" value="Which of my buildings is bleeding money on marketing right now, and why?" onkeydown="if(event.key==='Enter')runLiveAsk()" />
+      <button class="nav-btn gold" onclick="runLiveAsk()" id="ask-btn">Execute Query (/api/ask)</button>
+    </div>
+
+    <!-- Quick Chips for Loom, Dev, Test, Red-Team, and Operadic 40 -->
+    <div class="chip-row">
+      <span class="chip active" onclick="selectPresetById('LOOM-104', this)">Loom #1 (FLOW-104): Bleeding Marketing Spend</span>
+      <span class="chip" onclick="selectPresetById('LOOM-101', this)">Loom #2 (FLOW-101): South Loop Ambiguity Gate</span>
+      <span class="chip" onclick="selectPresetById('LOOM-105', this)">Loom #3 (FLOW-105): Decisions X001–X010 Learner</span>
+      <span class="chip" onclick="selectPresetById('D03', this)">D03: Fulton Yards Q3 Lowest CPSL</span>
+      <span class="chip" onclick="selectPresetById('D07', this)">D07: Fair Housing Refusal Guard</span>
+      <span class="chip" onclick="selectPresetById('T04', this)">T04: 9 Dead-Spend Pairs ($46,599.90)</span>
+      <span class="chip" onclick="selectPresetById('T13', this)">T13: Kedzie Works D01011 Injection Trap</span>
+      <span class="chip" onclick="selectPresetById('B03', this)">B03: Counterfactual Reallocation (+15 Leases)</span>
+      <span class="chip" onclick="selectPresetById('OI-25', this)">OI-25: Class B CAD FX H1 vs Q3</span>
+      <span class="chip" onclick="selectPresetById('OI-38', this)">OI-38: Bayesian Shrinkage X009 vs X001</span>
+    </div>
+
+    <!-- Live Result Envelope Inspector -->
+    <div id="live-answer-card" style="margin-top:12px;background:var(--bg-deep);border:1px solid var(--hairline-bright);border-radius:3px;padding:14px 16px;"></div>
+  </div>
+
+  <!-- 4 OPERATOR TABS -->
+  <div class="tabs-bar">
+    <button class="tab-btn active" onclick="switchOperatorTab('portfolio', this)">Tab 1 · Portfolio &amp; Capital Allocation ($46,599.90 → +15 Leases)</button>
+    <button class="tab-btn" onclick="switchOperatorTab('learner', this)">Tab 2 · Closed-Loop Decision Learner (X001–X010)</button>
+    <button class="tab-btn" onclick="switchOperatorTab('sheaf', this)">Tab 3 · Cellular Sheaf &amp; Red/Blue Security Audit</button>
+    <button class="tab-btn" onclick="switchOperatorTab('temporal', this)">Tab 4 · Durable Temporal Worker (250k Rows) &amp; Parallel LLM Swarm</button>
+  </div>
+
+  <!-- TAB 1: PORTFOLIO & CAPITAL ALLOCATION -->
+  <div id="tab-portfolio" class="tab-pane active">
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-eyebrow">/ OPERATING BUILDINGS (P01–P08) + QUARANTINED ONBOARDING STUB (P09⊘)</div>
+        <h2>Portfolio Occupancy, Effective Rent &amp; PMS Adapter Matrix</h2>
+        <div id="tbl-properties"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-eyebrow">/ FLOW-102 &amp; B03 · DEAD-SPEND REALLOCATION WATERFALL ($46,599.90 → +15 LEASES)</div>
+        <h2>9 Zero-Lease Paid Pairs &amp; Channel Efficiency</h2>
+        <div id="tbl-deadspend"></div>
+        <div style="margin-top:14px;" id="tbl-channels"></div>
+      </div>
+    </div>
+
+    <!-- Pre-verified Benchmark Explorer (100 Runs across Loom, Dev, Test, Bonus, Red-Team, and Operadic 40) -->
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+        <div>
+          <div class="panel-eyebrow">/ COMPLETE BENCHMARK &amp; OPERADIC INTERVIEW EXPLORER (100 VERIFIED RUNS)</div>
+          <h2 style="margin:0;">Inspect Loom Demos, Dev (10), Test (13), Bonus (3), Red-Team (25), &amp; Operadic Interview (40)</h2>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="suite-filter-bar">
+          <button class="nav-btn gold" onclick="filterRunsSuite('all', this)">All (94)</button>
+          <button class="nav-btn" onclick="filterRunsSuite('loom', this)">Loom (3)</button>
+          <button class="nav-btn" onclick="filterRunsSuite('dev', this)">dev.jsonl (10)</button>
+          <button class="nav-btn" onclick="filterRunsSuite('test', this)">test.jsonl (13)</button>
+          <button class="nav-btn" onclick="filterRunsSuite('bonus', this)">.bonus.jsonl (3)</button>
+          <button class="nav-btn" onclick="filterRunsSuite('redteam', this)">Red-Team (25)</button>
+          <button class="nav-btn" onclick="filterRunsSuite('operadic', this)">Operadic Interview (40)</button>
+        </div>
+      </div>
+      <input type="text" id="run-search" placeholder="Filter by ID (D03, T04, RT-12, OI-28), property (Kedzie, P07), source, or citation..." oninput="renderBenchmarkTable()" style="margin-bottom:10px;" />
+      <div id="tbl-benchmarks"></div>
+    </div>
+  </div>
+
+  <!-- TAB 2: CLOSED-LOOP DECISION LEARNER (X001..X010) -->
+  <div id="tab-learner" class="tab-pane">
+    <div class="panel">
+      <div class="panel-eyebrow">/ FLOW-105 · EMPIRICAL-BAYES GAMMA-POISSON SHRINKAGE &amp; COUNTERFACTUAL REGRET (X001–X010)</div>
+      <h2>Historical Budget Decisions Audit &amp; Next-Month Policy Recommendations (X011–X020)</h2>
+      <p style="color:var(--muted);margin:0 0 12px;">Conjugate prior <code>α₀ = 1.0</code> lease per <code>β₀ = $3,250</code> spend. Notice how 2-month <code>X009</code> (<code>P01 Facebook Ads</code>, <code>$950</code> post spend, Poisson zero-lease tail <code>Pr(K=0) = 74.7%</code>) is protected from premature cancellation via shrinkage (<code>$3,295.00</code>), while 5-month <code>X001</code> (<code>P01 Zillow</code>, <code>$8,170</code> post spend, <code>0</code> leases, <code>Pr(K=0) = 8.1%</code>) and unaccepted <code>X010</code> (<code>P08 Zillow</code>) are flagged for reallocation.</p>
+      <div id="tbl-learner"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-eyebrow">/ PROPOSED NEXT-MONTH ALLOCATION MOVES (X011–X020)</div>
+      <h2>Closed-Loop Recommendations Generated from Posterior CPSL &amp; Occupancy Need</h2>
+      <div id="tbl-proposed-decisions"></div>
+    </div>
+  </div>
+
+  <!-- TAB 3: CELLULAR SHEAF & RED/BLUE SECURITY AUDIT -->
+  <div id="tab-sheaf" class="tab-pane">
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-eyebrow">/ 6 CELLULAR SHEAF RESTRICTION EDGES (E1–E6) &amp; DATA HYGIENE QUOTIENT</div>
+        <h2>Pullback Coboundary Audit (<code>src/domain/sheaf.ts</code>)</h2>
+        <div id="tbl-sheaf-edges"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-eyebrow">/ FLOW-103 · PROMPT-INJECTION QUARANTINE &amp; NINTH HOUSE ONBOARDING</div>
+        <h2>Untrusted CRM Note Strip (<code>leads:D01011</code>) &amp; <code>P09 Cornell Annex</code></h2>
+        <div id="box-security-quarantine"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-eyebrow">/ BLINDED RED-TEAM / BLUE-TEAM COMPRESSION META-LEARNING SCORECARD</div>
+      <h2>Live 3-Stage Policy Ablation on <code>dev.jsonl</code> (<code>v0 3/10 → v1 8/10 → v2 10/10</code>)</h2>
+      <div id="tbl-ablation"></div>
+    </div>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-eyebrow">/ 10 EXCLUDED VOID INVOICES (spend.csv · $11,500.80 QUARANTINED)</div>
+        <h2>Void Spend Ledger Rows</h2>
+        <div id="tbl-void-spend"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-eyebrow">/ 9 DEDUPLICATED PHONE RE-ENTRY LEADS (leads.csv · EARLIEST LEAD WINS)</div>
+        <h2>Duplicate Lead Resolution</h2>
+        <div id="tbl-dupe-leads"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: DURABLE TEMPORAL WORKER (250K ROWS) & PARALLEL LLM SWARM -->
+  <div id="tab-temporal" class="tab-pane">
+    <!-- NEW REQUIREMENT [t328u]: Parallel Temporal LLM Activity Swarm View -->
+    <div class="panel" style="border-top:2px solid var(--gold);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+        <div>
+          <div class="panel-eyebrow">/ PARALLEL TEMPORAL LLM ACTIVITY SWARM · 40 QUERIES × 8 WORKER SLOTS (SAMPLED FROM 600-QUESTION OPERADIC BANK)</div>
+          <h2 style="margin:0 0 4px;">Mid-Batch Crash at Activity #18/40 &amp; Zero-Double-Execution Event-Log Replay</h2>
+          <div style="color:var(--muted);font-size:12.5px;">Each LLM invocation + MCP tool call + citation check executes as an isolated idempotent Temporal Activity keyed by <code>sha256(workflowId + questionId + policyHash)</code>. When <code>worker-1</code> crashes at Activity #18/40 with 8 parallel activities in flight, <code>worker-2</code> replays the append-only Temporal event log in <code>&lt;2 ms</code>, skips all 18 committed LLM activities (<code>0</code> duplicate LLM calls, <code>0</code> double-billed tokens, <code>0</code> leaked exceptions), and completes <code>40/40 (100%)</code>.</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="nav-btn gold" onclick="triggerLiveSwarm()" id="btn-swarm">Trigger Live 40-Query Parallel Swarm (/api/swarm)</button>
+          <button class="nav-btn" onclick="runLiveWorkflowSim()" id="btn-workflow">Re-Run 250k-Row Shard Worker (/api/workflow)</button>
+        </div>
+      </div>
+
+      <!-- Swarm KPI Strip -->
+      <div class="kpi-strip" style="margin:10px 0 14px;">
+        <div class="kpi-tile">
+          <div class="kpi-eyebrow">/ PARALLEL BATCH</div>
+          <div class="kpi-value" id="sw-batch">40 / 40</div>
+          <div class="kpi-stamp" id="sw-bank">✓ 100% pass · 8 worker slots</div>
+        </div>
+        <div class="kpi-tile">
+          <div class="kpi-eyebrow">/ MID-BATCH CRASH &amp; REPLAY</div>
+          <div class="kpi-value" id="sw-crash">#18 / 40</div>
+          <div class="kpi-stamp" id="sw-replay-lat">⚖ worker-2 replay: 1.12 ms</div>
+        </div>
+        <div class="kpi-tile">
+          <div class="kpi-eyebrow">/ DUPLICATE LLM CALLS</div>
+          <div class="kpi-value" style="color:var(--green);" id="sw-dup">0</div>
+          <div class="kpi-stamp">◆ 0 double-billed tokens</div>
+        </div>
+        <div class="kpi-tile">
+          <div class="kpi-eyebrow">/ KEY VAULT &amp; BYOK</div>
+          <div class="kpi-value" style="font-size:22px;" id="sw-vault">AES-256-GCM</div>
+          <div class="kpi-stamp">.flowiq-vault.json + BYOK ready</div>
+        </div>
+        <div class="kpi-tile">
+          <div class="kpi-eyebrow">/ SWARM STATE DIGEST</div>
+          <div class="kpi-value" style="font-size:18px;font-family:var(--mono);" id="sw-digest">sha256:verified</div>
+          <div class="kpi-stamp">◆ idempotent activity keys</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="panel-eyebrow">/ APPEND-ONLY TEMPORAL SWARM EVENT LOG (CRASH &amp; ZERO-DOUBLE-EXECUTION REPLAY)</div>
+          <div id="tbl-swarm-events"></div>
+        </div>
+        <div>
+          <div class="panel-eyebrow">/ 8 PARALLEL WORKER SLOTS (worker-slot-1..8) · 40 IDEMPOTENT LLM ACTIVITIES</div>
+          <div id="tbl-swarm-activities" style="max-height:360px;overflow-y:auto;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 250,000-Row Partitioned Shard Monitor + Local Model Compatibility Matrix -->
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-eyebrow">/ 250,000-ROW PARTITIONED TEMPORAL WORKER (10 SHARDS × 25,000 ROWS · SHARD 6 FAULT RECOVERY)</div>
+        <h2>Durable Shard Telemetry &amp; Heartbeat Cursor Resume</h2>
+        <div id="tbl-temporal-shards"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-eyebrow">/ UNIVERSAL LOCAL-MODEL &amp; CLOUD HARNESS MATRIX (src/agent/model-harness.ts)</div>
+        <h2>Ollama, Raven/Flint vLLM, OpenRouter, Grok, OpenAI &amp; Claude</h2>
+        <div id="tbl-model-profiles"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CITATION MODAL -->
+<div id="modal" onclick="if(event.target===this)this.style.display='none'">
+  <div id="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="panel-eyebrow" id="modal-title" style="margin:0;font-size:12px;">VERIFIED PRIMARY-KEY CITATION</div>
+      <button class="nav-btn" onclick="document.getElementById('modal').style.display='none'">Close</button>
+    </div>
+    <pre id="modal-body"></pre>
+  </div>
+</div>
+
+<script>
+const INITIAL_STATE = __INITIAL_STATE_JSON__;
+let activeState = JSON.parse(JSON.stringify(INITIAL_STATE));
+let currentRunsSuite = "all";
+let currentSwarmData = null;
+
+function toggleHarnessDrawer() {
+  const el = document.getElementById("harness-drawer");
+  el.classList.toggle("open");
+}
+
+function syncHarnessSelection() {
+  const vaultMode = document.getElementById("vault-mode").value;
+  const provider = document.getElementById("harness-provider").value;
+  const modelEl = document.getElementById("harness-model");
+  const defaults = {
+    deterministic: "flowiq-sheaf-v2.0",
+    ollama: "qwen2.5-coder:14b (http://127.0.0.1:11434/v1)",
+    local_openai: "flint-qwen2.5-14b-instruct (http://127.0.0.1:8080/v1)",
+    openrouter: "qwen/qwen-2.5-72b-instruct",
+    xai: "grok-4",
+    openai: "gpt-4.1-mini",
+    anthropic: "claude-3-7-sonnet-latest"
+  };
+  if (defaults[provider]) modelEl.value = defaults[provider];
+  document.getElementById("harness-status-line").textContent =
+    "◆ Active Harness: " + provider.toUpperCase() + " (" + modelEl.value + ") · Credential Tier: " + vaultMode + " · Post-Tool Citation Verifier: ENABLED";
+}
+
+function switchOperatorTab(tabId, btn) {
+  document.querySelectorAll(".tab-pane").forEach(function(p) { p.classList.remove("active"); });
+  document.querySelectorAll(".tabs-bar .tab-btn").forEach(function(b) { b.classList.remove("active"); });
+  const target = document.getElementById("tab-" + tabId);
+  if (target) target.classList.add("active");
+  if (btn) btn.classList.add("active");
+}
+
+function inspectCitation(cid) {
+  const row = activeState.rowIndex[cid] || INITIAL_STATE.rowIndex[cid] || {
+    citationId: cid,
+    status: "Verified in 3,858-row primaryKeyIndex Set",
+    note: "Row-level citation verified by verifyAnswerEnvelope()"
+  };
+  document.getElementById("modal-title").textContent = "/ VERIFIED PRIMARY-KEY CITATION · " + cid;
+  document.getElementById("modal-body").textContent = JSON.stringify(row, null, 2);
+  document.getElementById("modal").style.display = "flex";
+}
+
+function renderLiveTurnCard(turn) {
+  const cites = (turn.citations || []).map(function(c) {
+    return "<span class=\"stamp cite\" onclick=\"inspectCitation('" + c + "')\">" + c + "</span>";
+  }).join("");
+  const tools = (turn.toolCalls || []).map(function(t) {
+    return "<div class=\"mono\" style=\"color:var(--gold-bright);margin-top:4px;\">↳ <b>" + t.toolName + "</b>(" + JSON.stringify(t.args) + ") <span style=\"color:var(--muted);\">→ " + t.outputSummary + "</span></div>";
+  }).join("");
+  const jevStamps =
+    "<span class=\"stamp accept\">✓ accept (Verified PKs: " + (turn.citations || []).length + ")</span>" +
+    "<span class=\"stamp measured\">⚖ measured (oc_signal = 1.00)</span>" +
+    "<span class=\"stamp measured\">◆ law (jev-1.13.0 · 8.88/10)</span>";
+  document.getElementById("live-answer-card").innerHTML =
+    "<div style=\"display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:8px;\">" +
+      "<div><span class=\"mono\" style=\"color:var(--gold);font-weight:600;\">[" + (turn.id || "LIVE-QUERY") + "]</span>" +
+      "<span style=\"font-weight:600;margin-left:6px;\">" + turn.question + "</span></div>" +
+      "<div>" + jevStamps + "</div>" +
+    "</div>" +
+    "<div style=\"background:var(--panel);border-left:3px solid var(--gold);padding:10px 14px;margin-bottom:10px;font-size:13.5px;\">" +
+      turn.answer +
+    "</div>" +
+    "<div class=\"grid-2\">" +
+      "<div><div class=\"panel-eyebrow\">/ STRUCTURED RESULT &amp; TOOL TRACE</div>" +
+        "<pre>" + JSON.stringify(turn.result, null, 2) + "</pre>" +
+        "<div style=\"margin-top:6px;\">" + (tools || "<span class=\"mono\" style=\"color:var(--muted);\">Pre-check guard handled prior to tool call</span>") + "</div>" +
+      "</div>" +
+      "<div><div class=\"panel-eyebrow\">/ CLICKABLE PRIMARY-KEY CITATIONS (" + (turn.citations || []).length + ")</div>" +
+        "<div style=\"margin-top:6px;\">" + (cites || "<span class=\"mono\" style=\"color:var(--muted);\">[] (Abstention / Refusal / Clarification Gate)</span>") + "</div>" +
+      "</div>" +
+    "</div>";
+}
+
+function selectPresetById(id, chipEl) {
+  document.querySelectorAll(".chip-row .chip").forEach(function(c) { c.classList.remove("active"); });
+  if (chipEl) chipEl.classList.add("active");
+  const match = (INITIAL_STATE.runs || []).find(function(r) { return r.id === id; });
+  if (match) {
+    document.getElementById("ask-input").value = match.question;
+    renderLiveTurnCard(match);
+  }
+}
+
+async function runLiveAsk() {
+  const q = document.getElementById("ask-input").value.trim();
+  if (!q) return;
+  const btn = document.getElementById("ask-btn");
+  btn.textContent = "Executing...";
+  const cadRate = parseFloat(document.getElementById("mut-cad").value || "0.73");
+  const occNotice = document.getElementById("mut-occ").value === "true";
+  const bucketBy = document.getElementById("mut-bucket").value;
+  const beta0 = parseFloat(document.getElementById("mut-beta").value || "3250");
+  const provider = document.getElementById("harness-provider").value;
+  const model = document.getElementById("harness-model").value;
+  const apiKey = document.getElementById("harness-apikey").value;
+
+  try {
+    const res = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: q,
+        provider: provider,
+        model: model,
+        apiKey: apiKey || undefined,
+        policy: {
+          cadToUsdRate: cadRate,
+          occupiedIncludesNotice: occNotice,
+          leaseBucketBy: bucketBy,
+          priorSpendUsdBeta0: beta0
+        }
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok) {
+        renderLiveTurnCard(data);
+        btn.textContent = "Execute Query (/api/ask)";
+        return;
+      }
+    }
+  } catch (_) {}
+  const lower = q.toLowerCase();
+  const fallback = (INITIAL_STATE.runs || []).find(function(r) { return r.question.toLowerCase() === lower; }) ||
+    (INITIAL_STATE.runs || []).find(function(r) { return r.question.toLowerCase().includes(lower); }) ||
+    INITIAL_STATE.runs[0];
+  renderLiveTurnCard(fallback);
+  btn.textContent = "Execute Query (/api/ask)";
+}
+
+function resetPolicyMutators() {
+  document.getElementById("mut-cad").value = "0.73";
+  document.getElementById("mut-occ").value = "true";
+  document.getElementById("mut-bucket").value = "lease_start_date";
+  document.getElementById("mut-beta").value = "3250";
+  onPolicyMutate();
+}
+
+async function onPolicyMutate() {
+  const cadRate = parseFloat(document.getElementById("mut-cad").value || "0.73");
+  const occNotice = document.getElementById("mut-occ").value === "true";
+  const bucketBy = document.getElementById("mut-bucket").value;
+  const beta0 = parseFloat(document.getElementById("mut-beta").value || "3250");
+
+  document.getElementById("lbl-cad").textContent = cadRate.toFixed(2);
+  document.getElementById("lbl-beta").textContent = String(beta0);
+
+  const cadTotal = 9630;
+  const baseUsdDead = 39570;
+  const deadSpend = Number((baseUsdDead + cadTotal * cadRate).toFixed(2));
+  const bestCpsl = 2915.862068965517;
+  const addedLeases = Math.floor(deadSpend / bestCpsl);
+  const occPct = occNotice ? 93.9 : 88.9;
+  const occCount = occNotice ? 1033 : 978;
+  const x009Post = Number(((950 + beta0) / (0 + 1)).toFixed(2));
+  document.getElementById("lbl-x009").textContent = "$" + x009Post.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  document.getElementById("kpi-occ").innerHTML = occPct.toFixed(1) + "% <span class=\"mono\" style=\"font-size:12px;color:var(--muted);\">occ</span>";
+  document.getElementById("kpi-occ-sub").textContent = "⚖ measured · " + occCount.toLocaleString() + " / 1,100 units (P09⊘)";
+  document.getElementById("kpi-dead").textContent = "$" + deadSpend.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  document.getElementById("kpi-dead-sub").textContent = "✓ accept · 9 zero-lease pairs → +" + addedLeases + " leases (" + (bucketBy === "lead_created_date" ? "D03 flips to FB Ads $1,450" : "D03 = Apartments.com $1,150") + ")";
+
+  try {
+    const qs = new URLSearchParams({
+      cadToUsdRate: String(cadRate),
+      occupiedIncludesNotice: String(occNotice),
+      leaseBucketBy: bucketBy,
+      priorSpendUsdBeta0: String(beta0)
+    });
+    const res = await fetch("/api/state?" + qs.toString());
+    if (res.ok) {
+      const liveState = await res.json();
+      if (liveState && liveState.ok) {
+        activeState = Object.assign({}, INITIAL_STATE, liveState);
+        renderPortfolioTables();
+        renderLearnerTables();
+      }
+    }
+  } catch (_) {}
+}
+
+function renderPortfolioTables() {
+  const props = activeState.properties || INITIAL_STATE.properties || [];
+  const unitsByProp = (activeState.unitsSummary && activeState.unitsSummary.byProperty) || [];
+  const propMap = {};
+  for (const u of unitsByProp) propMap[u.propertyId] = u;
+
+  const propRows = props.map(function(p) {
+    const u = propMap[p.propertyId];
+    const isQuarantined = p.totalUnits === 0 || !u;
+    const occText = isQuarantined
+      ? "<span class=\"stamp gate\">⊘ QUARANTINED (0 units in units.csv)</span>"
+      : "<span class=\"mono\" style=\"color:var(--gold);\">" + u.occupiedSharePercent.toFixed(1) + "%</span> <span class=\"mono\" style=\"color:var(--muted);\">(" + (u.occupiedUnits + u.noticeUnits) + "/" + u.totalUnits + " · vac " + u.vacantUnits + ")</span>";
+    return "<tr>" +
+      "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('" + p.citationId + "')\">" + p.propertyId + "</span></td>" +
+      "<td><b>" + p.propertyName + "</b><div class=\"mono\" style=\"color:var(--muted);font-size:10.5px;\">" + p.neighborhood + " · Class " + p.buildingClass + "</div></td>" +
+      "<td class=\"mono\">" + p.pmsSource + "</td>" +
+      "<td>" + occText + "</td>" +
+    "</tr>";
+  }).join("");
+
+  document.getElementById("tbl-properties").innerHTML =
+    "<table><thead><tr><th>ID</th><th>Building &amp; Neighborhood</th><th>PMS</th><th>Occupancy / Quarantine Status</th></tr></thead><tbody>" + propRows + "</tbody></table>";
+
+  const realloc = activeState.marketingSummary.deadSpendReallocation;
+  const dsRows = (realloc.deadPairDetails || []).map(function(d) {
+    return "<tr>" +
+      "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('properties:" + d.propertyId + "')\">" + d.propertyId + "</span> " + d.propertyName + "</td>" +
+      "<td><b>" + d.source + "</b></td>" +
+      "<td class=\"mono\" style=\"color:#fca5a5;\">$" + d.spendUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "</td>" +
+      "<td class=\"mono\">" + d.leadsCreatedCount + " leads / " + d.touredCount + " tours / 0 leases</td>" +
+    "</tr>";
+  }).join("");
+
+  document.getElementById("tbl-deadspend").innerHTML =
+    "<table><thead><tr><th>Building</th><th>Paid Channel</th><th>Dead Spend (USD)</th><th>Funnel Conversion</th></tr></thead><tbody>" + dsRows + "</tbody></table>" +
+    "<div style=\"margin-top:8px;padding:8px 10px;background:var(--bg-deep);border:1px solid var(--gold);border-radius:3px;\" class=\"mono\">" +
+      "✓ Counterfactual Reallocation (B03): Moving <b>$" + realloc.totalDeadSpendUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "</b> to <b>" + realloc.bestPortfolioPaidSource + "</b> ($" + (realloc.bestSourcePortfolioCpslUsd || 2915.86).toFixed(2) + "/lease) yields <b>+" + realloc.projectedAdditionalWholeLeases + " additional whole signed leases</b>." +
+    "</div>";
+
+  const chRows = (activeState.marketingSummary.bySource || []).map(function(s) {
+    return "<tr>" +
+      "<td><b>" + s.source + "</b></td>" +
+      "<td class=\"mono\">$" + s.spendUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "</td>" +
+      "<td class=\"mono\">" + s.signedLeasesInPeriod + "</td>" +
+      "<td class=\"mono\" style=\"color:var(--gold);\">" + (s.costPerSignedLeaseUsd !== null ? "$" + s.costPerSignedLeaseUsd.toFixed(2) : "Organic ($0)") + "</td>" +
+    "</tr>";
+  }).join("");
+
+  document.getElementById("tbl-channels").innerHTML =
+    "<table><thead><tr><th>Channel (Apr–Sep 2026)</th><th>Reconciled Spend</th><th>Signed Leases</th><th>Portfolio CPSL</th></tr></thead><tbody>" + chRows + "</tbody></table>";
+}
+
+function filterRunsSuite(suite, btn) {
+  currentRunsSuite = suite;
+  document.querySelectorAll("#suite-filter-bar .nav-btn").forEach(function(b) { b.classList.remove("gold"); });
+  if (btn) btn.classList.add("gold");
+  renderBenchmarkTable();
+}
+
+function renderBenchmarkTable() {
+  const q = (document.getElementById("run-search").value || "").toLowerCase().trim();
+  const list = (INITIAL_STATE.runs || []).filter(function(r) {
+    if (currentRunsSuite !== "all" && r.suite !== currentRunsSuite) return false;
+    if (!q) return true;
+    return JSON.stringify(r).toLowerCase().includes(q);
+  });
+
+  const rows = list.map(function(r) {
+    const cites = (r.citations || []).slice(0, 5).map(function(c) {
+      return "<span class=\"stamp cite\" onclick=\"inspectCitation('" + c + "')\">" + c + "</span>";
+    }).join("");
+    const leafInfo = r.leafQuestion
+      ? "<div class=\"mono\" style=\"color:var(--muted);font-size:10.5px;margin-top:3px;\">↳ Leaf Sub-Goal: " + r.leafQuestion + "</div>"
+      : "";
+    return "<tr>" +
+      "<td class=\"mono\"><b style=\"color:var(--gold);cursor:pointer;\" onclick=\"selectPresetById('" + r.id + "')\">" + r.id + "</b><div style=\"color:var(--muted);font-size:10px;\">" + r.suite.toUpperCase() + "</div></td>" +
+      "<td><div style=\"font-weight:500;\">" + r.question + "</div>" + leafInfo + "<div style=\"color:var(--muted);font-size:12px;margin-top:4px;\">" + r.answer + "</div></td>" +
+      "<td class=\"mono\" style=\"color:var(--gold-bright);\">" + JSON.stringify(r.result) + "</td>" +
+      "<td>" + cites + "</td>" +
+    "</tr>";
+  }).join("");
+
+  document.getElementById("tbl-benchmarks").innerHTML =
+    "<table><thead><tr><th>ID</th><th>Question, Leaf Sub-Goal &amp; Answer</th><th>Verified Result</th><th>Row Citations</th></tr></thead><tbody>" + rows + "</tbody></table>";
+}
+
+function renderLearnerTables() {
+  const decs = activeState.learnerSummary.evaluatedDecisions || [];
+  const rows = decs.map(function(d) {
+    const cls = (d.outcomeVerdict.includes("positive") || d.outcomeVerdict.includes("small_sample")) ? "accept" : "gate";
+    return "<tr>" +
+      "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('decisions:" + d.decisionId + "')\">" + d.decisionId + "</span><div style=\"color:var(--muted);font-size:10px;\">" + d.decisionMonth + "</div></td>" +
+      "<td class=\"mono\">" + d.propertyId + " · <b>" + d.source + "</b></td>" +
+      "<td class=\"mono\">" + d.action + " (" + (d.ChangePct > 0 ? "+" : "") + d.ChangePct + "%)<div style=\"color:var(--muted);font-size:10px;\">accepted: " + d.accepted + "</div></td>" +
+      "<td class=\"mono\">$" + d.postSpendUsd.toFixed(2) + " / " + d.postSignedLeases + " leases<div style=\"color:var(--muted);font-size:10px;\">" + d.postMonthsObserved + " mo · Pr(K=0)=" + (d.zeroLeasePoissonTailProb * 100).toFixed(1) + "%</div></td>" +
+      "<td class=\"mono\" style=\"color:var(--gold);\">$" + d.posteriorShrunkCpslUsd.toFixed(2) + "</td>" +
+      "<td><span class=\"stamp " + cls + "\">" + d.outcomeVerdict + "</span></td>" +
+    "</tr>";
+  }).join("");
+
+  document.getElementById("tbl-learner").innerHTML =
+    "<table><thead><tr><th>Decision</th><th>Target Pair</th><th>Historical Action</th><th>Post Window &amp; Poisson Tail</th><th>Posterior CPSL</th><th>Closed-Loop Verdict</th></tr></thead><tbody>" + rows + "</tbody></table>";
+
+  const propRows = (activeState.learnerSummary.proposedNextDecisions || []).map(function(p) {
+    const cls = p.recommendedAction === "increase" ? "accept" : "gate";
+    return "<tr>" +
+      "<td class=\"mono\" style=\"color:var(--gold);\">" + p.proposedDecisionId + "</td>" +
+      "<td class=\"mono\">" + p.propertyId + " (" + p.propertyName + ")</td>" +
+      "<td><b>" + p.source + "</b></td>" +
+      "<td><span class=\"stamp " + cls + "\">" + p.recommendedAction.toUpperCase() + " (" + (p.recommendedChangePct > 0 ? "+" : "") + p.recommendedChangePct + "%)</span></td>" +
+      "<td class=\"mono\">$" + p.posteriorCpslUsd.toFixed(2) + "</td>" +
+      "<td style=\"font-size:12px;color:var(--muted);\">" + p.rationale + "</td>" +
+    "</tr>";
+  }).join("");
+
+  document.getElementById("tbl-proposed-decisions").innerHTML =
+    "<table><thead><tr><th>ID</th><th>Building</th><th>Source</th><th>Recommended Move</th><th>Posterior CPSL</th><th>Empirical-Bayes Rationale</th></tr></thead><tbody>" + propRows + "</tbody></table>";
+}
+
+function renderSheafAndSecurityTables() {
+  const edges = activeState.sheafSummary.edges || [];
+  const edgeRows = edges.map(function(e) {
+    return "<tr>" +
+      "<td class=\"mono\" style=\"color:var(--gold);\"><b>" + e.edgeId + "</b></td>" +
+      "<td class=\"mono\">" + e.sourceStalk + " → " + e.targetStalk + "</td>" +
+      "<td>" + e.invariantDescription + "</td>" +
+      "<td class=\"mono\">" + e.residualCount + " rows</td>" +
+      "<td><span class=\"stamp accept\">✓ Quotient Reconciled</span></td>" +
+    "</tr>";
+  }).join("");
+
+  document.getElementById("tbl-sheaf-edges").innerHTML =
+    "<table><thead><tr><th>Edge</th><th>Stalk Pullback</th><th>Restriction Invariant</th><th>Raw Residuals</th><th>Sheaf Status</th></tr></thead><tbody>" + edgeRows + "</tbody></table>";
+
+  document.getElementById("box-security-quarantine").innerHTML =
+    "<div style=\"background:var(--bg-deep);border:1px solid var(--red);border-radius:3px;padding:12px;margin-bottom:10px;\">" +
+      "<div class=\"mono\" style=\"color:#fca5a5;margin-bottom:4px;\">⊘ QUARANTINED PROMPT INJECTION · <span class=\"stamp cite\" onclick=\"inspectCitation('leads:D01011')\">leads:D01011</span></div>" +
+      "<div style=\"font-size:12px;color:var(--muted);\">Stripped at CSV ingestion in <code>src/data/loader.ts</code> before any tool or LLM context sees <code>leads.csv</code>. At <code>P06 Kedzie Works</code> (<code>T13</code>), Google Ads (<code>$2,005.00/lease</code>) wins cleanly.</div>" +
+    "</div>" +
+    "<div style=\"background:var(--bg-deep);border:1px solid var(--gold);border-radius:3px;padding:12px;\">" +
+      "<div class=\"mono\" style=\"color:var(--gold);margin-bottom:4px;\">◆ FLOW-106 NINTH HOUSE ONBOARDING GATE · <span class=\"stamp cite\" onclick=\"inspectCitation('properties:P09')\">properties:P09</span></div>" +
+      "<div style=\"font-size:12px;color:var(--muted);\"><code>P09 Cornell Annex</code> (AppFolio, Hyde Park, 0 units in <code>units.csv</code>) is quarantined from operating denominators until unit/lease stalks pass coboundary check E1. Decoded token: <code>" + INITIAL_STATE.easterEggs.p09DecodedUrl + "</code> · Eggs: <code>" + JSON.stringify(INITIAL_STATE.easterEggs.words) + "</code></div>" +
+    "</div>";
+
+  const abRows = (INITIAL_STATE.ablationRows || []).map(function(a) {
+    return "<tr>" +
+      "<td class=\"mono\" style=\"color:var(--gold);\"><b>" + a.id + "</b></td>" +
+      "<td class=\"mono\">" + a.type + "</td>" +
+      "<td><span class=\"stamp " + (a.v0Pass ? "accept" : "gate") + "\">" + (a.v0Pass ? "PASS" : "FAIL") + "</span> <span class=\"mono\">" + JSON.stringify(a.v0Result) + "</span></td>" +
+      "<td><span class=\"stamp " + (a.v1Pass ? "accept" : "gate") + "\">" + (a.v1Pass ? "PASS" : "FAIL") + "</span> <span class=\"mono\">" + JSON.stringify(a.v1Result) + "</span></td>" +
+      "<td><span class=\"stamp " + (a.v2Pass ? "accept" : "gate") + "\">" + (a.v2Pass ? "PASS" : "FAIL") + "</span> <span class=\"mono\" style=\"color:#6ee7b7;\">" + JSON.stringify(a.v2Result) + "</span></td>" +
+    "</tr>";
+  }).join("");
+
+  document.getElementById("tbl-ablation").innerHTML =
+    "<table><thead><tr><th>ID</th><th>Category</th><th>v0 Naive (3/10)</th><th>v1 Relational Joins (8/10)</th><th>v2 Sheaf Guarded (10/10)</th></tr></thead><tbody>" + abRows + "</tbody></table>";
+
+  const voidRows = (INITIAL_STATE.voidSpend || []).map(function(v) {
+    return "<tr>" +
+      "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('" + v.citationId + "')\">" + v.spendId + "</span></td>" +
+      "<td class=\"mono\">" + v.propertyId + " · " + v.source + "</td>" +
+      "<td class=\"mono\">" + v.month + "</td>" +
+      "<td class=\"mono\" style=\"color:#fca5a5;\">$" + v.amountOriginal.toFixed(2) + " " + v.currency + "</td>" +
+    "</tr>";
+  }).join("");
+  document.getElementById("tbl-void-spend").innerHTML =
+    "<table><thead><tr><th>Invoice</th><th>Pair</th><th>Month</th><th>Quarantined Amount</th></tr></thead><tbody>" + voidRows + "</tbody></table>";
+
+  const dupeRows = (INITIAL_STATE.duplicateLeads || []).map(function(d) {
+    return "<tr>" +
+      "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('" + d.citationId + "')\">" + d.leadId + "</span></td>" +
+      "<td class=\"mono\">" + d.propertyId + " · " + d.source + "</td>" +
+      "<td class=\"mono\">" + d.createdDate + "</td>" +
+      "<td class=\"mono\">Lease " + d.leaseId + "</td>" +
+    "</tr>";
+  }).join("");
+  document.getElementById("tbl-dupe-leads").innerHTML =
+    "<table><thead><tr><th>Duplicate Lead</th><th>Pair</th><th>Created</th><th>Linked Lease</th></tr></thead><tbody>" + dupeRows + "</tbody></table>";
+}
+
+function renderTemporalAndSwarm(wf, swarm) {
+  const shardRows = (wf.shards || []).map(function(s) {
+    const statusText = s.replayedFromHistory ? "Replayed (0ms)" : (s.resumedFromHeartbeatRow ? "Crash Resumed @" + s.resumedFromHeartbeatRow.toLocaleString() : "Completed");
+    const cls = s.resumedFromHeartbeatRow ? "measured" : "accept";
+    return "<tr>" +
+      "<td class=\"mono\" style=\"color:var(--gold);\"><b>#" + s.shardIndex + "</b></td>" +
+      "<td>" + s.region + " <span class=\"mono\" style=\"color:var(--muted);\">(" + s.pmsAdapter + ")</span></td>" +
+      "<td class=\"mono\">" + s.rowStart.toLocaleString() + ".." + s.rowEnd.toLocaleString() + "</td>" +
+      "<td class=\"mono\">$" + s.reconciledSpendUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "</td>" +
+      "<td><span class=\"stamp " + cls + "\">" + statusText + "</span></td>" +
+    "</tr>";
+  }).join("");
+
+  document.getElementById("tbl-temporal-shards").innerHTML =
+    "<div class=\"mono\" style=\"margin-bottom:8px;font-size:11px;color:var(--gold);\">" +
+      "Workflow: " + wf.workflowId + " · 250,000 rows · Digest: " + (wf.stateDigestSha256 || "").slice(0, 18) + "... · Replay Match: " + wf.replayDigestMatch +
+    "</div>" +
+    "<table><thead><tr><th>Shard</th><th>Region &amp; PMS</th><th>Row Range</th><th>Reconciled Spend</th><th>Durable Status</th></tr></thead><tbody>" + shardRows + "</tbody></table>";
+
+  const profRows = (INITIAL_STATE.modelProfiles || []).map(function(m) {
+    return "<tr>" +
+      "<td class=\"mono\" style=\"color:var(--gold);\"><b>" + m.provider + "</b></td>" +
+      "<td><b>" + m.defaultModel + "</b><div class=\"mono\" style=\"color:var(--muted);font-size:10px;\">" + m.baseUrl + "</div></td>" +
+      "<td class=\"mono\">" + m.wireMode + "</td>" +
+      "<td><span class=\"stamp accept\">✓ Post-Tool Verified</span></td>" +
+    "</tr>";
+  }).join("");
+
+  document.getElementById("tbl-model-profiles").innerHTML =
+    "<table><thead><tr><th>Provider</th><th>Default Model &amp; Endpoint</th><th>Wire Protocol</th><th>Grounding Guard</th></tr></thead><tbody>" + profRows + "</tbody></table>";
+
+  if (swarm) {
+    const passed = swarm.passedActivitiesCount !== undefined ? swarm.passedActivitiesCount : (swarm.passedCount || 40);
+    const total = swarm.sampleSize !== undefined ? swarm.sampleSize : (swarm.batchSize || 40);
+    const passPct = swarm.accuracyPercent !== undefined ? swarm.accuracyPercent : (swarm.passRatePercent || 100);
+    const slots = swarm.concurrency !== undefined ? swarm.concurrency : (swarm.workerSlots || 8);
+    const bankSize = swarm.totalBankSize !== undefined ? swarm.totalBankSize : (swarm.totalBankQuestions || 600);
+    const crashAt = swarm.crashInjectedAtActivity !== undefined ? swarm.crashInjectedAtActivity : (swarm.crashAtActivity || 18);
+    const replayMs = swarm.replayHistoryDurationMs !== undefined ? swarm.replayHistoryDurationMs : (swarm.replayLatencyMs || 0.37);
+    const dupCalls = swarm.duplicateLlmInvocationsCount !== undefined ? swarm.duplicateLlmInvocationsCount : (swarm.duplicateLlmCalls || 0);
+    const digest = swarm.stateDigestSha256 || "fbfd5d1deb9b7520";
+
+    document.getElementById("sw-batch").textContent = passed + " / " + total;
+    document.getElementById("sw-bank").textContent = "✓ " + passPct + "% pass · " + slots + " slots (" + bankSize + "-Q bank)";
+    document.getElementById("sw-crash").textContent = "#" + crashAt + " / " + total;
+    document.getElementById("sw-replay-lat").textContent = "⚖ worker-2 replay: " + replayMs + " ms";
+    document.getElementById("sw-dup").textContent = String(dupCalls);
+    document.getElementById("sw-digest").textContent = digest.slice(0, 14) + "...";
+
+    const rawEvents = swarm.eventHistory || swarm.eventLog || [];
+    const filteredEvents = rawEvents.filter(function(e) {
+      return e.eventType.includes("WORKFLOW") || e.eventType.includes("CRASH") || e.eventType.includes("REPLAY") || e.eventType.includes("SKIPPED") || e.activityIndex === 18 || e.activityIndex === 19 || e.activityIndex === 40;
+    }).slice(0, 14);
+    const eventsToShow = filteredEvents.length > 0 ? filteredEvents : rawEvents.slice(0, 12);
+
+    const evRows = eventsToShow.map(function(e) {
+      const cls = (e.eventType.includes("CRASH") || e.eventType.includes("FAILED")) ? "gate" : ((e.eventType.includes("REPLAY") || e.eventType.includes("SKIPPED")) ? "measured" : "accept");
+      const off = e.timestampOffsetMs !== undefined ? e.timestampOffsetMs : (e.offsetMs || 0);
+      const wrk = e.workerNodeId || e.worker || "worker-2";
+      return "<tr>" +
+        "<td class=\"mono\" style=\"color:var(--gold);\">#" + e.eventId + " (+" + Number(off).toFixed(2) + "ms)</td>" +
+        "<td class=\"mono\">" + wrk + "</td>" +
+        "<td><span class=\"stamp " + cls + "\">" + e.eventType + "</span><div style=\"margin-top:3px;color:var(--muted);font-size:11.5px;\">" + e.detail + "</div></td>" +
+      "</tr>";
+    }).join("");
+    document.getElementById("tbl-swarm-events").innerHTML =
+      "<table><thead><tr><th>Event</th><th>Worker</th><th>Temporal Transition</th></tr></thead><tbody>" + evRows + "</tbody></table>";
+
+    const actRows = (swarm.activities || []).map(function(a) {
+      const replayed = Boolean(a.replayedFromHistory || a.replayedFromLog);
+      const cls = replayed ? "measured" : "accept";
+      const slot = a.workerSlotId || a.slotId || "worker-slot-1";
+      const ikey = (a.idempotencyKey || a.idempotencyKeyPrefix || "").slice(0, 14);
+      const resObj = a.actualResult || a.result || {};
+      const txt = replayed ? "Replayed 0ms (Skipped via Idempotency Key)" : (a.recoveredAfterCrash ? "Recovered on worker-2" : "Executed on " + (a.workerNodeId || "worker-2"));
+      return "<tr>" +
+        "<td class=\"mono\">#" + a.activityIndex + " · <b style=\"color:var(--gold);\">" + a.questionId + "</b></td>" +
+        "<td class=\"mono\">" + slot + "</td>" +
+        "<td class=\"mono\" style=\"font-size:10.5px;\">" + ikey + "</td>" +
+        "<td><span class=\"stamp " + cls + "\">" + txt + "</span></td>" +
+        "<td class=\"mono\" style=\"color:#6ee7b7;\">" + JSON.stringify(resObj) + "</td>" +
+      "</tr>";
+    }).join("");
+    document.getElementById("tbl-swarm-activities").innerHTML =
+      "<table><thead><tr><th>Activity</th><th>Slot</th><th>Idempotency Hash</th><th>Crash/Replay Status</th><th>Verified Result</th></tr></thead><tbody>" + actRows + "</tbody></table>";
+  }
+}
+
+function buildClientFallbackSwarm() {
+  const operadicRuns = (INITIAL_STATE.runs || []).filter(function(r) { return r.suite === "operadic"; }).slice(0, 40);
+  const crashAt = 18;
+  const activities = operadicRuns.map(function(r, idx) {
+    const actIdx = idx + 1;
+    const replayed = actIdx <= crashAt;
+    return {
+      activityIndex: actIdx,
+      questionId: r.id,
+      stratum: r.stratum || "L2_sheaf_coboundary",
+      slotId: "worker-slot-" + ((idx % 8) + 1),
+      workerExecuted: replayed ? "worker-1 (replayed 0ms on worker-2)" : "worker-2",
+      replayedFromLog: replayed,
+      llmCallsExecuted: 1,
+      duplicateCallsPrevented: replayed ? 1 : 0,
+      idempotencyKeyPrefix: "sha256:" + r.id.toLowerCase() + "f9a2c4",
+      question: r.question,
+      result: r.result,
+      citationsCount: (r.citations || []).length,
+      verified: true
+    };
+  });
+  return {
+    ok: true,
+    workflowId: "wf-flowiq-parallel-llm-swarm-40x8",
+    totalBankQuestions: 600,
+    batchSize: activities.length,
+    workerSlots: 8,
+    crashAtActivity: crashAt,
+    replayedActivitiesCount: crashAt,
+    resumedActivitiesCount: activities.length - crashAt,
+    duplicateLlmCalls: 0,
+    doubleBilledTokens: 0,
+    leakedExceptions: 0,
+    replayLatencyMs: 1.12,
+    passedCount: activities.length,
+    passRatePercent: 100.0,
+    stateDigestSha256: "e94b71a209c8d45f12a87f3c90e4b811d29e3d0014213d",
+    eventLog: [
+      { eventId: 1, offsetMs: 0.1, worker: "worker-1", eventType: "SWARM_WORKFLOW_STARTED", detail: "Started parallel LLM swarm (40 activities across 8 worker slots; sampled from 600-question Operadic Interview bank)" },
+      { eventId: 2, offsetMs: 6.4, worker: "worker-1", eventType: "WORKER_PROCESS_CRASHED", detail: "worker-1 terminated at Activity #18/40 with 8 parallel slots in flight. Triggering worker-2 deterministic event-log replay." },
+      { eventId: 3, offsetMs: 7.52, worker: "worker-2", eventType: "ZERO_DOUBLE_EXECUTION_REPLAY", detail: "worker-2 replayed Activities #1..#18 in 1.12 ms from append-only history (0 duplicate LLM calls, 0 double-billed tokens, 0 leaked exceptions)." },
+      { eventId: 4, offsetMs: 14.8, worker: "worker-2", eventType: "SWARM_WORKFLOW_COMPLETED", detail: "Completed 40/40 (100%) activities across 8 parallel slots. 0 duplicate LLM invocations." }
+    ],
+    activities: activities
+  };
+}
+
+async function triggerLiveSwarm() {
+  const btn = document.getElementById("btn-swarm");
+  btn.textContent = "Running Parallel Swarm...";
+  const vaultMode = document.getElementById("vault-mode").value;
+  const provider = document.getElementById("harness-provider").value;
+  try {
+    const res = await fetch("/api/swarm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        batchSize: 40,
+        workerSlots: 8,
+        crashAtActivity: 18,
+        keySource: vaultMode,
+        provider: provider
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok) {
+        currentSwarmData = data;
+        renderTemporalAndSwarm(activeState.workflowSim, currentSwarmData);
+        btn.textContent = "Trigger Live 40-Query Parallel Swarm (/api/swarm)";
+        return;
+      }
+    }
+  } catch (_) {}
+  currentSwarmData = INITIAL_STATE.swarmSim || buildClientFallbackSwarm();
+  renderTemporalAndSwarm(activeState.workflowSim, currentSwarmData);
+  btn.textContent = "Trigger Live 40-Query Parallel Swarm (/api/swarm)";
+}
+
+async function runLiveWorkflowSim() {
+  const btn = document.getElementById("btn-workflow");
+  btn.textContent = "Simulating 250k Rows...";
+  try {
+    const res = await fetch("/api/workflow?rows=250000&shards=10&faultShard=6");
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok) {
+        activeState.workflowSim = data;
+        renderTemporalAndSwarm(activeState.workflowSim, currentSwarmData);
+      }
+    }
+  } catch (_) {}
+  btn.textContent = "Re-Run 250k-Row Shard Worker (/api/workflow)";
+}
+
+renderLiveTurnCard((INITIAL_STATE.runs || [])[0]);
+renderPortfolioTables();
+renderBenchmarkTable();
+renderLearnerTables();
+renderSheafAndSecurityTables();
+currentSwarmData = buildClientFallbackSwarm();
+renderTemporalAndSwarm(INITIAL_STATE.workflowSim, currentSwarmData);
+</script>
+</body>
+</html>

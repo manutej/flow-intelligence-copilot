@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" width="960" height="430" role="img" aria-label="FLOW-102 Paid Channel Contrast Bars and $46,599.90 Dead-Spend Reallocation">
+  <defs>
+    <linearGradient id="wf-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#14213d"/>
+      <stop offset="100%" stop-color="#0e1830"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="960" height="430" rx="3" fill="url(#wf-bg)"/>
+  <rect x="0.5" y="0.5" width="959" height="429" rx="3" fill="none" stroke="#eceae3" stroke-opacity="0.12"/>
+  <line x1="0" y1="1" x2="960" y2="1" stroke="#d29e3d" stroke-opacity="0.8" stroke-width="2"/>
+
+  <!-- Header -->
+  <text x="28" y="30" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="11" letter-spacing="1.0">/ FLOW-102 &amp; B03 · PAID CHANNEL CONTRAST BARS &amp; DEAD-SPEND REALLOCATION (APR–SEP 2026)</text>
+  <text x="28" y="58" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="26">Moving $46,599.90 from 9 zero-lease pairs to Apartments.com ($2,915.86/lease) buys +15 leases.</text>
+  <line x1="28" y1="72" x2="932" y2="72" stroke="#eceae3" stroke-opacity="0.12"/>
+
+  <!-- Left Panel: Portfolio CPSL Contrast Bars (ormus-chrome-charts.md pattern) -->
+  <g transform="translate(28, 90)">
+    <text x="0" y="14" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10.5" letter-spacing="0.8">/ PORTFOLIO COST PER SIGNED LEASE (ONE LINEAR SCALE, $0 – $9,000)</text>
+
+    <!-- Axis at bottom of bars -->
+    <line x1="150" y1="252" x2="430" y2="252" stroke="#eceae3" stroke-opacity="0.18" stroke-width="1"/>
+    <text x="150" y="268" text-anchor="middle" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">$0</text>
+    <text x="243" y="268" text-anchor="middle" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">$3,000</text>
+    <text x="336" y="268" text-anchor="middle" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">$6,000</text>
+    <text x="430" y="268" text-anchor="middle" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">$9,000</text>
+
+    <!-- Row 1: Apartments.com ($2,915.86 -> width 91px on 280px = $9,000 scale) -->
+    <g transform="translate(0, 32)">
+      <text x="0" y="14" fill="#eceae3" font-family="'Inter', sans-serif" font-size="12.5" font-weight="500">Apartments.com</text>
+      <text x="0" y="28" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">$84,560 · 29 leases</text>
+      <rect x="150" y="4" width="91" height="22" fill="#d29e3d"/>
+      <text x="249" y="19" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="11.5" font-weight="500">$2,915.86</text>
+      <text x="322" y="19" fill="#d29e3d" font-family="'Cormorant Garamond', Georgia, serif" font-size="15">1.0× (best)</text>
+    </g>
+
+    <!-- Row 2: Google Ads ($3,045.83 -> width 95px) -->
+    <g transform="translate(0, 68)">
+      <text x="0" y="14" fill="#eceae3" font-family="'Inter', sans-serif" font-size="12.5">Google Ads</text>
+      <text x="0" y="28" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">$36,550 · 12 leases</text>
+      <rect x="150" y="4" width="95" height="22" fill="#eceae3"/>
+      <text x="253" y="19" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11.5">$3,045.83</text>
+      <text x="326" y="19" fill="#d29e3d" font-family="'Cormorant Garamond', Georgia, serif" font-size="15">1.04× cost</text>
+    </g>
+
+    <!-- Row 3: Zillow ($4,399.23 -> width 137px) -->
+    <g transform="translate(0, 104)">
+      <text x="0" y="14" fill="#eceae3" font-family="'Inter', sans-serif" font-size="12.5">Zillow</text>
+      <text x="0" y="28" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">$57,190 · 13 leases</text>
+      <rect x="150" y="4" width="137" height="22" fill="#a5b0c4"/>
+      <text x="295" y="19" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11.5">$4,399.23</text>
+      <text x="368" y="19" fill="#d29e3d" font-family="'Cormorant Garamond', Georgia, serif" font-size="15">1.51× cost</text>
+    </g>
+
+    <!-- Row 4: Facebook Ads ($4,979.97 -> width 155px) -->
+    <g transform="translate(0, 140)">
+      <text x="0" y="14" fill="#eceae3" font-family="'Inter', sans-serif" font-size="12.5">Facebook Ads</text>
+      <text x="0" y="28" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">$14,939.90 · 3 leases</text>
+      <rect x="150" y="4" width="155" height="22" fill="#a5b0c4"/>
+      <text x="313" y="19" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11.5">$4,979.97</text>
+      <text x="386" y="19" fill="#d29e3d" font-family="'Cormorant Garamond', Georgia, serif" font-size="15">1.71× cost</text>
+    </g>
+
+    <!-- Row 5: Rent. ($7,486.67 -> width 233px) -->
+    <g transform="translate(0, 176)">
+      <text x="0" y="14" fill="#eceae3" font-family="'Inter', sans-serif" font-size="12.5">Rent.</text>
+      <text x="0" y="28" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">$22,460 · 3 leases</text>
+      <rect x="150" y="4" width="233" height="22" fill="#6d7891"/>
+      <text x="390" y="19" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11.5">$7,486.67</text>
+      <text x="456" y="19" fill="#d29e3d" font-family="'Cormorant Garamond', Georgia, serif" font-size="15">2.57×</text>
+    </g>
+
+    <!-- Row 6: Apartment List ($8,900.00 -> width 277px) -->
+    <g transform="translate(0, 212)">
+      <text x="0" y="14" fill="#eceae3" font-family="'Inter', sans-serif" font-size="12.5">Apartment List</text>
+      <text x="0" y="28" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">$8,900 · 1 lease (T03)</text>
+      <rect x="150" y="4" width="277" height="22" fill="#6d7891"/>
+      <text x="434" y="19" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11.5">$8,900.00</text>
+    </g>
+
+    <!-- Organic footnote -->
+    <text x="0" y="294" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10.5">Organic channels ($0 spend): Referral (64 leases) · Website (32 leases)</text>
+    <text x="0" y="312" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">⚖︎ All 10 void invoices ($11,500.80) excluded; 12 CAD invoices × 0.73 USD.</text>
+  </g>
+
+  <!-- Vertical Hairline Divider -->
+  <line x1="518" y1="88" x2="518" y2="404" stroke="#eceae3" stroke-opacity="0.12"/>
+
+  <!-- Right Panel: 9 Zero-Lease Dead-Spend Pairs ($46,599.90) -->
+  <g transform="translate(538, 90)">
+    <text x="0" y="14" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5" letter-spacing="0.8">/ 9 ZERO-LEASE PAID PAIRS (T04 · $46,599.90 TOTAL DEAD SPEND)</text>
+
+    <g transform="translate(0, 28)" font-family="'JetBrains Mono', monospace" font-size="11">
+      <text x="0" y="16" fill="#eceae3">1. P01 Halsted &amp; Lake · Zillow</text>
+      <text x="390" y="16" text-anchor="end" fill="#d29e3d">$9,690.00</text>
+      <line x1="0" y1="23" x2="394" y2="23" stroke="#eceae3" stroke-opacity="0.08"/>
+
+      <text x="0" y="40" fill="#eceae3">2. P05 Armitage Commons · Apartments.com</text>
+      <text x="390" y="40" text-anchor="end" fill="#eceae3">$7,340.00</text>
+      <line x1="0" y1="47" x2="394" y2="47" stroke="#eceae3" stroke-opacity="0.08"/>
+
+      <text x="0" y="64" fill="#eceae3">3. P08 Wabash Point · Zillow (X010)</text>
+      <text x="390" y="64" text-anchor="end" fill="#eceae3">$6,650.00</text>
+      <line x1="0" y1="71" x2="394" y2="71" stroke="#eceae3" stroke-opacity="0.08"/>
+
+      <text x="0" y="88" fill="#eceae3">4. P07 Printers Row Tower · Rent. (X008)</text>
+      <text x="390" y="88" text-anchor="end" fill="#eceae3">$4,470.00</text>
+      <line x1="0" y1="95" x2="394" y2="95" stroke="#eceae3" stroke-opacity="0.08"/>
+
+      <text x="0" y="112" fill="#eceae3">5. P08 Wabash Point · Rent.</text>
+      <text x="390" y="112" text-anchor="end" fill="#eceae3">$4,300.00</text>
+      <line x1="0" y1="119" x2="394" y2="119" stroke="#eceae3" stroke-opacity="0.08"/>
+
+      <text x="0" y="136" fill="#eceae3">6. P03 Fulton Yards · Apartment List (X004)</text>
+      <text x="390" y="136" text-anchor="end" fill="#eceae3">$4,200.00</text>
+      <line x1="0" y1="143" x2="394" y2="143" stroke="#eceae3" stroke-opacity="0.08"/>
+
+      <text x="0" y="160" fill="#eceae3">7. P07 Printers Row · Facebook Ads (5,730 CAD)</text>
+      <text x="390" y="160" text-anchor="end" fill="#d29e3d">$4,182.90</text>
+      <line x1="0" y1="167" x2="394" y2="167" stroke="#eceae3" stroke-opacity="0.08"/>
+
+      <text x="0" y="184" fill="#eceae3">8. P05 Armitage Commons · Rent. (X006)</text>
+      <text x="390" y="184" text-anchor="end" fill="#eceae3">$2,920.00</text>
+      <line x1="0" y1="191" x2="394" y2="191" stroke="#eceae3" stroke-opacity="0.08"/>
+
+      <text x="0" y="208" fill="#eceae3">9. P06 Kedzie Works · Facebook Ads (3,900 CAD)</text>
+      <text x="390" y="208" text-anchor="end" fill="#d29e3d">$2,847.00</text>
+      <line x1="0" y1="216" x2="394" y2="216" stroke="#d29e3d" stroke-opacity="0.6"/>
+    </g>
+
+    <!-- Counterfactual Box -->
+    <g transform="translate(0, 256)">
+      <rect width="394" height="58" rx="3" fill="#0e1830" stroke="#d29e3d" stroke-opacity="0.7"/>
+      <text x="12" y="21" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ B03 COUNTERFACTUAL REALLOCATION YIELD</text>
+      <text x="12" y="42" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-size="20">floor($46,599.90 ÷ $2,915.8621) = <tspan fill="#d29e3d">+15 whole leases</tspan> (15.98)</text>
+    </g>
+  </g>
+</svg>

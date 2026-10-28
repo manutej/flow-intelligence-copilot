@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" width="960" height="320" role="img" aria-label="FlowIQ — Ormus Chrome Portfolio and Growth Decision Copilot">
+  <defs>
+    <linearGradient id="lacquer-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#14213d"/>
+      <stop offset="75%" stop-color="#0e1830"/>
+      <stop offset="100%" stop-color="#0b1226"/>
+    </linearGradient>
+    <radialGradient id="gold-bloom" cx="85%" cy="0%" r="65%">
+      <stop offset="0%" stop-color="#d29e3d" stop-opacity="0.16"/>
+      <stop offset="60%" stop-color="#d29e3d" stop-opacity="0.03"/>
+      <stop offset="100%" stop-color="#0e1830" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Ground & Bloom -->
+  <rect width="960" height="320" rx="3" fill="url(#lacquer-bg)"/>
+  <rect width="960" height="320" rx="3" fill="url(#gold-bloom)"/>
+  <rect x="0.5" y="0.5" width="959" height="319" rx="3" fill="none" stroke="#eceae3" stroke-opacity="0.12"/>
+  <line x1="0" y1="1" x2="960" y2="1" stroke="#d29e3d" stroke-opacity="0.8" stroke-width="2"/>
+
+  <!-- Arrival Rail -->
+  <line x1="0" y1="38" x2="960" y2="38" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
+  <text x="32" y="24" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="11" letter-spacing="1.1">/ ORMUS · TALENT · BRIEFS · FLOW · COPILOT</text>
+  <text x="928" y="24" text-anchor="end" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="11" letter-spacing="0.8">AS OF 2026-10-01 · 3,858 PKS · P01–P08 + P09⊘</text>
+
+  <!-- Right Cover Block Art (from references/cover.md) -->
+  <g transform="translate(620, 38)">
+    <rect x="24" y="-8" width="116" height="224" rx="3" fill="#d29e3d" fill-opacity="0.92"/>
+    <rect x="156" y="76" width="40" height="20" rx="3" fill="#a5b0c4" fill-opacity="0.85"/>
+    <rect x="156" y="104" width="68" height="112" rx="3" fill="#e0b258" fill-opacity="0.92"/>
+    <rect x="240" y="156" width="100" height="60" rx="3" fill="#eceae3" fill-opacity="0.9"/>
+    <line x1="0" y1="56" x2="340" y2="56" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
+    <line x1="0" y1="96" x2="340" y2="96" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
+    <line x1="0" y1="136" x2="340" y2="136" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
+    <line x1="0" y1="176" x2="340" y2="176" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
+    <!-- Saturn Alchemical Line Sigil on Gold Block -->
+    <g transform="translate(66, 36)" stroke="#1a1407" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="6" y1="4" x2="18" y2="4"/>
+      <line x1="12" y1="4" x2="12" y2="22"/>
+      <path d="M12 13 C20 11, 22 19, 15 23 C12 25, 16 28, 20 26"/>
+    </g>
+  </g>
+
+  <!-- Left Editorial Display -->
+  <text x="32" y="72" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="11" letter-spacing="1.1">/ FLOW-101..106 · DETERMINISTIC RELATIONAL SHEAF &amp; AGENT COPILOT</text>
+  <text x="32" y="118" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="42" letter-spacing="-0.4">Eight buildings. 1,100 units.</text>
+  <text x="32" y="162" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="42" letter-spacing="-0.4">One answerable portfolio.</text>
+  <text x="32" y="196" fill="#a5b0c4" font-family="'Inter', -apple-system, sans-serif" font-size="13.5">Cross-system joins over PMS, CRM, ILS spend, and budget decisions. Every figure verified against 3,858 row primary keys.</text>
+
+  <!-- Bottom 5-Tile Measured Record Strip -->
+  <line x1="0" y1="226" x2="960" y2="226" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
+
+  <!-- Tile 1 -->
+  <g transform="translate(32, 238)">
+    <line x1="0" y1="0" x2="164" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
+    <text x="0" y="18" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ OPERATING FLEET</text>
+    <text x="0" y="48" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="30">93.9%<tspan fill="#a5b0c4" font-size="13" font-family="'JetBrains Mono', monospace"> occ</tspan></text>
+    <text x="0" y="66" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10">⚖︎ measured · 1,033/1,100</text>
+  </g>
+
+  <!-- Tile 2 -->
+  <g transform="translate(216, 238)">
+    <line x1="0" y1="0" x2="164" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
+    <text x="0" y="18" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ DEAD AD SPEND</text>
+    <text x="0" y="48" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="30">$46,599.90</text>
+    <text x="0" y="66" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10">✓︎ accept · +15 leases</text>
+  </g>
+
+  <!-- Tile 3 -->
+  <g transform="translate(400, 238)">
+    <line x1="0" y1="0" x2="164" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
+    <text x="0" y="18" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ POLICY ABLATION</text>
+    <text x="0" y="48" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="30">3→8→10<tspan fill="#a5b0c4" font-size="13" font-family="'JetBrains Mono', monospace">/10</tspan></text>
+    <text x="0" y="66" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10">⚖︎ measured · 25/25 red-team</text>
+  </g>
+
+  <!-- Tile 4 -->
+  <g transform="translate(584, 238)">
+    <line x1="0" y1="0" x2="164" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
+    <text x="0" y="18" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ QUARANTINE GATES</text>
+    <text x="0" y="48" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="30">6<tspan fill="#a5b0c4" font-size="13" font-family="'JetBrains Mono', monospace"> traps</tspan></text>
+    <text x="0" y="66" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10">⊘ gate · P09 &amp; D01011</text>
+  </g>
+
+  <!-- Tile 5 -->
+  <g transform="translate(768, 238)">
+    <line x1="0" y1="0" x2="160" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
+    <text x="0" y="18" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ ROW CITATIONS</text>
+    <text x="0" y="48" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="30">3,858<tspan fill="#a5b0c4" font-size="13" font-family="'JetBrains Mono', monospace"> PKs</tspan></text>
+    <text x="0" y="66" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10">◆ law · 0 unverified</text>
+  </g>
+</svg>

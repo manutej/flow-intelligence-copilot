@@ -103,12 +103,12 @@ What we trust vs. quarantine across the 6 CSV exports:
 
 ### 3.1 Plain-Words Explanation: Why Small Samples Lie in Leasing Data
 In apartment leasing, a single ad channel at a single building typically spends `$500`–`$1,800/month` and signs `0` to `2` leases per month. Because lease signings are rare discrete events (a Poisson arrival process), **a short 1-to-2 month observation window with `0` leases is often random luck, not proof that a channel broke**:
-- Look at **`decisions:X009` (`2026-08`, `P01`, `Apartments.com`, `decrease -$200/mo`, `accepted = yes`)**: Before August (4 months, `$2,390` spend), it signed `1` lease. After August (only 2 months: Aug–Sep, `$950` total spend), it signed `0` leases.
+- Look at **`decisions:X009` (`2026-08`, `P01`, `Facebook Ads`, `decrease -$200/mo`, `accepted = yes`)**: Before August (4 months, `$2,390` spend), it signed `1` lease. After August (only 2 months: Aug–Sep, `$950` total spend), it signed `0` leases.
 - At the portfolio prior Cost Per Signed Lease (`β₀ = $3,250/lease`), `$950` of spend has an expected arrival rate of only `λ = 950 ÷ 3250 = 0.292` leases. Under a Poisson distribution, the probability of seeing `0` leases purely by chance is:
 
 $$\Pr(K = 0 \mid \lambda = 0.292) = e^{-0.292} = 74.7\%$$
 
-- A naive "before vs. after" ratio claims `P01 Apartments.com` dropped `100%` (`0.25/mo → 0.0/mo`) and tells the operator to kill it.
+- A naive "before vs. after" ratio claims `P01 Facebook Ads` dropped `100%` (`0.25/mo → 0.0/mo`) and tells the operator to kill it.
 - By contrast, look at **`decisions:X001` (`2026-05`, `P01`, `Zillow`, `increase +$300/mo`, `accepted = yes`)**: After accepting the increase in May, `P01 Zillow` spent **`$8,170` over 5 post-decision months** (`$9,690` total across 6 months) and signed **`0` leases**. At `$8,170` post-decision spend, expected leases under the portfolio prior is `λ = 8170 ÷ 3250 = 2.514` leases, so the probability of seeing `0` leases by chance is only:
 
 $$\Pr(K = 0 \mid \lambda = 2.514) = e^{-2.514} = 8.1\%$$
@@ -132,13 +132,13 @@ Because $S_{\text{pre}} + S_{\text{post}} = S_{\text{all}}$ and $K_{\text{pre}} 
 | `X006` | `2026-06` | `P05` · `Rent.` | `decrease -$250` | `no` | `2m`: `$1,020 / 0L` | `4m`: `$1,900 / 0L` | 55.7% | No (`4m` window) | `$4,270.00` → **`$6,170.00`** | **Missed cut (`$1,000` regret; `$2,920` dead spend across 6m)** → Cut 100% |
 | `X007` | `2026-07` | `P06` · `Zillow` | `increase +$200` | `yes` | `3m`: `$2,950 / 0L` | `3m`: `$3,500 / 2L` | 34.1% | No (`3m`, `$3,500`) | `$6,200.00` → **`$3,233.33`** | **Validated increase:** Signed 2 Q3 leases (`$1,750/L` post) → Promoted `#4 → #2` |
 | `X008` | `2026-07` | `P07` · `Rent.` | `decrease -$150` | `yes` | `3m`: `$2,560 / 0L` | `3m`: `$1,910 / 0L` | 55.6% | No (`3m` window) | `$5,810.00` → **`$7,720.00`** | **Confirmed waste cut:** `0` leases across all 6m (`$4,470` dead spend) → Cut remaining |
-| `X009` | `2026-08` | `P01` · `Apartments.com` | `decrease -$200` | `yes` | `4m`: `$2,390 / 1L` | `2m`: `$950 / 0L` | **74.7%** | **YES (`2m`, `$950`)** | `$2,820.00` → **`$3,295.00`** | **Small-sample shrinkage guard active:** Protected at `#2` ahead of Google Ads (`$3,466.67`) |
-| `X010` | `2026-08` | `P08` · `Zillow` | `increase +$150` | `no` | `4m`: `$4,580 / 0L` | `2m`: `$2,070 / 0L` | 52.9% | Yes (`2m` post) | `$7,830.00` → **`$9,900.00`** | Correctly rejected increase (`$6,650` 6m dead spend) → Cut 100% |
+| `X009` | `2026-08` | `P01` · `Facebook Ads` | `decrease -$200` | `yes` | `4m`: `$2,390 / 1L` | `2m`: `$950 / 0L` | **74.7%** | **YES (`2m`, `$950`)** | `$2,820.00` → **`$3,295.00`** | **Small-sample shrinkage guard active:** Protected at `#2` ahead of Google Ads (`$3,466.67`) |
+| `X010` | `2026-08` | `P08` · `Zillow` | `increase +$150` | `no` | `4m`: `$4,580 / 0L` | `2m`: `$2,070 / 0L` | 52.9% | No (`6m $6,650`) | `$7,830.00` → **`$9,900.00`** | Correctly rejected increase (`$6,650` 6m dead spend) → Cut 100% |
 
 ### 3.4 Concrete Ranking Shifts Driven by Post-Decision Outcomes (`windowInvarianceVerified = true`)
 Comparing the H1 pre-outcome baseline posterior against the full post-outcome posterior reveals concrete ranking shifts across the portfolio:
 - **`P06` (`Kedzie Works`) · `Zillow` (`X007`):** Ranked **#4 of 5** in H1 (`$2,950` spend, `0` leases → pre-posterior `$6,200.00`). After accepting `+$200/mo` in July (`X007`), `P06 Zillow` signed **2 leases in Q3** (`$3,500` post spend, `$1,750/lease`), improving its conjugate posterior CPSL to **`$3,233.33`** and jumping to **#2 of 5** (overtaking `Apartment List` at `$3,975.00` and `Apartments.com` at `$3,983.33`).
-- **`P01` (`Halsted & Lake`) · `Apartments.com` (`X009`) vs. `Zillow` (`X001`):** Despite `0` leases in the 2-month post-August window (`$950` spend, `Pr(K=0) = 74.7%`), conjugate shrinkage holds `P01 Apartments.com` at **`$3,295.00`** (rank **#2**, ahead of `Google Ads` at `$3,466.67`), whereas 5-month `Zillow` (`X001`, `$8,170` post-spend, `0` leases, `Pr(K=0) = 8.1%`) degrades to **`$12,940.00`** (rank **#4**, last place) and is flagged for immediate termination.
+- **`P01` (`Halsted & Lake`) · `Facebook Ads` (`X009`) vs. `Zillow` (`X001`):** Despite `0` leases in the 2-month post-August window (`$950` spend, `Pr(K=0) = 74.7%`), conjugate shrinkage holds `P01 Facebook Ads` at **`$3,295.00`** (rank **#2**, ahead of `Google Ads` at `$3,466.67`), whereas 5-month `Zillow` (`X001`, `$8,170` post-spend, `0` leases, `Pr(K=0) = 8.1%`) degrades to **`$12,940.00`** (rank **#4**, last place) and is flagged for immediate termination.
 
 ### 3.5 Method Limits
 1. **Observational Confounding (Seasonality):** Chicago leasing peaks in May–August. Comparing pre-July (Q2) vs. post-July (Q3) without a seasonal baseline can conflate summer demand with budget elasticity.

@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="FlowIQ Blinded Red-Team / Blue-Team &amp; Compression Meta-Learning Architecture">
+  <defs>
+    <linearGradient id="rb-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#14213d"/>
+      <stop offset="100%" stop-color="#0e1830"/>
+    </linearGradient>
+    <marker id="rb-arrow-gold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 8 5 L 0 9 z" fill="#d29e3d"/>
+    </marker>
+    <marker id="rb-arrow-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 8 5 L 0 9 z" fill="#8b95a7"/>
+    </marker>
+  </defs>
+
+  <!-- Ground Frame -->
+  <rect width="960" height="540" rx="3" fill="url(#rb-bg)"/>
+  <rect x="0.5" y="0.5" width="959" height="539" rx="3" fill="none" stroke="#e8ecf4" stroke-opacity="0.14"/>
+  <line x1="0" y1="1" x2="960" y2="1" stroke="#d29e3d" stroke-opacity="0.85" stroke-width="2"/>
+
+  <!-- Header Rail -->
+  <text x="28" y="30" fill="#d29e3d" font-family="JetBrains Mono, Consolas, monospace" font-size="11" letter-spacing="1.0">/ ADVERSARIAL ARCHITECTURE · BLINDED RED/BLUE LANES &amp; COMPRESSION META-LEARNING GATE</text>
+  <text x="28" y="58" fill="#e8ecf4" font-family="Cormorant Garamond, Georgia, serif" font-weight="300" font-size="26">Separated evaluation and execution lanes converge on a simplicity-constrained invariant gate.</text>
+  <line x1="28" y1="72" x2="932" y2="72" stroke="#e8ecf4" stroke-opacity="0.12"/>
+
+  <!-- LANE 1: BLINDED RED TEAM EVALUATOR LANE -->
+  <g transform="translate(28, 88)">
+    <rect width="284" height="352" rx="3" fill="#0e1830" stroke="#1e2c4a" stroke-width="1.2"/>
+    <line x1="0" y1="0" x2="284" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="14" y="22" fill="#d29e3d" font-family="JetBrains Mono, Consolas, monospace" font-size="10" letter-spacing="0.8">/ LANE 01 · BLINDED RED TEAM</text>
+    <text x="14" y="42" fill="#e8ecf4" font-family="Cormorant Garamond, Georgia, serif" font-size="19">Adversarial Evaluator Lane</text>
+    <text x="14" y="58" fill="#8b95a7" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">Reads AGENTS.md · llms.txt · src/schema.ts only</text>
+
+    <g transform="translate(12, 70)">
+      <rect width="260" height="62" rx="3" fill="#14213d" stroke="#1e2c4a"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">01A · AGENT DISCOVERY INDEX</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">AGENTS.md + llms.txt + schema.ts</text>
+      <text x="10" y="51" fill="#8b95a7" font-family="Inter, sans-serif" font-size="10">Contract-first map · blinded to solver internals</text>
+    </g>
+
+    <g transform="translate(12, 140)">
+      <rect width="260" height="62" rx="3" fill="#14213d" stroke="#1e2c4a"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">01B · 6 ATTACK SURFACES / 18 PROBES</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">RT-01..RT-25 + Injection + Fair Housing</text>
+      <text x="10" y="51" fill="#8b95a7" font-family="Inter, sans-serif" font-size="10">Tests D01011, P09 stub, CAD FX, void spend</text>
+    </g>
+
+    <g transform="translate(12, 210)">
+      <rect width="260" height="62" rx="3" fill="#14213d" stroke="#1e2c4a"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">01C · 40 OPERADIC INTERVIEW PROBES</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">OI-01..OI-40 (operadic-interview-bank)</text>
+      <text x="10" y="51" fill="#8b95a7" font-family="Inter, sans-serif" font-size="10">Compositional sub-goal decomposition tree</text>
+    </g>
+
+    <g transform="translate(12, 280)">
+      <rect width="260" height="58" rx="3" fill="#14213d" stroke="#d29e3d" stroke-opacity="0.45"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">01D · TYPESAFE JEV-1.13.0 HARNESS</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">Composite Score: 8.88 / 10.0</text>
+      <text x="10" y="50" fill="#8b95a7" font-family="JetBrains Mono, monospace" font-size="9.5">D01–D10 · T01–T13 · B01–B03 · EGGS</text>
+    </g>
+  </g>
+
+  <!-- Arrow 1 -> 2 -->
+  <line x1="312" y1="264" x2="334" y2="264" stroke="#d29e3d" stroke-width="1.5" marker-end="url(#rb-arrow-gold)"/>
+
+  <!-- LANE 2: BLINDED BLUE TEAM ENGINE & LOCAL MODEL HARNESS -->
+  <g transform="translate(338, 88)">
+    <rect width="284" height="352" rx="3" fill="#0e1830" stroke="#1e2c4a" stroke-width="1.2"/>
+    <line x1="0" y1="0" x2="284" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="14" y="22" fill="#d29e3d" font-family="JetBrains Mono, Consolas, monospace" font-size="10" letter-spacing="0.8">/ LANE 02 · BLINDED BLUE TEAM</text>
+    <text x="14" y="42" fill="#e8ecf4" font-family="Cormorant Garamond, Georgia, serif" font-size="19">Engine &amp; Universal Model Harness</text>
+    <text x="14" y="58" fill="#8b95a7" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">Zero prompt-specific regex · general primitives</text>
+
+    <g transform="translate(12, 70)">
+      <rect width="260" height="62" rx="3" fill="#14213d" stroke="#1e2c4a"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">02A · UNIVERSAL MODEL HARNESS</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">Ollama · Raven vLLM · OpenRouter · Grok</text>
+      <text x="10" y="51" fill="#8b95a7" font-family="Inter, sans-serif" font-size="10">Native tools + &lt;tool_call&gt; ReAct grammar</text>
+    </g>
+
+    <g transform="translate(12, 140)">
+      <rect width="260" height="62" rx="3" fill="#14213d" stroke="#1e2c4a"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">02B · 6 READ-ONLY MCP DOMAIN TOOLS</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">src/mcp/server.ts · src/agent/tools.ts</text>
+      <text x="10" y="51" fill="#8b95a7" font-family="Inter, sans-serif" font-size="10">JSON-RPC 2.0 stdio + /api/ask + CLI</text>
+    </g>
+
+    <g transform="translate(12, 210)">
+      <rect width="260" height="62" rx="3" fill="#14213d" stroke="#1e2c4a"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">02C · 6-EDGE SHEAF &amp; BAYES LEARNER</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">E1–E6 Pullback + Gamma-Poisson (β₀=$3,250)</text>
+      <text x="10" y="51" fill="#8b95a7" font-family="Inter, sans-serif" font-size="10">X001–X010 regret &amp; window invariance</text>
+    </g>
+
+    <g transform="translate(12, 280)">
+      <rect width="260" height="58" rx="3" fill="#14213d" stroke="#d29e3d" stroke-opacity="0.45"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">02D · DURABLE TEMPORAL 250K WORKER</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">10 Shards · Shard 6 Crash Recovery</text>
+      <text x="10" y="50" fill="#8b95a7" font-family="JetBrains Mono, monospace" font-size="9.5">Zero-compute replay · SHA-256 verified</text>
+    </g>
+  </g>
+
+  <!-- Arrow 2 -> 3 -->
+  <line x1="622" y1="264" x2="644" y2="264" stroke="#d29e3d" stroke-width="1.5" marker-end="url(#rb-arrow-gold)"/>
+
+  <!-- LANE 3: COMPRESSION META-LEARNING GATE -->
+  <g transform="translate(648, 88)">
+    <rect width="284" height="352" rx="3" fill="#0e1830" stroke="#1e2c4a" stroke-width="1.2"/>
+    <line x1="0" y1="0" x2="284" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="14" y="22" fill="#d29e3d" font-family="JetBrains Mono, Consolas, monospace" font-size="10" letter-spacing="0.8">/ LANE 03 · COMPRESSION GATE</text>
+    <text x="14" y="42" fill="#e8ecf4" font-family="Cormorant Garamond, Georgia, serif" font-size="19">Meta-Learning Invariant Filter</text>
+    <text x="14" y="58" fill="#8b95a7" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">Fixes shrink surface area, never add bloat</text>
+
+    <g transform="translate(12, 70)">
+      <rect width="260" height="62" rx="3" fill="#14213d" stroke="#1e2c4a"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">03A · 100% INVARIANT COVERAGE</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">10/10 Dev · 25/25 Red · 40/40 Operadic</text>
+      <text x="10" y="51" fill="#8b95a7" font-family="Inter, sans-serif" font-size="10">3,858 primary keys verified per turn</text>
+    </g>
+
+    <g transform="translate(12, 140)">
+      <rect width="260" height="62" rx="3" fill="#14213d" stroke="#1e2c4a"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">03B · OPERADIC CONSISTENCY (OC = 1.00)</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">Whole Answer == Glued Leaf Sub-Goals</text>
+      <text x="10" y="51" fill="#8b95a7" font-family="Inter, sans-serif" font-size="10">Zero coboundary drift across stalks</text>
+    </g>
+
+    <g transform="translate(12, 210)">
+      <rect width="260" height="62" rx="3" fill="#14213d" stroke="#1e2c4a"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">03C · LOC &amp; CYCLOMATIC SIMPLICITY</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">Zero Runtime Deps · Pure O(N) Cube</text>
+      <text x="10" y="51" fill="#8b95a7" font-family="Inter, sans-serif" font-size="10">Rejects ad-hoc branches; enforces algebra</text>
+    </g>
+
+    <g transform="translate(12, 280)">
+      <rect width="260" height="58" rx="3" fill="#14213d" stroke="#d29e3d" stroke-opacity="0.45"/>
+      <text x="10" y="18" fill="#d29e3d" font-family="JetBrains Mono, monospace" font-size="10.5">03D · EXPLICIT SCOPE ABSTENTION</text>
+      <text x="10" y="35" fill="#e8ecf4" font-family="JetBrains Mono, monospace" font-size="10.5">{ &quot;unknown&quot;: true } · { &quot;refused&quot;: true }</text>
+      <text x="10" y="50" fill="#8b95a7" font-family="JetBrains Mono, monospace" font-size="9.5">Minimizes adversarial blast radius</text>
+    </g>
+  </g>
+
+  <!-- Bottom Meta-Learning Loop Strip -->
+  <g transform="translate(28, 458)">
+    <rect width="904" height="56" rx="3" fill="#14213d" stroke="#1e2c4a" stroke-width="1.2"/>
+    <line x1="0" y1="0" x2="904" y2="0" stroke="#d29e3d" stroke-opacity="0.8" stroke-width="1.5"/>
+    <text x="16" y="21" fill="#d29e3d" font-family="JetBrains Mono, Consolas, monospace" font-size="10.5" letter-spacing="0.8">/ CLOSED-LOOP META-LEARNING PROGRESSION (COMPRESSION OVER BUREAUCRACY)</text>
+    <text x="16" y="41" fill="#e8ecf4" font-family="JetBrains Mono, Consolas, monospace" font-size="11">Round 0 Naive (3/10)  →  Round 1 Relational Joins (8/10)  →  Round 2 Sheaf Quotient + Shrinkage (10/10 · 40/40 OI · oc_signal = 1.00)</text>
+  </g>
+</svg>
