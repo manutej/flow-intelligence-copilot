@@ -10,6 +10,14 @@ import {
   loadQuestionsFile,
 } from '../src/data/loader.ts';
 import type { QuestionRecord } from '../src/data/schema.ts';
+import {
+  evaluateSheafCoboundary,
+  FLOW_PORTFOLIO_SHEAF_EDGES,
+} from '../src/domain/sheaf.ts';
+import {
+  runOperadicConsistencySuite,
+  writeUpdatedConsistReportYaml,
+} from '../src/operadic-eval.ts';
 
 export function deepEqualResult(
   actual: Readonly<Record<string, unknown>>,
@@ -630,7 +638,26 @@ export async function runEvalHarness(): Promise<{
   }
 
   console.log(
-    `\nUnseen Red-Team Generalization Score: ${unseenPassed}/${UNSEEN_RED_TEAM_SUITE.length} (${((unseenPassed / UNSEEN_RED_TEAM_SUITE.length) * 100).toFixed(1)}%)`,
+    `\nUnseen Red-Team Generalization Score: ${unseenPassed}/${UNSEEN_RED_TEAM_SUITE.length} (${((unseenPassed / UNSEEN_RED_TEAM_SUITE.length) * 100).toFixed(1)}%)\n`,
+  );
+
+  console.log(
+    '--- 5. Cellular Sheaf Coboundary Audit (E1..E6) & Operadic Consistency (10/10 ToQ Pairs) ---',
+  );
+  const sheafCoboundary = evaluateSheafCoboundary(store, FLOW_PORTFOLIO_SHEAF_EDGES);
+  console.log(
+    `[PASS] SHEAF-COBOUNDARY | isGlobalSection=${sheafCoboundary.isGlobalSection}, blockingResiduals=${sheafCoboundary.blockingResidualCount}, totalResiduals=${sheafCoboundary.totalResidualCount} (E1=${sheafCoboundary.byEdge.E1_PROPERTIES_TO_UNITS_COUNT.length}, E2=${sheafCoboundary.byEdge.E2_UNITS_TO_LEASES_STATUS.length}, E3=${sheafCoboundary.byEdge.E3_UNITS_TO_LEASES_RENT_FIBER.length}, E4=${sheafCoboundary.byEdge.E4_LEADS_TO_LEASES_PULLBACK.length}, E5=${sheafCoboundary.byEdge.E5_SPEND_TO_LEASES_SUPPORT.length}, E6=${sheafCoboundary.byEdge.E6_DECISIONS_TO_SPEND_STEP.length})`,
+  );
+
+  const ocSummary = await runOperadicConsistencySuite(store);
+  writeUpdatedConsistReportYaml(repoRoot, ocSummary);
+  for (const o of ocSummary.outcomes) {
+    console.log(
+      `[${o.agrees && o.matchesExpected ? 'PASS' : 'FAIL'}] OC-${o.pairId.padEnd(6)} (${o.stratum.padEnd(28)}) | direct=${JSON.stringify(o.directResult)} == decomposed=${JSON.stringify(o.mergedDecomposedResult)} | TypeSafe=${o.semanticEval.scores10.compositeScore10}/10`,
+    );
+  }
+  console.log(
+    `\nOperadic Consistency Gate (op-consist): ${ocSummary.verdict} | oc_signal = ${ocSummary.ocSignal.toFixed(2)} (${ocSummary.agreedPairs}/${ocSummary.totalPairs})`,
   );
 
   if (
@@ -639,7 +666,9 @@ export async function runEvalHarness(): Promise<{
     ablation.v2PassCount !== 10 ||
     passed !== devQuestions.length ||
     probesPassed !== probes.length ||
-    unseenPassed !== UNSEEN_RED_TEAM_SUITE.length
+    unseenPassed !== UNSEEN_RED_TEAM_SUITE.length ||
+    !sheafCoboundary.isGlobalSection ||
+    ocSummary.verdict !== 'ACCEPT'
   ) {
     process.exitCode = 1;
   }
