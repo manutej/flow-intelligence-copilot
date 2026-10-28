@@ -1,0 +1,80 @@
+/**
+ * Ormus Fusion — Design Token Custom Properties
+ * Single source of truth: tokens.json (Ormus-Solutions/ormus-brand main@1f78935)
+ */
+:root {
+  --ormus-midnight: #14213d;
+  --ormus-deep: #0e1830;
+  --ormus-gold: #d29e3d;
+  --ormus-gold-bright: #e0b258;
+  --ormus-ink: #eceae3;
+  --ormus-ink-muted: #a5b0c4;
+  --ormus-muted: #6d7891;
+  --ormus-hairline: rgba(236, 234, 227, 0.12);
+  --ormus-on-gold: #1a1407;
+  --ormus-code-bg: #0b1226;
+  --ormus-danger: #d44f4f;
+  --ormus-bg-elevated: rgba(255, 255, 255, 0.015);
+  --ormus-bg-muted: rgba(255, 255, 255, 0.04);
+  --card-border: rgba(255, 255, 255, 0.05);
+  --card-hairline-gold: rgba(210, 158, 61, 0.7);
+  --ghost-border: rgba(236, 234, 227, 0.25);
+  --canvas-edge-default: rgba(236, 234, 227, 0.08);
+  --canvas-edge-gold: rgba(210, 158, 61, 0.3);
+  --print-gold: #8a6519;
+  --ormus-ease-reveal: cubic-bezier(0.16, 1, 0.3, 1);
+  --ormus-radius: 3px;
+}
+
+.surface-firm {
+  background-color: var(--ormus-deep);
+  color: var(--ormus-ink);
+  position: relative;
+  isolation: isolate;
+}
+.surface-firm::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image:
+    radial-gradient(90% 60% at 85% -5%, rgba(210, 158, 61, 0.10), transparent 55%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.925  0 0 0 0 0.918  0 0 0 0 0.890  0 0 0 0.07 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>"),
+    linear-gradient(180deg, var(--ormus-midnight) 0%, var(--ormus-deep) 70%);
+}
+.surface-firm::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  z-index: -1;
+  border-radius: 50%;
+  box-shadow:
+    12vw 18vh 1px 0.5px rgba(224, 178, 88, 0.42),
+    28vw 9vh  1px 0   rgba(210, 158, 61, 0.30),
+    46vw 24vh 2px 0.5px rgba(224, 178, 88, 0.48),
+    67vw 14vh 1px 0   rgba(210, 158, 61, 0.28),
+    83vw 29vh 2px 0.5px rgba(224, 178, 88, 0.50),
+    91vw 8vh  1px 0   rgba(210, 158, 61, 0.34),
+    7vw  52vh 1px 0   rgba(210, 158, 61, 0.26),
+    22vw 64vh 2px 0.5px rgba(224, 178, 88, 0.44),
+    39vw 47vh 1px 0   rgba(210, 158, 61, 0.24),
+    58vw 71vh 2px 0.5px rgba(224, 178, 88, 0.46),
+    74vw 56vh 1px 0   rgba(210, 158, 61, 0.32),
+    88vw 68vh 1px 0.5px rgba(224, 178, 88, 0.38),
+    16vw 86vh 1px 0   rgba(210, 158, 61, 0.28),
+    52vw 91vh 2px 0.5px rgba(224, 178, 88, 0.40),
+    79vw 84vh 1px 0   rgba(210, 158, 61, 0.30);
+  animation: ormus-gold-dust-drift 60s ease-in-out infinite;
+}
+@keyframes ormus-gold-dust-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.85; }
+  50%      { transform: translate3d(-14px, -22px, 0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .surface-firm::after { animation: none; }
+}

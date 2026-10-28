@@ -1,186 +1,96 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="FlowIQ End-to-End Cellular Sheaf and Agent Architecture">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 320" width="1080" height="320" role="img" aria-label="FlowIQ 4-Stage Visual Pipeline">
   <defs>
     <linearGradient id="arch-bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#14213d"/>
-      <stop offset="100%" stop-color="#0e1830"/>
+      <stop offset="100%" stop-color="#0b1326"/>
     </linearGradient>
-    <marker id="arrow-gold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <marker id="pipe-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
       <path d="M 0 1 L 8 5 L 0 9 z" fill="#d29e3d"/>
-    </marker>
-    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 1 L 8 5 L 0 9 z" fill="#a5b0c4"/>
     </marker>
   </defs>
 
-  <!-- Background -->
-  <rect width="960" height="540" rx="3" fill="url(#arch-bg)"/>
-  <rect x="0.5" y="0.5" width="959" height="539" rx="3" fill="none" stroke="#eceae3" stroke-opacity="0.12"/>
-  <line x1="0" y1="1" x2="960" y2="1" stroke="#d29e3d" stroke-opacity="0.8" stroke-width="2"/>
+  <rect width="1080" height="320" rx="6" fill="url(#arch-bg)"/>
+  <rect x="1" y="1" width="1078" height="318" rx="5" fill="none" stroke="#d29e3d" stroke-opacity="0.3" stroke-width="1.25"/>
+  <line x1="0" y1="2" x2="1080" y2="2" stroke="#d29e3d" stroke-width="2.5"/>
 
-  <!-- Header -->
-  <text x="28" y="30" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="11" letter-spacing="1.0">/ SYSTEM ARCHITECTURE · CELLULAR SHEAF RESTRICTION &amp; VERIFIED TOOL PIPELINE</text>
-  <text x="28" y="58" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="27">Six relational stalks reconciled into one verified answer envelope.</text>
-  <line x1="28" y1="72" x2="932" y2="72" stroke="#eceae3" stroke-opacity="0.12"/>
+  <text x="36" y="34" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="600" letter-spacing="1.0">/ END-TO-END DATA &amp; AGENT PIPELINE · ZERO EXTERNAL DEPENDENCIES</text>
+  <text x="36" y="64" fill="#e8ecf4" font-family="Georgia, serif" font-size="25" font-weight="600">How six raw exports become verified answers across CLI, Web, and Temporal workers.</text>
+  <line x1="36" y1="80" x2="1044" y2="80" stroke="#e8ecf4" stroke-opacity="0.12"/>
 
-  <!-- STAGE 1: 6 CSV STALKS -->
-  <g transform="translate(28, 88)">
-    <rect width="190" height="368" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="190" y2="0" stroke="#d29e3d" stroke-width="2"/>
-    <text x="14" y="22" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ 01 · RAW CSV STALKS</text>
-    <text x="14" y="42" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-size="19">3,858 Indexed PKs</text>
+  <!-- Stage 1 Card (x=36, y=96, w=232, h=196) -->
+  <g transform="translate(36, 96)">
+    <rect width="232" height="196" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.15"/>
+    <line x1="0" y1="0" x2="232" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <circle cx="32" cy="34" r="16" fill="#182747" stroke="#d29e3d" stroke-width="1.25"/>
+    <rect x="24" y="27" width="16" height="4" rx="1" fill="#d29e3d"/>
+    <rect x="24" y="33" width="16" height="4" rx="1" fill="#e8ecf4"/>
+    <rect x="24" y="39" width="16" height="4" rx="1" fill="#9aa7bd"/>
+    <text x="58" y="30" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" font-weight="600">STAGE 01</text>
+    <text x="58" y="46" fill="#e8ecf4" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="15" font-weight="600">6 Raw CSV Exports</text>
 
-    <!-- 6 Table boxes -->
-    <g transform="translate(12, 56)">
-      <rect width="166" height="44" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.1"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500">pms/properties.csv</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">9 rows · P01–P08 + P09⊘</text>
-    </g>
-    <g transform="translate(12, 106)">
-      <rect width="166" height="44" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.1"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500">pms/units.csv</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">1,100 rows · U0001–U1100</text>
-    </g>
-    <g transform="translate(12, 156)">
-      <rect width="166" height="44" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.1"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500">pms/leases.csv</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">1,033 rows · L00001–L01033</text>
-    </g>
-    <g transform="translate(12, 206)">
-      <rect width="166" height="44" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.1"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500">crm/leads.csv</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">1,498 rows · D00001–D01498</text>
-    </g>
-    <g transform="translate(12, 256)">
-      <rect width="166" height="44" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.1"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500">ils/spend.csv</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">208 rows · S0001–S0208</text>
-    </g>
-    <g transform="translate(12, 306)">
-      <rect width="166" height="44" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.1"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500">ops/decisions.csv</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="10">10 rows · X001–X010</text>
-    </g>
+    <text x="16" y="82" fill="#e8ecf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" font-weight="600">data/{pms,crm,ils,ops}</text>
+    <text x="16" y="108" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• 3,858 source rows indexed</text>
+    <text x="16" y="130" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• PMS units &amp; lease rolls</text>
+    <text x="16" y="152" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• CRM leads, bills &amp; X001–X010</text>
+    <text x="16" y="178" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5">6 tables · 3,858 IDs</text>
   </g>
 
-  <!-- Arrow 1 -> 2 -->
-  <line x1="218" y1="272" x2="244" y2="272" stroke="#d29e3d" stroke-width="1.5" marker-end="url(#arrow-gold)"/>
+  <line x1="270" y1="194" x2="292" y2="194" stroke="#d29e3d" stroke-width="1.5" marker-end="url(#pipe-arrow)"/>
 
-  <!-- STAGE 2: SHEAF RESTRICTION & 6-TRAP QUARANTINE -->
-  <g transform="translate(248, 88)">
-    <rect width="224" height="368" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="224" y2="0" stroke="#d29e3d" stroke-width="2"/>
-    <text x="14" y="22" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ 02 · SHEAF QUOTIENT &amp; GATES</text>
-    <text x="14" y="42" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-size="19">loader.ts + sheaf.ts</text>
+  <!-- Stage 2 Card (x=296, y=96, w=232, h=196) -->
+  <g transform="translate(296, 96)">
+    <rect width="232" height="196" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.15"/>
+    <line x1="0" y1="0" x2="232" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <circle cx="32" cy="34" r="16" fill="#182747" stroke="#d29e3d" stroke-width="1.25"/>
+    <path d="M 32 24 L 40 28 L 40 35 C 40 40 36 43 32 45 C 28 43 24 40 24 35 L 24 28 Z" fill="none" stroke="#d29e3d" stroke-width="1.5"/>
+    <text x="58" y="30" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" font-weight="600">STAGE 02</text>
+    <text x="58" y="46" fill="#e8ecf4" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="15" font-weight="600">Clean &amp; Quarantine</text>
 
-    <g transform="translate(12, 56)">
-      <rect width="200" height="44" rx="3" fill="#14213d" stroke="#d44f4f" stroke-opacity="0.5"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="10.5">⊘ P09 Cornell Annex Stub</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="10.5">0 units in units.csv · AppFolio</text>
-    </g>
-    <g transform="translate(12, 106)">
-      <rect width="200" height="44" rx="3" fill="#14213d" stroke="#d44f4f" stroke-opacity="0.5"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="10.5">⊘ leads:D01011 Note Strip</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="10.5">Prompt injection quarantined</text>
-    </g>
-    <g transform="translate(12, 156)">
-      <rect width="200" height="44" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.12"/>
-      <text x="10" y="18" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">⚖︎ 10 Void Spend Invoices</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="10.5">S0003..S0174 ($11,500.80) → $0</text>
-    </g>
-    <g transform="translate(12, 206)">
-      <rect width="200" height="44" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.12"/>
-      <text x="10" y="18" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">⚖︎ 12 Posted CAD Invoices</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="10.5">P06 &amp; P07 FB Ads × 0.73 USD</text>
-    </g>
-    <g transform="translate(12, 256)">
-      <rect width="200" height="44" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.12"/>
-      <text x="10" y="18" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">⚖︎ 9 Phone Re-Entry Leads</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="10.5">D01490..D01498 → earliest lead</text>
-    </g>
-    <g transform="translate(12, 306)">
-      <rect width="200" height="44" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.12"/>
-      <text x="10" y="18" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">⚖︎ 20 Cross-Month Lags</text>
-      <text x="10" y="34" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="10.5">Bucket by leases.start_date (D03)</text>
-    </g>
+    <text x="16" y="82" fill="#e8ecf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" font-weight="600">src/data/loader.ts</text>
+    <text x="16" y="108" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Holds 0-unit P09 stub</text>
+    <text x="16" y="130" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Strips D01011 injection note</text>
+    <text x="16" y="152" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Converts CAD &amp; drops 10 voids</text>
+    <text x="16" y="178" fill="#34d399" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5">6 traps caught on load</text>
   </g>
 
-  <!-- Arrow 2 -> 3 -->
-  <line x1="472" y1="272" x2="498" y2="272" stroke="#d29e3d" stroke-width="1.5" marker-end="url(#arrow-gold)"/>
+  <line x1="530" y1="194" x2="552" y2="194" stroke="#d29e3d" stroke-width="1.5" marker-end="url(#pipe-arrow)"/>
 
-  <!-- STAGE 3: TYPED DOMAIN & BAYESIAN LEARNER -->
-  <g transform="translate(502, 88)">
-    <rect width="218" height="368" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="218" y2="0" stroke="#d29e3d" stroke-width="2"/>
-    <text x="14" y="22" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ 03 · DOMAIN &amp; LEARNER</text>
-    <text x="14" y="42" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-size="19">Pure O(N) Cube Joins</text>
+  <!-- Stage 3 Card (x=556, y=96, w=232, h=196) -->
+  <g transform="translate(556, 96)">
+    <rect width="232" height="196" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.15"/>
+    <line x1="0" y1="0" x2="232" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <circle cx="32" cy="34" r="16" fill="#182747" stroke="#d29e3d" stroke-width="1.25"/>
+    <rect x="24" y="35" width="4" height="8" fill="#9aa7bd"/>
+    <rect x="30" y="30" width="4" height="13" fill="#e8ecf4"/>
+    <rect x="36" y="25" width="4" height="18" fill="#d29e3d"/>
+    <text x="58" y="30" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" font-weight="600">STAGE 03</text>
+    <text x="58" y="46" fill="#e8ecf4" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="13.5" font-weight="600">Portfolio &amp; Budget Math</text>
 
-    <g transform="translate(12, 56)">
-      <rect width="194" height="68" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.12"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500">domain/resolver.ts</text>
-      <text x="10" y="35" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="10.5">Colloquial aliases &amp; amenities.</text>
-      <text x="10" y="51" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">⊘ Ambiguity Gate (P07 vs P08)</text>
-    </g>
-    <g transform="translate(12, 134)">
-      <rect width="194" height="68" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.12"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500">domain/metrics.ts</text>
-      <text x="10" y="35" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="10.5">Occupancy, renewals, funnel.</text>
-      <text x="10" y="51" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">✓︎ $46,599.90 → +15 Leases</text>
-    </g>
-    <g transform="translate(12, 212)">
-      <rect width="194" height="68" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.12"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500">domain/learner.ts</text>
-      <text x="10" y="35" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="10.5">Gamma-Poisson (α₀=1, β₀=$3,250).</text>
-      <text x="10" y="51" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">⚖︎ X009 Shrunk · X001 Cut</text>
-    </g>
-    <g transform="translate(12, 290)">
-      <rect width="194" height="62" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.12"/>
-      <text x="10" y="18" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500">domain/guards.ts</text>
-      <text x="10" y="35" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="10.5">Fair Housing + Unknown Schema</text>
-      <text x="10" y="50" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">◆ Citation PK Verifier</text>
-    </g>
+    <text x="16" y="82" fill="#e8ecf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" font-weight="600">metrics.ts &amp; learner.ts</text>
+    <text x="16" y="108" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Occupancy, renewals &amp; CPSL</text>
+    <text x="16" y="130" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• $46.6k waste -&gt; +15 leases</text>
+    <text x="16" y="152" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Bayesian small-sample guard</text>
+    <text x="16" y="178" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5">Pure O(N) joins · 0 LLM math</text>
   </g>
 
-  <!-- Arrow 3 -> 4 -->
-  <line x1="720" y1="272" x2="746" y2="272" stroke="#d29e3d" stroke-width="1.5" marker-end="url(#arrow-gold)"/>
+  <line x1="790" y1="194" x2="812" y2="194" stroke="#d29e3d" stroke-width="1.5" marker-end="url(#pipe-arrow)"/>
 
-  <!-- STAGE 4: 3 OPERATOR SURFACES -->
-  <g transform="translate(750, 88)">
-    <rect width="182" height="368" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="182" y2="0" stroke="#d29e3d" stroke-width="2"/>
-    <text x="14" y="22" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ 04 · SURFACES</text>
-    <text x="14" y="42" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-size="19">Three Doors, One Core</text>
+  <!-- Stage 4 Card (x=816, y=96, w=228, h=196) -->
+  <g transform="translate(816, 96)">
+    <rect width="228" height="196" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.15"/>
+    <line x1="0" y1="0" x2="228" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <circle cx="32" cy="34" r="16" fill="#182747" stroke="#d29e3d" stroke-width="1.25"/>
+    <circle cx="32" cy="34" r="4" fill="#d29e3d"/>
+    <circle cx="24" cy="28" r="2" fill="#e8ecf4"/>
+    <circle cx="40" cy="28" r="2" fill="#e8ecf4"/>
+    <circle cx="32" cy="43" r="2" fill="#e8ecf4"/>
+    <text x="58" y="30" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" font-weight="600">STAGE 04</text>
+    <text x="58" y="46" fill="#e8ecf4" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="15" font-weight="600">Copilot &amp; Swarm</text>
 
-    <g transform="translate(12, 56)">
-      <rect width="158" height="86" rx="3" fill="#14213d" stroke="#d29e3d" stroke-opacity="0.5"/>
-      <text x="10" y="20" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ WEB STUDIO</text>
-      <text x="10" y="38" fill="#eceae3" font-family="'Cormorant Garamond', serif" font-size="17">Ormus Chrome UI</text>
-      <text x="10" y="56" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="9.5">public/index.html</text>
-      <text x="10" y="72" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="9.5">api/ask.js · /api/state</text>
-    </g>
-
-    <g transform="translate(12, 156)">
-      <rect width="158" height="86" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.15"/>
-      <text x="10" y="20" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ TERMINAL CLI</text>
-      <text x="10" y="38" fill="#eceae3" font-family="'Cormorant Garamond', serif" font-size="17">flowiq CLI &amp; REPL</text>
-      <text x="10" y="56" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="9.5">setup · doctor · ask</text>
-      <text x="10" y="72" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="9.5">Offline + Live Grok/LLM</text>
-    </g>
-
-    <g transform="translate(12, 256)">
-      <rect width="158" height="94" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.15"/>
-      <text x="10" y="20" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ MCP SERVER</text>
-      <text x="10" y="38" fill="#eceae3" font-family="'Cormorant Garamond', serif" font-size="17">JSON-RPC 2.0 stdio</text>
-      <text x="10" y="56" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="9.5">src/mcp/server.ts</text>
-      <text x="10" y="72" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="9.5">5 Read-Only Tools +</text>
-      <text x="10" y="85" fill="#a5b0c4" font-family="'JetBrains Mono', monospace" font-size="9.5">ask_flowiq Endpoint</text>
-    </g>
-  </g>
-
-  <!-- Bottom Verification Bar -->
-  <g transform="translate(28, 472)">
-    <rect width="904" height="48" rx="3" fill="#14213d" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="904" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
-    <text x="16" y="20" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10.5" letter-spacing="0.8">/ CONTINUOUS VERIFICATION HARNESS (scripts/run-eval.ts · tests/*.test.ts)</text>
-    <text x="16" y="37" fill="#eceae3" font-family="'JetBrains Mono', Consolas, monospace" font-size="11">⚖︎ Ablation: v0 (3/10) → v1 (8/10) → v2 (10/10)   ·   ✓︎ 25/25 Unseen Red-Team   ·   ◆ 17/17 answers.jsonl (T01–T13, B01–B03, EGGS)</text>
+    <text x="16" y="82" fill="#e8ecf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" font-weight="600">copilot.ts &amp; temporal</text>
+    <text x="16" y="108" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Web UI, CLI &amp; stdio MCP</text>
+    <text x="16" y="130" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• 8-worker Temporal LLM swarm</text>
+    <text x="16" y="152" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Row-key citation verifier</text>
+    <text x="16" y="178" fill="#34d399" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5">100% row-verified output</text>
   </g>
 </svg>

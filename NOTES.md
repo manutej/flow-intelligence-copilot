@@ -1,5 +1,11 @@
 # Engineering Notes, Decision Log & Onboarding Plan (`FLOW-101`–`FLOW-106`)
 
+> **Second Seal & Verification Links:**
+> - **Submission Answers (`17` lines: `T01..T13, B01..B03, EGGS`):** [`answers.jsonl`](answers.jsonl)
+> - **Full 27-Item Provenance, Clean-Room Python & Blind Red-Team Audit:** [`docs/PROVENANCE_VERIFICATION.md`](docs/PROVENANCE_VERIFICATION.md)
+> - **Architectural Changelog (`v2.1` Dynamic Column-Set Refactor & TUI):** [`CHANGELOG.md`](CHANGELOG.md)
+> - **Interactive Visual Dashboard & 12-Plate Field Notebook:** [`https://repo-sigma-one-80.vercel.app`](https://repo-sigma-one-80.vercel.app) · [`/field-notebook.html`](https://repo-sigma-one-80.vercel.app/field-notebook.html)
+
 ## 1. System Design on One Page
 
 ### Architectural Principle: Functional Core, Imperative Shell & Typed Tool Primitives

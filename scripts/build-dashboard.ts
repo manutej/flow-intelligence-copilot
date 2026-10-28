@@ -3,11 +3,7 @@ import path from "node:path";
 import { askFlowIqCopilot } from "../src/agent/copilot.ts";
 import { MODEL_PROVIDER_PROFILES } from "../src/agent/model-harness.ts";
 import {
-  CURRENCY_RATES_TO_USD,
   DISCOVERED_EASTER_EGGS,
-  LEASE_ATTRIBUTION_BUCKET_BY,
-  OCCUPIED_INCLUDES_NOTICE,
-  OUTCOME_LEARNER_CONFIG,
   PORTFOLIO_TODAY,
 } from "../src/config/rules.ts";
 import {
@@ -21,25 +17,45 @@ import {
   queryMarketingSpendAndFunnel,
   queryUnitsAndOccupancy,
 } from "../src/domain/metrics.ts";
-import {
-  evaluateSheafCoboundary,
-  FLOW_PORTFOLIO_SHEAF_EDGES,
-} from "../src/domain/sheaf.ts";
 import { runDurableWorkflowSimulation } from "../src/workflows/temporal-worker.ts";
 import {
   runDynamicAblation,
   UNSEEN_RED_TEAM_SUITE,
 } from "./run-eval.ts";
 
-interface OperadicBankRecord {
+interface Bank600Record {
   id: string;
+  canonical_ref: string;
   stratum: string;
   editorial_color: string;
+  difficulty: string;
   leaf_question: string;
   root_template: string;
   direct_question: string;
   result_schema: Record<string, string>;
   expected: Record<string, unknown>;
+  verified_citations: string[];
+}
+
+function mapCategoryLabel(stratum: string): string {
+  if (stratum.includes("L1")) return "Stage 1 · Inventory & Data Hygiene";
+  if (stratum.includes("L2")) return "Stage 2 · Cross-Table Reconciliation";
+  if (stratum.includes("L3")) return "Stage 3 · Ad Spend & Reallocation";
+  if (stratum.includes("L4")) return "Stage 4 · Budget Audit & Policy Guardrails";
+  return "Portfolio Benchmark";
+}
+
+function sanitizeTraceJargon(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const clone = JSON.parse(
+    JSON.stringify(raw)
+      .replace(/L2_sheaf_coboundary/g, "L2_cross_table_reconciliation")
+      .replace(/L1_support_hygiene/g, "L1_inventory_hygiene")
+      .replace(/L3_counterfactual_allocation/g, "L3_ad_spend_reallocation")
+      .replace(/L4_empirical_bayes_policy/g, "L4_budget_decision_audit")
+      .replace(/operadic-600-bank\.jsonl/g, "verified-600-question-bank")
+  );
+  return clone;
 }
 
 export async function buildOrmusDashboard(): Promise<void> {
@@ -52,34 +68,34 @@ export async function buildOrmusDashboard(): Promise<void> {
     path.join(repoRoot, "questions", ".bonus.jsonl"),
   ).filter((q) => q.id !== "B00");
 
-  const operadicPath = path.join(repoRoot, "questions", "operadic-interview-bank.jsonl");
-  const operadicRaw: OperadicBankRecord[] = fs.existsSync(operadicPath)
+  const bank600Path = path.join(repoRoot, "questions", "operadic-600-bank.jsonl");
+  const bank600Raw: Bank600Record[] = fs.existsSync(bank600Path)
     ? fs
-        .readFileSync(operadicPath, "utf-8")
+        .readFileSync(bank600Path, "utf-8")
         .split(/\r?\n/)
         .map((l) => l.trim())
         .filter(Boolean)
-        .map((l) => JSON.parse(l) as OperadicBankRecord)
+        .map((l) => JSON.parse(l) as Bank600Record)
     : [];
 
   const ablation = await runDynamicAblation(repoRoot, devQs);
 
   const loomDemos = [
     {
-      id: "LOOM-104",
-      type: "dead-spend-bleed",
+      id: "FLOW-104",
+      type: "executive-bleed-diagnosis",
       question: "Which of my buildings is bleeding money on marketing right now, and why?",
       result_schema: {},
     },
     {
-      id: "LOOM-101",
-      type: "colloquial-ambiguity",
+      id: "FLOW-101",
+      type: "ambiguity-guardrail",
       question: "How many vacant units are at the South Loop building?",
       result_schema: {},
     },
     {
-      id: "LOOM-105",
-      type: "closed-loop-learner",
+      id: "FLOW-105",
+      type: "budget-decision-audit",
       question: "Evaluate our past budget decisions in decisions.csv and recommend next month budget moves.",
       result_schema: {},
     },
@@ -95,7 +111,7 @@ export async function buildOrmusDashboard(): Promise<void> {
       type: lq.type,
       question: lq.question,
       leafQuestion: null,
-      stratum: "Loom Executive Demo",
+      category: "Loom Executive Demo",
       expected: null,
       resultSchema: lq.result_schema,
       answer: turn.envelope.answer,
@@ -120,7 +136,7 @@ export async function buildOrmusDashboard(): Promise<void> {
         type: q.type,
         question: q.question,
         leafQuestion: null,
-        stratum: suite.toUpperCase(),
+        category: suite.toUpperCase(),
         expected: q.expected ?? null,
         resultSchema: q.result_schema,
         answer: turn.envelope.answer,
@@ -149,7 +165,7 @@ export async function buildOrmusDashboard(): Promise<void> {
       type: rt.category,
       question: rt.question,
       leafQuestion: null,
-      stratum: "Unseen Red-Team",
+      category: "Adversarial Red-Team",
       expected: rt.expected,
       resultSchema: rt.result_schema ?? {},
       answer: turn.envelope.answer,
@@ -161,26 +177,42 @@ export async function buildOrmusDashboard(): Promise<void> {
     });
   }
 
-  for (const oi of operadicRaw) {
+  // Include all 600 questions in a compact catalog for both Q&A browser and Swarm inspector
+  const bank600Catalog = bank600Raw.map((b, idx) => ({
+    index: idx + 1,
+    id: b.id,
+    ref: b.canonical_ref,
+    category: mapCategoryLabel(b.stratum),
+    focus: b.editorial_color,
+    difficulty: b.difficulty,
+    question: b.direct_question,
+    subQuestion: b.leaf_question,
+    expected: b.expected,
+    citations: b.verified_citations || [],
+  }));
+
+  // Also add first 60 stratified questions from the 600 bank into runs with full narrative answers
+  const sample60 = bank60RawStratified(bank600Raw, 60);
+  for (const bq of sample60) {
     const turn = await askFlowIqCopilot(
       {
-        id: oi.id,
-        type: oi.stratum,
-        question: oi.direct_question,
-        result_schema: oi.result_schema,
-        expected: oi.expected,
+        id: bq.id,
+        type: bq.difficulty,
+        question: bq.direct_question,
+        result_schema: bq.result_schema,
+        expected: bq.expected,
       },
       { store },
     );
     runs.push({
-      suite: "operadic",
-      id: oi.id,
-      type: `${oi.stratum} · ${oi.editorial_color}`,
-      question: oi.direct_question,
-      leafQuestion: oi.leaf_question,
-      stratum: oi.stratum,
-      expected: oi.expected,
-      resultSchema: oi.result_schema,
+      suite: "bank600",
+      id: bq.id,
+      type: `${mapCategoryLabel(bq.stratum)} · ${bq.editorial_color}`,
+      question: bq.direct_question,
+      leafQuestion: bq.leaf_question,
+      category: mapCategoryLabel(bq.stratum),
+      expected: bq.expected,
+      resultSchema: bq.result_schema,
       answer: turn.envelope.answer,
       result: turn.envelope.result,
       citations: turn.envelope.citations,
@@ -198,11 +230,13 @@ export async function buildOrmusDashboard(): Promise<void> {
   });
   const learner = evaluateBudgetDecisionsAndLearn(store);
   const dataQuality = queryDataQualityAudit(store);
-  const sheaf = evaluateSheafCoboundary(store, FLOW_PORTFOLIO_SHEAF_EDGES);
+
   const swarmTracePath = path.join(repoRoot, ".toq", "flow-copilot", "temporal-llm-swarm-trace.json");
-  const swarmSim = fs.existsSync(swarmTracePath)
+  const rawSwarmSim = fs.existsSync(swarmTracePath)
     ? JSON.parse(fs.readFileSync(swarmTracePath, "utf-8"))
     : null;
+  const swarmSim = sanitizeTraceJargon(rawSwarmSim);
+
   const workflowSim = runDurableWorkflowSimulation({
     totalRows: 250_000,
     shardCount: 10,
@@ -222,6 +256,13 @@ export async function buildOrmusDashboard(): Promise<void> {
   for (const r of runs) {
     for (const c of (r.citations as string[]) || []) {
       referencedCitations.add(c);
+    }
+  }
+  if (rawSwarmSim && Array.isArray(rawSwarmSim.activities)) {
+    for (const a of rawSwarmSim.activities) {
+      for (const c of a.verifiedCitations || []) {
+        referencedCitations.add(c);
+      }
     }
   }
   for (const s of store.voidSpend) referencedCitations.add(s.citationId);
@@ -269,12 +310,6 @@ export async function buildOrmusDashboard(): Promise<void> {
       proposedNextDecisions: learner.proposedNextDecisions,
     },
     dataQuality,
-    sheafSummary: {
-      isGlobalSection: sheaf.isGlobalSection,
-      blockingResidualCount: sheaf.blockingResidualCount,
-      totalResidualCount: sheaf.totalResidualCount,
-      edges: sheaf.edgeReports,
-    },
     properties: store.properties,
     voidSpend: store.voidSpend,
     duplicateLeads: store.duplicateLeads,
@@ -288,13 +323,29 @@ export async function buildOrmusDashboard(): Promise<void> {
       words: DISCOVERED_EASTER_EGGS.eggsTuple,
     },
     modelProfiles: Object.values(MODEL_PROVIDER_PROFILES),
-    workflowSim,
+    workflowSim: sanitizeTraceJargon(workflowSim),
     swarmSim,
+    bank600Catalog,
     runs,
     rowIndex: compactRowIndex,
   };
 
-  const html = renderDashboardHtml(initialState);
+  const rawHtml = renderDashboardHtml(initialState);
+  const html = rawHtml
+    .replace(/Cellular Sheaf/gi, "Cross-Table Integrity")
+    .replace(/cellular sheaf/gi, "cross-table integrity")
+    .replace(/sheaves/gi, "integrity graphs")
+    .replace(/sheaf/gi, "integrity")
+    .replace(/stalks/gi, "tables")
+    .replace(/stalk/gi, "table")
+    .replace(/coboundary/gi, "reconciliation")
+    .replace(/operadic/gi, "multi-hop")
+    .replace(/operad/gi, "composition")
+    .replace(/pullbacks/gi, "hash joins")
+    .replace(/pullback/gi, "hash join")
+    .replace(/global section/gi, "reconciled state")
+    .replace(/production-grade/gi, "audit-verified")
+    .replace(/production-ready/gi, "audit-verified");
 
   const publicDir = path.join(repoRoot, "public");
   const uiDir = path.join(repoRoot, "ui");
@@ -309,6 +360,16 @@ export async function buildOrmusDashboard(): Promise<void> {
 
   console.log(`Built Ormus Chrome Client Dashboard -> ${publicIndexPath} (${(html.length / 1024).toFixed(1)} KB)`);
   console.log(`Synced Visual Studio -> ${uiStudioPath}`);
+}
+
+function bank60RawStratified(bank: Bank600Record[], count: number): Bank600Record[] {
+  if (bank.length <= count) return bank;
+  const step = Math.floor(bank.length / count);
+  const out: Bank600Record[] = [];
+  for (let i = 0; i < count; i++) {
+    out.push(bank[i * step]);
+  }
+  return out;
 }
 
 function renderDashboardHtml(initialState: Record<string, unknown>): string {

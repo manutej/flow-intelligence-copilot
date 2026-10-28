@@ -1,99 +1,64 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" role="img" aria-label="FlowIQ Repository Code and Module Map">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 300" width="1080" height="300" role="img" aria-label="FlowIQ Repository Code Map">
   <defs>
-    <linearGradient id="code-bg" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="cm-bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#14213d"/>
-      <stop offset="100%" stop-color="#0e1830"/>
+      <stop offset="100%" stop-color="#0b1326"/>
     </linearGradient>
-    <marker id="code-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 1 L 8 5 L 0 9 z" fill="#d29e3d"/>
-    </marker>
   </defs>
 
-  <rect width="960" height="520" rx="3" fill="url(#code-bg)"/>
-  <rect x="0.5" y="0.5" width="959" height="519" rx="3" fill="none" stroke="#eceae3" stroke-opacity="0.12"/>
-  <line x1="0" y1="1" x2="960" y2="1" stroke="#d29e3d" stroke-opacity="0.8" stroke-width="2"/>
+  <rect width="1080" height="300" rx="6" fill="url(#cm-bg)"/>
+  <rect x="1" y="1" width="1078" height="298" rx="5" fill="none" stroke="#d29e3d" stroke-opacity="0.3" stroke-width="1.25"/>
+  <line x1="0" y1="2" x2="1080" y2="2" stroke="#d29e3d" stroke-width="2.5"/>
 
-  <text x="28" y="30" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="11" letter-spacing="1.0">/ REPOSITORY CODE MAP · HOW A QUESTION FLOWS THROUGH SRC/</text>
-  <text x="28" y="58" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="27">Every file owns one concern, one boundary, and one testable contract.</text>
-  <line x1="28" y1="72" x2="932" y2="72" stroke="#eceae3" stroke-opacity="0.12"/>
+  <text x="36" y="34" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="600" letter-spacing="1.0">/ REPOSITORY MODULE MAP · CLEAR SEPARATION OF CONCERNS</text>
+  <text x="36" y="64" fill="#e8ecf4" font-family="Georgia, serif" font-size="25" font-weight="600">Every file owns one job: policy, cleaning, domain math, or agent execution.</text>
+  <line x1="36" y1="80" x2="1044" y2="80" stroke="#e8ecf4" stroke-opacity="0.12"/>
 
-  <!-- Row 1: Configuration & Data Ingestion Layer -->
-  <g transform="translate(28, 88)">
-    <rect width="284" height="118" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="284" y2="0" stroke="#d29e3d" stroke-width="1.5"/>
-    <text x="14" y="20" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ LAYER 1 · POLICY &amp; CONFIG</text>
-    <text x="14" y="40" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="500">src/config/rules.ts</text>
-    <text x="14" y="58" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• PortfolioPolicyConfig &amp; env overrides</text>
-    <text x="14" y="75" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• POLICY_V0_NAIVE / V1_JOINED / V2_GUARDED</text>
-    <text x="14" y="92" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• CAD=0.73, α₀=1.0, β₀=$3,250, DATE_WINDOWS</text>
-    <text x="14" y="108" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">◆ Law D2: Pure function of declared policy</text>
+  <!-- Card 1 (x=36, w=236) -->
+  <g transform="translate(36, 96)">
+    <rect width="236" height="176" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.15"/>
+    <line x1="0" y1="0" x2="236" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="16" y="24" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" font-weight="600">1. CONFIG &amp; VAULT</text>
+    <text x="16" y="48" fill="#e8ecf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="600">config/{rules,key-vault}.ts</text>
+    <text x="16" y="76" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• 4 runtime policy overrides</text>
+    <text x="16" y="98" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• v0 / v1 / v2 ablation presets</text>
+    <text x="16" y="120" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• AES-256-GCM key vault</text>
+    <text x="16" y="152" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5">Zero hardcoded secrets</text>
   </g>
 
-  <g transform="translate(338, 88)">
-    <rect width="284" height="118" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="284" y2="0" stroke="#d29e3d" stroke-width="1.5"/>
-    <text x="14" y="20" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ LAYER 2 · SCHEMA &amp; CSV LOADER</text>
-    <text x="14" y="40" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="500">src/data/{schema,loader}.ts</text>
-    <text x="14" y="58" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• RFC-4180 CSV parser over 6 exports</text>
-    <text x="14" y="75" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• Strips leads.notes (quarantines D01011)</text>
-    <text x="14" y="92" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• Builds 3,858-row primaryKeyIndex Set</text>
-    <text x="14" y="108" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">⊘ Gate E1: Untrusted notes never reach tools</text>
+  <!-- Card 2 (x=292, w=236) -->
+  <g transform="translate(292, 96)">
+    <rect width="236" height="176" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.15"/>
+    <line x1="0" y1="0" x2="236" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="16" y="24" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" font-weight="600">2. LOADER &amp; INTEGRITY</text>
+    <text x="16" y="48" fill="#e8ecf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="600">src/data/{loader,schema}.ts</text>
+    <text x="16" y="76" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• 6-table integrity checks</text>
+    <text x="16" y="98" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Quarantines P09 &amp; D01011</text>
+    <text x="16" y="120" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Deduplicates 9 phone leads</text>
+    <text x="16" y="152" fill="#34d399" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5">3,858 primary keys indexed</text>
   </g>
 
-  <g transform="translate(648, 88)">
-    <rect width="284" height="118" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="284" y2="0" stroke="#d29e3d" stroke-width="1.5"/>
-    <text x="14" y="20" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ LAYER 2B · SHEAF COBOUNDARY</text>
-    <text x="14" y="40" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="500">src/domain/sheaf.ts · src/schema.ts</text>
-    <text x="14" y="58" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• Declarative stalks &amp; restriction edges E1–E6</text>
-    <text x="14" y="75" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• O(N) hash-join pullback residual audit</text>
-    <text x="14" y="92" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• Emits CitationId[] on any ||δs||_e &gt; 0</text>
-    <text x="14" y="108" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">⚖︎ Measured: Global section check on load</text>
+  <!-- Card 3 (x=548, w=236) -->
+  <g transform="translate(548, 96)">
+    <rect width="236" height="176" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.15"/>
+    <line x1="0" y1="0" x2="236" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="16" y="24" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" font-weight="600">3. DOMAIN ENGINE</text>
+    <text x="16" y="48" fill="#e8ecf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="600">resolver · metrics · learner</text>
+    <text x="16" y="76" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Ambiguity clarification gate</text>
+    <text x="16" y="98" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• $46.6k -&gt; +15 leases math</text>
+    <text x="16" y="120" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Fair Housing &amp; scope guards</text>
+    <text x="16" y="152" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5">FLOW-101..106 enforced</text>
   </g>
 
-  <!-- Row 2: Domain Engine -->
-  <g transform="translate(28, 228)">
-    <rect width="438" height="126" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="438" y2="0" stroke="#d29e3d" stroke-width="1.5"/>
-    <text x="14" y="20" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ LAYER 3A · ENTITY RESOLUTION &amp; SAFETY GUARDS</text>
-    <text x="14" y="40" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="500">src/domain/resolver.ts  ·  src/domain/guards.ts</text>
-    <text x="14" y="60" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• FLOW-101: Resolves nicknames ("the brick one in Logan Square" → P06)</text>
-    <text x="14" y="77" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• FLOW-101: Singular ambiguity gate ("South Loop building" → P07 vs P08)</text>
-    <text x="14" y="94" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• FLOW-103: Fair Housing refusal (refused: true) &amp; unmodeled (unknown: true)</text>
-    <text x="14" y="112" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">◆ verifyAnswerEnvelope(): checks every &lt;table&gt;:&lt;id&gt; against primaryKeyIndex</text>
-  </g>
-
-  <g transform="translate(494, 228)">
-    <rect width="438" height="126" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="438" y2="0" stroke="#d29e3d" stroke-width="1.5"/>
-    <text x="14" y="20" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ LAYER 3B · METRICS &amp; CONJUGATE BAYESIAN LEARNER</text>
-    <text x="14" y="40" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="500">src/domain/metrics.ts   ·  src/domain/learner.ts</text>
-    <text x="14" y="60" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• FLOW-102: O(N) pre-indexed cube for occupancy, renewals, funnel, CPSL</text>
-    <text x="14" y="77" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• FLOW-102: 9 zero-lease pairs ($46,599.90) → Apartments.com (+15 leases)</text>
-    <text x="14" y="94" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• FLOW-105: Gamma-Poisson shrinkage over X001–X010, proposes X011–X020</text>
-    <text x="14" y="112" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">⚖︎ Exact postInclusive == postStrict window invariance verified</text>
-  </g>
-
-  <!-- Row 3: Agent Planner + Delivery Surfaces -->
-  <g transform="translate(28, 376)">
-    <rect width="438" height="118" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="438" y2="0" stroke="#d29e3d" stroke-width="1.5"/>
-    <text x="14" y="20" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ LAYER 4 · AGENT ORCHESTRATION &amp; 5 DOMAIN TOOLS</text>
-    <text x="14" y="40" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="500">src/agent/{intent,planner,tools,copilot}.ts</text>
-    <text x="14" y="60" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• 5 read-only tools: find_properties, query_units_and_occupancy,</text>
-    <text x="14" y="76" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">  query_leases_and_renewals, query_marketing_spend_and_funnel, evaluate_budget</text>
-    <text x="14" y="93" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• Runs deterministic compositional planner OR live LLM tool-calling loop</text>
-    <text x="14" y="109" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">✓︎ Zero mental math: LLM never divides or converts currencies in prose</text>
-  </g>
-
-  <g transform="translate(494, 376)">
-    <rect width="438" height="118" rx="3" fill="#0e1830" stroke="#eceae3" stroke-opacity="0.12"/>
-    <line x1="0" y1="0" x2="438" y2="0" stroke="#d29e3d" stroke-width="1.5"/>
-    <text x="14" y="20" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10.5">/ LAYER 5 · SURFACES &amp; EVALUATION SUITE</text>
-    <text x="14" y="40" fill="#eceae3" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="500">src/cli.ts · src/mcp/server.ts · src/dashboard-server.ts</text>
-    <text x="14" y="60" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• public/index.html + ui/flowiq-visual-studio.html + api/{ask,state}.js</text>
-    <text x="14" y="77" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• scripts/{run-eval,generate-answers,generate-reports,build-ui}.ts</text>
-    <text x="14" y="94" fill="#a5b0c4" font-family="'Inter', sans-serif" font-size="11">• tests/portfolio-agent.test.ts (unit, ablation, knob sync, MCP stdio)</text>
-    <text x="14" y="109" fill="#d29e3d" font-family="'JetBrains Mono', monospace" font-size="10">⚖︎ One command rebuilds reports, answers.jsonl, UI, and evals in &lt; 1s</text>
+  <!-- Card 4 (x=804, w=240) -->
+  <g transform="translate(804, 96)">
+    <rect width="240" height="176" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.15"/>
+    <line x1="0" y1="0" x2="240" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="16" y="24" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" font-weight="600">4. HARNESS &amp; SURFACES</text>
+    <text x="16" y="48" fill="#e8ecf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="600">agent · workflows · mcp · cli</text>
+    <text x="16" y="76" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Local &amp; cloud model harness</text>
+    <text x="16" y="98" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• 8-slot Temporal LLM swarm</text>
+    <text x="16" y="120" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="12">• Web UI, CLI &amp; stdio MCP</text>
+    <text x="16" y="152" fill="#34d399" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5">600/600 stress test pass</text>
   </g>
 </svg>

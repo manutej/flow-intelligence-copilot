@@ -1,92 +1,88 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" width="960" height="320" role="img" aria-label="FlowIQ — Ormus Chrome Portfolio and Growth Decision Copilot">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 340" width="1080" height="340" role="img" aria-label="FlowIQ Portfolio and Marketing Copilot Hero">
   <defs>
-    <linearGradient id="lacquer-bg" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="hero-bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#14213d"/>
-      <stop offset="75%" stop-color="#0e1830"/>
-      <stop offset="100%" stop-color="#0b1226"/>
+      <stop offset="100%" stop-color="#0b1326"/>
     </linearGradient>
-    <radialGradient id="gold-bloom" cx="85%" cy="0%" r="65%">
-      <stop offset="0%" stop-color="#d29e3d" stop-opacity="0.16"/>
-      <stop offset="60%" stop-color="#d29e3d" stop-opacity="0.03"/>
-      <stop offset="100%" stop-color="#0e1830" stop-opacity="0"/>
-    </radialGradient>
   </defs>
 
-  <!-- Ground & Bloom -->
-  <rect width="960" height="320" rx="3" fill="url(#lacquer-bg)"/>
-  <rect width="960" height="320" rx="3" fill="url(#gold-bloom)"/>
-  <rect x="0.5" y="0.5" width="959" height="319" rx="3" fill="none" stroke="#eceae3" stroke-opacity="0.12"/>
-  <line x1="0" y1="1" x2="960" y2="1" stroke="#d29e3d" stroke-opacity="0.8" stroke-width="2"/>
+  <rect width="1080" height="340" rx="6" fill="url(#hero-bg)"/>
+  <rect x="1" y="1" width="1078" height="338" rx="5" fill="none" stroke="#d29e3d" stroke-opacity="0.35" stroke-width="1.5"/>
+  <line x1="0" y1="2" x2="1080" y2="2" stroke="#d29e3d" stroke-width="3"/>
 
-  <!-- Arrival Rail -->
-  <line x1="0" y1="38" x2="960" y2="38" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
-  <text x="32" y="24" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="11" letter-spacing="1.1">/ ORMUS · TALENT · BRIEFS · FLOW · COPILOT</text>
-  <text x="928" y="24" text-anchor="end" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="11" letter-spacing="0.8">AS OF 2026-10-01 · 3,858 PKS · P01–P08 + P09⊘</text>
+  <!-- Left Narrative Region (x=48..720) -->
+  <text x="48" y="42" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" font-weight="600" letter-spacing="1.2">/ FLOW INTELLIGENCE · PORTFOLIO &amp; MARKETING COPILOT</text>
 
-  <!-- Right Cover Block Art (from references/cover.md) -->
-  <g transform="translate(620, 38)">
-    <rect x="24" y="-8" width="116" height="224" rx="3" fill="#d29e3d" fill-opacity="0.92"/>
-    <rect x="156" y="76" width="40" height="20" rx="3" fill="#a5b0c4" fill-opacity="0.85"/>
-    <rect x="156" y="104" width="68" height="112" rx="3" fill="#e0b258" fill-opacity="0.92"/>
-    <rect x="240" y="156" width="100" height="60" rx="3" fill="#eceae3" fill-opacity="0.9"/>
-    <line x1="0" y1="56" x2="340" y2="56" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
-    <line x1="0" y1="96" x2="340" y2="96" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
-    <line x1="0" y1="136" x2="340" y2="136" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
-    <line x1="0" y1="176" x2="340" y2="176" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
-    <!-- Saturn Alchemical Line Sigil on Gold Block -->
-    <g transform="translate(66, 36)" stroke="#1a1407" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="6" y1="4" x2="18" y2="4"/>
-      <line x1="12" y1="4" x2="12" y2="22"/>
-      <path d="M12 13 C20 11, 22 19, 15 23 C12 25, 16 28, 20 26"/>
-    </g>
+  <text x="48" y="94" fill="#e8ecf4" font-family="Georgia, serif" font-size="38" font-weight="600">Eight buildings. 1,100 units.</text>
+  <text x="48" y="140" fill="#d29e3d" font-family="Georgia, serif" font-size="38" font-weight="600">One reconciled portfolio.</text>
+
+  <text x="48" y="182" fill="#b4bfd3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Inter, sans-serif" font-size="14">Answers leasing, renewal, and ad-spend questions across 6 messy exports—every number tied to its source row.</text>
+
+  <!-- Vertical separator before Right Skyline Illustration -->
+  <line x1="756" y1="28" x2="756" y2="206" stroke="#e8ecf4" stroke-opacity="0.12" stroke-width="1"/>
+
+  <!-- Right Minimalist Architectural Skyline Illustration (x=780..1032, y=28..206) -->
+  <g transform="translate(780, 28)">
+    <rect x="0" y="0" width="252" height="178" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.14"/>
+    <text x="16" y="22" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="600" letter-spacing="0.8">P01–P08 ACTIVE  ·  P09 ON HOLD</text>
+
+    <!-- Baseline -->
+    <line x1="16" y1="146" x2="236" y2="146" stroke="#d29e3d" stroke-opacity="0.6" stroke-width="1.5"/>
+
+    <!-- 8 Operating Buildings (Solid Gold/Slate Towers) -->
+    <rect x="20" y="76" width="16" height="70" rx="1.5" fill="#233763" stroke="#d29e3d" stroke-width="1"/>
+    <rect x="42" y="54" width="16" height="92" rx="1.5" fill="#2c4478" stroke="#d29e3d" stroke-width="1"/>
+    <rect x="64" y="68" width="16" height="78" rx="1.5" fill="#233763" stroke="#d29e3d" stroke-width="1"/>
+    <rect x="86" y="60" width="16" height="86" rx="1.5" fill="#2c4478" stroke="#d29e3d" stroke-width="1"/>
+    <rect x="108" y="84" width="16" height="62" rx="1.5" fill="#233763" stroke="#d29e3d" stroke-width="1"/>
+    <rect x="130" y="72" width="16" height="74" rx="1.5" fill="#2c4478" stroke="#d29e3d" stroke-width="1"/>
+    <rect x="152" y="44" width="18" height="102" rx="1.5" fill="#d29e3d" fill-opacity="0.88"/>
+    <rect x="176" y="64" width="16" height="82" rx="1.5" fill="#2c4478" stroke="#d29e3d" stroke-width="1"/>
+
+    <!-- 9th Building: P09 Quarantined Stub (Dashed Gold Outline) -->
+    <rect x="204" y="96" width="24" height="50" rx="1.5" fill="none" stroke="#d29e3d" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="216" y="90" text-anchor="middle" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9.5" font-weight="600">P09</text>
+
+    <text x="16" y="165" fill="#9aa7bd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9.5">8 Active (1,100u) · 1 Hold (0u)</text>
   </g>
 
-  <!-- Left Editorial Display -->
-  <text x="32" y="72" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="11" letter-spacing="1.1">/ FLOW-101..106 · DETERMINISTIC RELATIONAL SHEAF &amp; AGENT COPILOT</text>
-  <text x="32" y="118" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="42" letter-spacing="-0.4">Eight buildings. 1,100 units.</text>
-  <text x="32" y="162" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="42" letter-spacing="-0.4">One answerable portfolio.</text>
-  <text x="32" y="196" fill="#a5b0c4" font-family="'Inter', -apple-system, sans-serif" font-size="13.5">Cross-system joins over PMS, CRM, ILS spend, and budget decisions. Every figure verified against 3,858 row primary keys.</text>
+  <!-- Horizontal Divider above Bottom KPI Strip -->
+  <line x1="48" y1="216" x2="1032" y2="216" stroke="#e8ecf4" stroke-opacity="0.12" stroke-width="1"/>
 
-  <!-- Bottom 5-Tile Measured Record Strip -->
-  <line x1="0" y1="226" x2="960" y2="226" stroke="#eceae3" stroke-opacity="0.12" stroke-width="1"/>
-
-  <!-- Tile 1 -->
-  <g transform="translate(32, 238)">
-    <line x1="0" y1="0" x2="164" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
-    <text x="0" y="18" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ OPERATING FLEET</text>
-    <text x="0" y="48" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="30">93.9%<tspan fill="#a5b0c4" font-size="13" font-family="'JetBrains Mono', monospace"> occ</tspan></text>
-    <text x="0" y="66" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10">⚖︎ measured · 1,033/1,100</text>
+  <!-- Bottom KPI Strip (y=230..314, 4 Spacious Cards across x=48..1032) -->
+  <!-- Card 1: x=48, width=234 -->
+  <g transform="translate(48, 230)">
+    <rect width="234" height="84" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.14"/>
+    <line x1="0" y1="0" x2="234" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="16" y="22" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="600" letter-spacing="0.6">PORTFOLIO OCCUPANCY</text>
+    <text x="16" y="52" fill="#e8ecf4" font-family="Georgia, serif" font-size="28" font-weight="600">93.9%</text>
+    <text x="16" y="72" fill="#9aa7bd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">1,033 / 1,100 Units Occupied</text>
   </g>
 
-  <!-- Tile 2 -->
-  <g transform="translate(216, 238)">
-    <line x1="0" y1="0" x2="164" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
-    <text x="0" y="18" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ DEAD AD SPEND</text>
-    <text x="0" y="48" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="30">$46,599.90</text>
-    <text x="0" y="66" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10">✓︎ accept · +15 leases</text>
+  <!-- Card 2: x=300, width=234 -->
+  <g transform="translate(300, 230)">
+    <rect width="234" height="84" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.14"/>
+    <line x1="0" y1="0" x2="234" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="16" y="22" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="600" letter-spacing="0.6">DEAD SPEND RECOVERED</text>
+    <text x="16" y="52" fill="#e8ecf4" font-family="Georgia, serif" font-size="28" font-weight="600">$46,599.90</text>
+    <text x="16" y="72" fill="#34d399" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">Wasted Ad Spend -&gt; +15 Leases</text>
   </g>
 
-  <!-- Tile 3 -->
-  <g transform="translate(400, 238)">
-    <line x1="0" y1="0" x2="164" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
-    <text x="0" y="18" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ POLICY ABLATION</text>
-    <text x="0" y="48" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="30">3→8→10<tspan fill="#a5b0c4" font-size="13" font-family="'JetBrains Mono', monospace">/10</tspan></text>
-    <text x="0" y="66" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10">⚖︎ measured · 25/25 red-team</text>
+  <!-- Card 3: x=552, width=234 -->
+  <g transform="translate(552, 230)">
+    <rect width="234" height="84" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.14"/>
+    <line x1="0" y1="0" x2="234" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="16" y="22" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="600" letter-spacing="0.6">DATA HYGIENE GATES</text>
+    <text x="16" y="52" fill="#e8ecf4" font-family="Georgia, serif" font-size="28" font-weight="600">6 Traps Caught</text>
+    <text x="16" y="72" fill="#9aa7bd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">P09 Stub · CAD FX · Void Bills</text>
   </g>
 
-  <!-- Tile 4 -->
-  <g transform="translate(584, 238)">
-    <line x1="0" y1="0" x2="164" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
-    <text x="0" y="18" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ QUARANTINE GATES</text>
-    <text x="0" y="48" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="30">6<tspan fill="#a5b0c4" font-size="13" font-family="'JetBrains Mono', monospace"> traps</tspan></text>
-    <text x="0" y="66" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10">⊘ gate · P09 &amp; D01011</text>
-  </g>
-
-  <!-- Tile 5 -->
-  <g transform="translate(768, 238)">
-    <line x1="0" y1="0" x2="160" y2="0" stroke="#d29e3d" stroke-opacity="0.7" stroke-width="1.5"/>
-    <text x="0" y="18" fill="#a5b0c4" font-family="'JetBrains Mono', Consolas, monospace" font-size="10" letter-spacing="0.8">/ ROW CITATIONS</text>
-    <text x="0" y="48" fill="#eceae3" font-family="'Cormorant Garamond', Georgia, serif" font-weight="300" font-size="30">3,858<tspan fill="#a5b0c4" font-size="13" font-family="'JetBrains Mono', monospace"> PKs</tspan></text>
-    <text x="0" y="66" fill="#d29e3d" font-family="'JetBrains Mono', Consolas, monospace" font-size="10">◆ law · 0 unverified</text>
+  <!-- Card 4: x=804, width=228 -->
+  <g transform="translate(804, 230)">
+    <rect width="228" height="84" rx="5" fill="#0d172e" stroke="#e8ecf4" stroke-opacity="0.14"/>
+    <line x1="0" y1="0" x2="228" y2="0" stroke="#d29e3d" stroke-width="2"/>
+    <text x="16" y="22" fill="#d29e3d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="600" letter-spacing="0.6">ROW-LEVEL VERIFICATION</text>
+    <text x="16" y="52" fill="#e8ecf4" font-family="Georgia, serif" font-size="28" font-weight="600">600 / 600</text>
+    <text x="16" y="72" fill="#34d399" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">Stress-Test Queries Verified</text>
   </g>
 </svg>
