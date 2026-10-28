@@ -134,7 +134,7 @@ export const MODEL_PROVIDER_PROFILES: Readonly<
     provider: 'xai',
     label: 'xAI Grok API',
     baseUrl: 'https://api.x.ai/v1',
-    defaultModel: 'grok-3-mini',
+    defaultModel: 'grok-4',
     recommendedModels: ['grok-4', 'grok-3-mini'],
     wireMode: 'native_tools',
     requiresApiKey: true,

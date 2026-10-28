@@ -1419,9 +1419,9 @@ function renderTemporalAndSwarm(wf, swarm) {
 }
 
 function buildClientFallbackSwarm() {
-  const multi-hopRuns = (INITIAL_STATE.runs || []).filter(function(r) { return r.suite === "multi-hop"; }).slice(0, 40);
+  const multiHopRuns = (INITIAL_STATE.runs || []).filter(function(r) { return r.suite === "multi-hop"; }).slice(0, 40);
   const crashAt = 18;
-  const activities = multi-hopRuns.map(function(r, idx) {
+  const activities = multiHopRuns.map(function(r, idx) {
     const actIdx = idx + 1;
     const replayed = actIdx <= crashAt;
     return {
