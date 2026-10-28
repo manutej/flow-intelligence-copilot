@@ -145,7 +145,7 @@ const UNMODELED_DATA_RULES: ReadonlyArray<{
   {
     category: 'Property Operating Expenses & Utilities (OpEx / Facilities / Landscaping)',
     pattern:
-      /\b(landscaping|snow\s+removal|maintenance\s+(spend|cost|expense|budget)|repair\s+(spend|cost|expense)|janitorial|utility\s+bills?|utilities(\s+spend|\s+cost)?|water\s+bills?|trash\s+(bills?|cost|collection)|electric(ity)?\s+(bills?|cost|spend)|gas\s+bills?|property\s+tax\w*|insurance\s+(cost|premium)|hvac\s+repair|plumbing\s+expense|roof\s+repair|pest\s+control)\b/i,
+      /\b(landscaping|snow\s+removal|maintenance\s+(spend|cost|expense|budget)|repair\s+(spend|cost|expense)|janitorial|utility\s+bills?|utilities(\s+spend|\s+cost)?|water\s+bills?|trash\s+(bills?|cost|collection)|electric(ity)?\s+(bills?|cost|spend)|gas\s+bills?|property\s+tax\w*|insurance\s+(cost|premium)|hvac\s+repair|plumbing\s+expense|roof\s+repair|pest\s+control|employee\s+payroll|staff\s+salar(y|ies)|payroll\s+(cost|expense|spend))\b/i,
     missingDetail:
       'The portfolio exports only contain marketing/ILS invoice lines in data/ils/spend.csv (Apartments.com, Zillow, Google Ads, Facebook Ads, Rent., Apartment List) and do not include general ledger, utility, or property operating/facilities expenses.',
   },
@@ -159,14 +159,14 @@ const UNMODELED_DATA_RULES: ReadonlyArray<{
   {
     category: 'Valuation, NOI, Debt Service & Unmodeled Resident Fees/Parking Leases',
     pattern:
-      /\b(cap\s+rate|capitalization\s+rate|noi\b|net\s+operating\s+income|debt\s+service|mortgage\s+payment|loan\s+balance|irr\b|cash[-\s]on[-\s]cash|security\s+deposit|pet\s+(fee|deposit|rent)|application\s+fee|move[-\s]?in\s+fee|lease\s+buyout\s+fee|buyout\s+fee|early\s+termination\s+fee|parking\s+(spots?|spaces?)\s+(leased|vacant|rented|available)|leased\s+parking)\b/i,
+      /\b(cap\s+rate|capitalization\s+rate|noi\b|net\s+operating\s+income|dscr\b|debt[-\s]?service(\s+coverage\s+ratio)?|mortgage\s+payment|loan\s+balance|irr\b|cash[-\s]on[-\s]cash|security\s+deposit|pet\s+(fee|deposit|rent)|application\s+fee|move[-\s]?in\s+fee|lease\s+buyout\s+fee|buyout\s+fee|early\s+termination\s+fee|parking\s+(spots?|spaces?)\s+(leased|vacant|rented|available)|leased\s+parking)\b/i,
     missingDetail:
       'The PMS exports track unit market_rent, lease monthly_rent, and concession_usd, but do not include building valuation/NOI/cap-rate ledgers, ancillary fee schedules (pet/application/deposit/buyout fees), or separate parking-stall lease inventories.',
   },
   {
     category: 'Competitor Private Pricing & External Neighborhood Indices',
     pattern:
-      /\b(competitor\w*'\s+private|private\s+comp\s+data|non-public\s+competitor\s+rent|realpage\s+private\s+comp|walk\s+score|transit\s+score|bike\s+score|crime\s+(rate|stats?|statistics|index)|school\s+(district|rating|score|rankings?))\b/i,
+      /\b(competitor\w*'\s+private|private\s+comp\s+data|non-public\s+competitor\s+rent|realpage\s+private\s+comp|walk\s+score|transit\s+score|bike\s+score|crime\s+(rate|stats?|statistics|index)|school\s+(district|rating|score|rankings?)|competitor\s+(rent\s+)?comps?|macro\s+(cpi|indices|index|inflation)|consumer\s+price\s+index)\b/i,
     missingDetail:
       'The dataset contains only FLOW portfolio properties (P01-P09) and internal PMS/CRM/ILS records; it does not include external competitor private pricing, walk/transit scores, crime statistics, or school ratings.',
   },

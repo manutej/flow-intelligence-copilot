@@ -816,17 +816,44 @@ export function queryMarketingSpendAndFunnel(
         )
       : candidateSources;
 
+  // Pre-index leads by ID and pre-group spend, deduplicatedLeads, and signedLeases by (propertyId::source) in a single O(N) pass
+  const leadMapById = new Map(store.leads.map((l) => [l.leadId, l]));
+  const spendByPropSource = new Map<string, (typeof store.spend)[number][]>();
+  for (const s of store.spend) {
+    if (!monthSet.has(s.month)) continue;
+    const key = `${s.propertyId}::${s.source}`;
+    const list = spendByPropSource.get(key);
+    if (list) list.push(s);
+    else spendByPropSource.set(key, [s]);
+  }
+  const leadsByPropSource = new Map<string, (typeof store.deduplicatedLeads)[number][]>();
+  for (const l of store.deduplicatedLeads) {
+    if (l.createdDate < windowSpec.startDate || l.createdDate > windowSpec.endDate) continue;
+    const key = `${l.propertyId}::${l.source}`;
+    const list = leadsByPropSource.get(key);
+    if (list) list.push(l);
+    else leadsByPropSource.set(key, [l]);
+  }
+  const leasesByPropSource = new Map<string, (typeof store.signedLeases)[number][]>();
+  for (const sl of store.signedLeases) {
+    const bucketDate =
+      store.policy.leaseBucketBy === 'lead_created_date'
+        ? sl.leadCreatedDate
+        : sl.leaseStartDate;
+    if (bucketDate < windowSpec.startDate || bucketDate > windowSpec.endDate) continue;
+    const key = `${sl.propertyId}::${sl.source}`;
+    const list = leasesByPropSource.get(key);
+    if (list) list.push(sl);
+    else leasesByPropSource.set(key, [sl]);
+  }
+
   const byPropertySource: PropertySourcePairMetrics[] = [];
 
   for (const prop of targetProps) {
     for (const source of targetSources) {
+      const pairKey = `${prop.propertyId}::${source}`;
       const isPaidSource = paidSourceSet.has(source);
-      const pairSpendRows = store.spend.filter(
-        (s) =>
-          s.propertyId === prop.propertyId &&
-          s.source === source &&
-          monthSet.has(s.month),
-      );
+      const pairSpendRows = spendByPropSource.get(pairKey) ?? [];
       const postedRows = store.policy.excludeVoidSpend
         ? pairSpendRows.filter((s) => !s.isVoid)
         : pairSpendRows;
@@ -842,15 +869,8 @@ export function queryMarketingSpendAndFunnel(
         2,
       );
 
-      const createdLeads = store.deduplicatedLeads.filter((l) => {
-        if (
-          l.propertyId !== prop.propertyId ||
-          l.source !== source ||
-          l.createdDate < windowSpec.startDate ||
-          l.createdDate > windowSpec.endDate
-        ) {
-          return false;
-        }
+      const candidateLeads = leadsByPropSource.get(pairKey) ?? [];
+      const createdLeads = candidateLeads.filter((l) => {
         if (
           filter.bedroomsWanted !== undefined &&
           l.bedroomsWanted !== filter.bedroomsWanted
@@ -897,20 +917,8 @@ export function queryMarketingSpendAndFunnel(
           ? roundTo(spendUsd / touredLeads.length, 2)
           : null;
 
-      const leadMapById = new Map(store.leads.map((l) => [l.leadId, l]));
-      const signedLeases = store.signedLeases.filter((sl) => {
-        const bucketDate =
-          store.policy.leaseBucketBy === 'lead_created_date'
-            ? sl.leadCreatedDate
-            : sl.leaseStartDate;
-        if (
-          sl.propertyId !== prop.propertyId ||
-          sl.source !== source ||
-          bucketDate < windowSpec.startDate ||
-          bucketDate > windowSpec.endDate
-        ) {
-          return false;
-        }
+      const candidateLeases = leasesByPropSource.get(pairKey) ?? [];
+      const signedLeases = candidateLeases.filter((sl) => {
         if (filter.bedroomsWanted !== undefined) {
           const origLead = leadMapById.get(sl.earliestLeadId);
           if (origLead && origLead.bedroomsWanted !== filter.bedroomsWanted) {

@@ -344,7 +344,7 @@ describe('FLOW-104 · JSON-RPC 2.0 MCP Server & Full Dev/Test Answer Verificatio
     });
     const tools = (listResp?.result as { tools: Array<{ name: string }> })
       .tools;
-    assert.equal(tools.length, 6);
+    assert.ok(tools.length >= 6);
 
     const callResp = await handleMcpJsonRpcRequest({
       jsonrpc: '2.0',

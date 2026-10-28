@@ -14,6 +14,7 @@ export type DecisionOutcomeVerdict =
   | 'validated_decrease_cut_waste'
   | 'low_sample_shrunk'
   | 'missed_opportunity_rejected_cut'
+  | 'correctly_rejected_dead_spend_increase'
   | 'neutral_observation';
 
 export interface DecisionQueryFilter {
@@ -129,6 +130,7 @@ export function evaluateBudgetDecisionsAndLearn(
 
   const allMonths = DATE_WINDOWS.APR_SEP_2026.months;
   const propMap = new Map(store.properties.map((p) => [p.propertyId, p]));
+  const operatingPropIdSet = new Set(store.operatingProperties.map((p) => p.propertyId));
 
   const allowedPropIds =
     options?.propertyIds && options.propertyIds.length > 0
@@ -152,6 +154,9 @@ export function evaluateBudgetDecisionsAndLearn(
   // 1. Evaluate historical decisions in decisions.csv
   const evaluatedDecisions: DecisionOutcomeEvaluation[] = store.decisions
     .filter((d) => {
+      if (store.policy.quarantineZeroUnitProperties && !operatingPropIdSet.has(d.propertyId)) {
+        return false;
+      }
       if (allowedPropIds && !allowedPropIds.has(d.propertyId)) {
         return false;
       }
@@ -255,8 +260,11 @@ export function evaluateBudgetDecisionsAndLearn(
       );
 
       const smallSampleGuardTriggered =
+        d.accepted &&
         postMonthList.length < minPostMonthsForFullConfidence &&
-        postSpendUsd < minPostSpendForFullConfidenceUsd;
+        postSpendUsd < minPostSpendForFullConfidenceUsd &&
+        (preSignedLeases > 0 ||
+          preSpendUsd + postSpendUsd < minPostSpendForFullConfidenceUsd);
 
       // Conjugate Gamma-Poisson pre-decision and post-decision posteriors (zero magic constants)
       const preShrunkCpslUsd = roundTo(
@@ -308,6 +316,13 @@ export function evaluateBudgetDecisionsAndLearn(
       ) {
         verdict = 'missed_opportunity_rejected_cut';
         explanation = `Rejected cut cost money: operator declined the -$${Math.abs(d.deltaUsd)}/mo cut in ${d.month} ($${counterfactualRegretUsd.toFixed(0)} direct counterfactual regret), and ${d.source} at ${d.propertyId} subsequently burned $${postSpendUsd.toFixed(0)} over ${postMonthList.length} months with 0 leases.`;
+      } else if (
+        !d.accepted &&
+        d.recommendation === 'increase' &&
+        postSignedLeases === 0
+      ) {
+        verdict = 'correctly_rejected_dead_spend_increase';
+        explanation = `Correctly rejected increase: operator declined the +$${d.deltaUsd}/mo increase in ${d.month}, avoiding additional waste on ${d.source} at ${d.propertyId}, which burned $${(preSpendUsd + postSpendUsd).toFixed(0)} across all 6 months ($${preSpendUsd.toFixed(0)} pre + $${postSpendUsd.toFixed(0)} post) with 0 signed leases (posterior CPSL $${postOutcomeShrunkCpslUsd.toFixed(2)}); recommend cutting all remaining spend.`;
       } else if (smallSampleGuardTriggered && postSignedLeases === 0) {
         verdict = 'low_sample_shrunk';
         explanation = `Small-sample guard active: post-decision window is only ${postMonthList.length} months ($${postSpendUsd.toFixed(0)} spend, 0 leases). Under the portfolio prior ($${beta0}/lease), Pr(K=0) = ${(poissonZeroLeaseProbability * 100).toFixed(1)}%, so conjugate shrinkage keeps ${d.source} at ${d.propertyId} at $${postOutcomeShrunkCpslUsd.toFixed(2)} instead of over-penalizing a 2-month sample.`;
