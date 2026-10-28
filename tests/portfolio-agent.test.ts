@@ -1,3 +1,4 @@
+import { runParaphraseAnd10xSuite } from "../scripts/test-paraphrase-and-ambiguity-invariance.ts";
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -376,6 +377,13 @@ describe('FLOW-104 · JSON-RPC 2.0 MCP Server & Full Dev/Test Answer Verificatio
     const eggs = answerLines[16];
     assert.equal(eggs.id, 'EGGS');
     assert.deepEqual(eggs.words, ['pyrite', 'athanor']);
-    assert.deepEqual(eggs.answer, { words: ['pyrite', 'athanor'] });
+    assert.deepEqual(Object.keys(eggs), ['id', 'words']);
+  });
+
+  it('passes all 240 blind paraphrases, 20 constraint-drop ambiguity probes, and 21 10x unseen portfolio queries', async () => {
+    const res = await runParaphraseAnd10xSuite();
+    assert.equal(res.paraphrasePassed, 240);
+    assert.equal(res.ambiguityPassed, 20);
+    assert.equal(res.tenXPassed, 21);
   });
 });

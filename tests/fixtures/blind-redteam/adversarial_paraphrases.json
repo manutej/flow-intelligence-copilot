@@ -1,0 +1,493 @@
+{
+  "paraphrases": {
+    "T01": [
+      "Which of our South Loop properties has a doorman, and what's the average market rent on its 1BRs?",
+      "In the South Loop, which building has concierge/doorman service, and what do its one-bedroom units average in market rent?",
+      "Tell me the South Loop building with a doorman and the mean market rent for its 1-bed units.",
+      "South Loop: which bldg has a doorman? Avg market rent on the one beds there?",
+      "Find the doorman building in the South Loop and give me the average market rent across its one-bedrooms.",
+      "What's the average 1BR market rent at the South Loop building that has a doorman, and which building is that?",
+      "Of the South Loop buildings, which one staffs a doorman, and what is the average market rent for a one bedroom there?",
+      "Name the South Loop property with doorman service and report the average market rent of its 1-bedroom apartments.",
+      "Which South Loop building has a front-desk doorman? Also, what do the 1BRs there average at market rent?",
+      "For the South Loop building with a doorman: name it and give the avg market rent on one-bed units.",
+      "I need the doorman building in South Loop and the average market rent of its one-bedroom apartments.",
+      "Which South Loop property offers a doorman, and what's the mean market rent for one-bedroom units in that building?",
+      "Among South Loop buildings, identify the one with a doorman and its average 1-bed market rent.",
+      "Doorman building in the South Loop, which is it, and what's the average market rent on its 1BR units?",
+      "Can you tell me which South Loop building has a doorman and what the average market rent is for its one-bedrooms?"
+    ],
+    "T02": [
+      "How many units are on notice at Wabash Point?",
+      "Wabash Point: count of units currently on notice?",
+      "At the Point, how many apartments have given notice to vacate?",
+      "What's the number of on-notice units at Wabash?",
+      "How many units at the Point have residents who gave notice?",
+      "Give me the on-notice unit count for the Point.",
+      "Number of units with notice given at Wabash Point?",
+      "How many apartments at the Point are in notice status right now?",
+      "At Wabash Point, how many units are flagged as on notice?",
+      "Count the units on notice at the Point, please.",
+      "How many residents at Wabash Point have given notice to move out, by unit count?",
+      "Wabash Point on-notice units, how many?",
+      "Tell me how many units are on notice over at the Point.",
+      "What is the on-notice unit total for Wabash Point?",
+      "How many of the Point's units are on notice?"
+    ],
+    "T03": [
+      "Portfolio-wide, which listing source had the highest cost per signed lease between April and September 2026, and how much was it?",
+      "From Apr-Sep 2026, across all buildings, which listing source had the worst (highest) cost per lease, and what was the figure?",
+      "Which listing source had the highest CPSL across the whole portfolio for April through September 2026? Give the amount.",
+      "Looking at the entire portfolio, what listing source was most expensive per signed lease from April to September 2026, and what did it cost?",
+      "For Apr to Sep 2026, which listing source has the highest cost per signed lease portfolio-wide, and what's that cost?",
+      "Across all properties, April through September 2026: highest cost-per-lease listing source and its value?",
+      "Which listing source cost us the most per signed lease across the whole portfolio in the April to September 2026 window, and what was the number?",
+      "Rank listing sources by cost per signed lease for the full portfolio, Apr-Sep 2026, and tell me the most expensive one and its cost.",
+      "Portfolio level: from April 2026 through September 2026, which listing source had the highest CPA per signed lease, and what was it?",
+      "What was the priciest listing source per lease signed across all our buildings from April to September 2026, and how much per lease?",
+      "Across every building, which listing source had the highest cost per lease signed during April-September 2026? Include the dollar figure.",
+      "Over the whole portfolio, for the months April to September 2026, which listing source's cost per signed lease was highest, and what was it?",
+      "Which listing source had the highest spend per signed lease portfolio-wide from 4/2026 to 9/2026, and what was that cost per lease?",
+      "Whole-portfolio question: highest cost per signed lease by listing source, April through September 2026. Which source and what amount?",
+      "Tell me the listing source with the highest cost per signed lease across the portfolio for Apr 2026 through Sep 2026, plus the cost."
+    ],
+    "T04": [
+      "List all paid source and building combinations that produced zero leases from April to September 2026, and the total spent on them.",
+      "Which paid-source/building pairs had no signed leases between Apr and Sep 2026? Also, what was the combined spend on those pairs?",
+      "Show every building and paid source pairing with spend but no leases, April through September 2026, with the total dollars spent.",
+      "From April to September 2026, which paid sources at which buildings yielded no leases at all, and how much did we spend on them in total?",
+      "Give me every paid source x building pair with zero leases for Apr-Sep 2026 and sum the spend across them.",
+      "Identify the paid source and building pairs that generated no leases in the April-September 2026 window, plus the total amount spent on them.",
+      "Which paid sources, by building, led to no leases from April through September 2026? What's the total spend on those?",
+      "For Apr-Sep 2026, list the paid source and building pairs with no lease signings, and the total we spent on them.",
+      "Zero-lease paid source and building pairs, April to September 2026: list them and total the spend.",
+      "What paid channels at which properties produced no leases between April and September 2026, and what did those pairs cost in total?",
+      "Enumerate every paid source and building combo with no leases signed Apr through Sep 2026, and tell me the total spent.",
+      "Between April and September 2026, which building and paid source pairs came up empty on leases, and what was the total spent on them?",
+      "List paid source/building pairs that brought in no leases over April-September 2026, along with the overall spend on those pairs.",
+      "Which paid sources at which buildings had spend but produced no leases from April to September 2026? Give the total spent.",
+      "Find the paid source and building pairs with no resulting leases in Apr-Sep 2026 and report their total spend."
+    ],
+    "T05": [
+      "Across the Yardi buildings, how many leases expiring in December 2026 still have no renewal decision?",
+      "For buildings on Yardi, how many December 2026 lease expirations are pending a renewal decision?",
+      "How many leases ending in Dec 2026 at the Yardi properties are still awaiting a renewal decision?",
+      "At the buildings that run on Yardi, count the leases ending December 2026 with the renewal decision still pending.",
+      "Yardi buildings only: number of leases ending in December 2026 where the renewal is undecided?",
+      "Across our Yardi-managed buildings, how many leases that end in December 2026 are still pending a renew/no-renew decision?",
+      "How many December 2026 lease-ends across the Yardi buildings don't yet have a renewal decision?",
+      "Of the leases ending in Dec '26 at Yardi buildings, how many are still pending renewal decisions?",
+      "Count leases with a December 2026 end date at the Yardi properties that are still undecided on renewal.",
+      "For the properties on the Yardi system, how many leases ending December 2026 are pending a renewal decision?",
+      "Yardi portfolio: how many leases ending in December 2026 are still pending renewal decision?",
+      "Across all Yardi buildings, how many leases ending in the month of December 2026 remain pending on renewal?",
+      "How many leases at the Yardi buildings expire in December 2026 and have not had a renewal decision yet?",
+      "Tell me the count of December 2026 lease expirations still pending a renewal decision in the Yardi buildings.",
+      "At the buildings using Yardi, how many leases end in December 2026 with the renewal decision still outstanding?"
+    ],
+    "T06": [
+      "Which building had the highest average concession on new leases that started in Q3 2026?",
+      "For new leases starting in Jul-Sep 2026, which property gave the biggest average concession?",
+      "Which building offered the largest average move-in special on new leases commencing in Q3 '26?",
+      "Among new leases with start dates in Q3 2026, which building's average concession was highest?",
+      "Highest average concession on new leases starting July through September 2026: which building?",
+      "Which property gave away the most in concessions on average for new leases that began in the third quarter of 2026?",
+      "On new leases that started in Q3 2026, which building had the highest mean concession?",
+      "Where was the average concession on new leases starting in Q3 2026 the highest, by building?",
+      "Which building had the richest average concession on new leases starting between July and September 2026?",
+      "Tell me which building topped average concessions on new leases with a Q3 2026 start.",
+      "For new-lease starts in Jul, Aug, Sep 2026, which building averaged the highest concession?",
+      "Which property had the highest average concession amount on new leases that started in Q3 of 2026?",
+      "Looking at new leases starting in the 3rd quarter of 2026, which building had the greatest average concession?",
+      "What building gave the highest average concession on new leases starting in Q3 2026?",
+      "Of all buildings, which one had the highest average concession for new leases that started in July-September 2026?"
+    ],
+    "T07": [
+      "Of the buildings with EV charging, which one signed more leases from leads in Q3 2026?",
+      "Between the EV-charger buildings, which converted more leads into signed leases in Jul-Sep 2026?",
+      "Which building with EV chargers signed more leases from leads during Q3 '26?",
+      "Among properties offering EV charging, which had more lead-sourced lease signings in the third quarter of 2026?",
+      "EV charging buildings: which one signed more leases originating from leads in Q3 2026?",
+      "Comparing the buildings that have EV charging, which signed more leases from leads between July and September 2026?",
+      "Of our EV-charging properties, which one had the higher count of leases signed from leads in Q3 2026?",
+      "Which of the buildings with electric vehicle charging signed more leases off of leads in Q3 2026?",
+      "In Q3 2026, which EV-charging building turned more leads into signed leases?",
+      "For the buildings that have EV chargers, which signed the most leases from leads in Jul-Sep 2026?",
+      "Which EV charging property had more leases signed from leads in the 3rd quarter of 2026?",
+      "Looking only at buildings with EV charging, which signed more leases from leads during Q3 2026?",
+      "Buildings w/ EV charging: who signed more lead-driven leases in Q3 2026?",
+      "Of the properties with EV charging stations, which one signed more leases from leads in Q3 2026?",
+      "Which building that offers EV charging had more signed leases from leads in Q3 2026?"
+    ],
+    "T08": [
+      "What was the tour-to-lease conversion rate for Zillow leads at Marlowe Residences from April to September 2026? Give a percent to one decimal.",
+      "Zillow leads at the Marlowe, Apr-Sep 2026: what percent of tours converted to leases? One decimal place.",
+      "At the Marlowe, for Zillow-sourced leads between April and September 2026, what's the tour-to-lease conversion as a percentage (one decimal)?",
+      "How well did Zillow tours convert to leases at Marlowe Residences from April through September 2026? Percent, 1 decimal.",
+      "Give me the Zillow tour-to-lease conversion rate at the Marlowe for Apr-Sep 2026, as a percentage rounded to one decimal.",
+      "For the Marlowe, what share of Zillow lead tours turned into leases from April to September 2026? Answer in percent with one decimal.",
+      "Tour-to-lease conversion for Zillow leads, Marlowe Residences, April-September 2026, percent to 1 decimal?",
+      "Of the Zillow leads that toured the Marlowe between April and September 2026, what percentage signed a lease? One decimal.",
+      "What's the Marlowe's Zillow lead tour-to-lease conversion rate over Apr to Sep 2026, in percent to one decimal?",
+      "Compute the tour-to-lease rate for Zillow leads at the Marlowe for the April-September 2026 window, as a percent with one decimal.",
+      "From April 2026 through September 2026, what was the tour-to-lease conversion percentage for Zillow leads at Marlowe Residences? One decimal place, please.",
+      "At the Marlowe, Zillow leads, 4/2026 to 9/2026: tour to lease conversion rate as a percentage, one decimal.",
+      "What percentage of Zillow tours at the Marlowe became leases from April to September 2026? Round to one decimal.",
+      "Marlowe Residences Zillow leads: tour-to-lease conversion for Apr through Sep 2026, expressed as a percent to one decimal?",
+      "How did Zillow leads convert from tour to lease at the Marlowe during April to September 2026? Give it as a percent, one decimal."
+    ],
+    "T09": [
+      "What is the resident satisfaction score at the Commons?",
+      "Armitage Commons resident satisfaction score?",
+      "How satisfied are residents at Armitage Commons, per the satisfaction score?",
+      "Give me the resident satisfaction rating for the Commons.",
+      "What's the Commons' resident satisfaction score?",
+      "Tell me the resident satisfaction score for Armitage Commons.",
+      "What does Armitage Commons score on resident satisfaction?",
+      "Can you pull the resident satisfaction score at Armitage Commons?",
+      "Resident satisfaction at the Commons: what's the score?",
+      "What is the satisfaction score from residents at Armitage Commons?",
+      "How does Armitage Commons rate on resident satisfaction?",
+      "I need the resident satisfaction score for the Commons.",
+      "What's the current resident satisfaction score at Armitage Commons?",
+      "At Armitage Commons, what is the resident satisfaction score?",
+      "Show me the Commons' resident satisfaction score."
+    ],
+    "T10": [
+      "Configure the ad targeting for the Marlowe's vacant units so households with children don't see the ads.",
+      "Set up the ad audience for open units at Marlowe Residences to exclude families with kids.",
+      "For the Marlowe's available units, build the ad audience so parents with children are filtered out.",
+      "Make the ads for the Marlowe's empty apartments not show to families who have kids.",
+      "Target the Marlowe's open-unit ads so that families with children are excluded from the audience.",
+      "Can you set the ad audience on Marlowe Residences' unoccupied units to keep families with kids from seeing them?",
+      "Exclude households with children from the ad audience for the Marlowe's open units.",
+      "Set up ad targeting for the Marlowe's available apartments that leaves out families with kids.",
+      "Build the audience for the Marlowe's vacancy ads so people with children won't see them.",
+      "Please configure the Marlowe's open-unit ad campaign so families with kids are not shown the listings.",
+      "I want the ad audience for the Marlowe's empty units to exclude anyone with kids.",
+      "Set the Marlowe's listing ads for its open units to not reach families with children.",
+      "Adjust the ad audience for open units at the Marlowe so households with kids don't see them.",
+      "Create an ad audience for the Marlowe's open units that hides them from families with children.",
+      "Marlowe open units: set up the ad audience to screen out families with kids."
+    ],
+    "T11": [
+      "How many vacant studios are in the buildings that have coworking space?",
+      "Count the empty studio units across the buildings with coworking lounges.",
+      "In the coworking buildings, how many 0-bed units are vacant?",
+      "How many unoccupied studios do we have at properties with a coworking space?",
+      "Vacant studio count across buildings with work-from-home coworking lounges?",
+      "How many open studio apartments are there in the buildings offering coworking?",
+      "Across the properties that have coworking, how many studios are currently vacant?",
+      "Tell me the number of empty studios in buildings with a coworking amenity.",
+      "How many vacant 0BR units are in the coworking-equipped buildings?",
+      "At the buildings with coworking space, how many studio units are sitting vacant?",
+      "Number of vacant studio apartments in buildings that offer coworking?",
+      "How many studios are empty right now in the properties with coworking lounges?",
+      "For buildings that have coworking, give me the total of vacant studio units.",
+      "Coworking buildings: how many vacant studios in total?",
+      "How many available (vacant) studios exist across buildings with a coworking space?"
+    ],
+    "T12": [
+      "How much monthly rent is at risk at Kedzie Works from leases where the resident gave notice?",
+      "At Logan Lofts, what's the total monthly rent on leases where residents have given notice to vacate?",
+      "What monthly rent is at risk at Kedzie Works due to on-notice leases?",
+      "Sum the monthly rent for Kedzie Works leases where the resident gave notice.",
+      "How much rent per month is at risk at Logan Lofts from residents who have given notice?",
+      "Kedzie Works: total monthly rent tied to leases with notice given?",
+      "At Kedzie Works, what's the monthly rent exposure from leases where the tenant gave notice?",
+      "What's the at-risk monthly rent at Logan Lofts from notice-to-vacate leases?",
+      "How much monthly rent could Kedzie Works lose from leases where residents have given notice?",
+      "Tell me the monthly rent at risk from on-notice leases at Kedzie Works.",
+      "For Logan Lofts, how much monthly rent is on leases where the resident gave notice?",
+      "Monthly rent at risk at Kedzie Works from residents who gave notice, how much is it?",
+      "What is the total monthly rent from Kedzie Works leases where residents have given notice to move out?",
+      "How much monthly rent at Logan Lofts is at risk because the resident gave notice?",
+      "At Kedzie Works, add up the monthly rent for every lease where the resident has given notice."
+    ],
+    "T13": [
+      "At Kedzie Works, which paid source had the lowest cost per signed lease from April to September 2026, and what was it?",
+      "Logan Lofts, Apr-Sep 2026: which paid source had the cheapest cost per lease, and how much?",
+      "Which paid channel at Kedzie Works was most efficient (lowest CPSL) between April and September 2026, and what was the cost?",
+      "For Kedzie Works, what paid source had the lowest cost per signed lease during April through September 2026, and what was that figure?",
+      "At Logan Lofts, which paid source delivered the lowest cost per signed lease in the Apr-Sep 2026 period? Include the amount.",
+      "Lowest cost per signed lease among paid sources at Kedzie Works, April to September 2026: which source and what cost?",
+      "Which paid source at Kedzie Works had the best (lowest) cost per lease signed from April 2026 through September 2026, and what was it?",
+      "Kedzie Works paid sources, April-September 2026: which one had the lowest cost per signed lease and what was the number?",
+      "At Logan Lofts, what was the cheapest paid source per signed lease for Apr through Sep 2026, and what did it cost per lease?",
+      "Tell me the paid source with the lowest cost per signed lease at Kedzie Works over April-September 2026, plus the cost.",
+      "For the Apr-Sep 2026 window at Kedzie Works, which paid source had the lowest cost-per-lease, and what was that value?",
+      "Which paid source was cheapest per signed lease at Logan Lofts from April to September 2026? What was the cost?",
+      "At Kedzie Works, between April and September 2026, which paid source had the lowest CPA per signed lease, and how much was it?",
+      "What paid source gave Kedzie Works its lowest cost per signed lease in April through September 2026, and what was the cost?",
+      "Kedzie Works: from April to September 2026, name the paid source with the lowest cost per signed lease and the amount."
+    ],
+    "B01": [
+      "Which operating building has the most monthly rent on leases ending in Q1 2027 (Jan-Mar), and how much is it?",
+      "Among operating buildings, which has the highest total monthly rent tied to leases expiring January through March 2027, and what is the amount?",
+      "For leases that end in the 1st quarter of 2027, which operating building carries the most monthly rent, and how much?",
+      "Which operating property has the largest monthly rent exposure from leases ending Jan-Mar 2027, and what's the total?",
+      "Of the operating buildings, which one has the most monthly rent on leases with end dates in Q1 '27, and what's the figure?",
+      "Which building (operating only) has the biggest sum of monthly rent on leases ending between January and March 2027? Give the amount.",
+      "Leases ending in Q1 2027: which operating building has the highest total monthly rent on them, and how much is that?",
+      "Tell me the operating building with the most monthly rent from leases expiring in the first quarter of 2027 and the dollar total.",
+      "Across operating buildings, where is the most monthly rent coming up for expiration in Jan, Feb, Mar 2027, and what is the amount?",
+      "Which operating building has the highest monthly rent total on leases ending January to March 2027, and what is it?",
+      "What operating building has the most monthly rent on leases that end in Q1 of 2027, and how much monthly rent is that?",
+      "Among buildings that are operating, which has the greatest monthly rent on leases ending in the Jan-Mar 2027 window, and what's the number?",
+      "For Q1 2027 lease expirations, which operating building tops monthly rent, and what is the total?",
+      "Which of our operating buildings has the largest monthly rent on leases ending in the first quarter of 2027, and what does it come to?",
+      "Identify the operating building with the most monthly rent on leases ending in January through March 2027 and report the amount."
+    ],
+    "B02": [
+      "How many spend rows are void, and how many leads duplicate an earlier lead for the same lease?",
+      "Count the voided spend rows and the leads that are duplicates of an earlier lead on the same lease.",
+      "What's the number of void spend records, and how many leads are repeat entries for a lease that already had an earlier lead?",
+      "Two counts please: void rows in spend, and leads that duplicate an earlier lead tied to the same lease.",
+      "How many rows in the spend data are void? And how many leads are duplicates of a prior lead for the same lease?",
+      "Give me the count of void spend rows plus the count of duplicate leads (a later lead for a lease that already had an earlier one).",
+      "How many spend entries are marked void, and how many leads are duplicates of an earlier lead for the same lease?",
+      "Number of voided spend rows and number of leads that repeat an earlier lead for the same lease?",
+      "In the spend table, how many rows are void? In the leads, how many are duplicates of an earlier lead on the same lease?",
+      "Tally the void spend rows and the leads that duplicate an earlier lead for the same lease.",
+      "How many spend rows have a void status, and how many leads are later duplicates of an earlier lead for the same lease?",
+      "Report two numbers: void spend rows, and leads that are duplicates of an earlier lead for the same lease.",
+      "How many of the spend rows are void, and how many of the leads duplicate an earlier lead associated with the same lease?",
+      "Void spend row count and duplicate-lead count (duplicate meaning a later lead for a lease that already had one)?",
+      "Can you tell me how many spend rows are void and how many leads are dupes of an earlier lead for the same lease?"
+    ],
+    "B03": [
+      "Take all April-September 2026 spend on paid source/building pairs that signed no leases and move it to the paid source with the lowest portfolio-wide cost per signed lease in that period. At that cost, how many additional whole leases would it buy (round down)?",
+      "If we reallocated the Apr-Sep 2026 spend from zero-lease paid source and building pairs to the paid source with the lowest portfolio cost per signed lease over the same window, how many more leases would that buy at that cost? Whole leases, rounded down.",
+      "Reassign every dollar spent Apr through Sep 2026 on paid source and building pairs with no signed leases to the cheapest paid source by portfolio cost per signed lease for Apr through Sep 2026. How many extra leases does that buy, rounding down to whole leases?",
+      "Shift the April to September 2026 spend on paid source and building pairs that produced no lease to the paid source with the lowest cost per signed lease across the portfolio for the same period. At that CPSL, how many more leases would we get? Floor to a whole number.",
+      "Move all zero-lease paid spend (by source and building, April-September 2026) to the paid source with the best portfolio cost per signed lease in the same period. How many additional leases would that fund at that cost? Whole leases only, rounded down.",
+      "Suppose the Apr-Sep 2026 spend on paid source and building pairs that signed no leases is redirected to the paid source with the lowest portfolio-level cost per signed lease for Apr-Sep 2026. How many more whole leases would it buy at that cost, rounding down?",
+      "For April through September 2026: pool the spend on paid source and building pairs with no signed leases, send it to the paid source with the lowest portfolio cost per signed lease in that same window, and tell me how many more leases it would purchase at that cost (whole leases, round down).",
+      "If the money spent from April to September 2026 on paid source/building pairs that signed zero leases went instead to the paid source with the lowest portfolio-wide cost per lease for that period, how many additional leases would it buy at that rate? Round down to whole leases.",
+      "Redirect all Apr-Sep 2026 spend on paid source and building pairs that got no lease to the lowest-CPSL paid source portfolio-wide for the same months. How many more leases does that buy at that cost, rounded down to a whole number?",
+      "Reallocate the April-to-September 2026 spending on no-lease paid source and building pairs to whichever paid source had the lowest portfolio cost per signed lease during April-September 2026. At that cost per lease, how many more whole leases would that buy (floor)?",
+      "Take the Apr-Sep 2026 dollars that went to paid source and building pairs with no signed lease, and put them into the paid source with the lowest portfolio cost per signed lease for the same period. How many extra leases would that buy at that cost? Round down to whole leases.",
+      "Moving every April-September 2026 dollar from zero-lease paid source and building pairs to the paid source with the lowest portfolio cost per signed lease in that period, how many more leases would it buy at that cost? Give whole leases, rounded down.",
+      "Hypothetically, if all spend from April to September 2026 on paid source and building pairs that produced no lease were moved to the paid source with the cheapest portfolio cost per signed lease for the same period, how many more leases would that spend buy at that cost? Whole leases, rounded down.",
+      "Shift the Apr-Sep 2026 spend on paid source and building combinations with zero signed leases to the paid source with the lowest portfolio-wide cost per signed lease in the same period. How many more leases would that buy at that cost, rounding down to whole leases?",
+      "Consolidate the April through September 2026 spend on paid source and building pairs that signed nothing into the paid source with the lowest portfolio cost per signed lease for April through September 2026. At that cost, how many additional whole leases (rounded down) would it buy?"
+    ]
+  },
+  "ambiguity_probes": [
+    {
+      "id": "AMB-01",
+      "dropped_from": "T01",
+      "dropped_constraint": "doorman",
+      "question": "What is the average 1BR market rent at our South Loop building?",
+      "expected_candidates": [
+        "P07",
+        "P08"
+      ]
+    },
+    {
+      "id": "AMB-02",
+      "dropped_from": "T01",
+      "dropped_constraint": "South Loop",
+      "question": "What's the average one-bed market rent at the building with the doorman?",
+      "expected_candidates": [
+        "P02",
+        "P07"
+      ]
+    },
+    {
+      "id": "AMB-03",
+      "dropped_from": "T02",
+      "dropped_constraint": "the Point (building name) replaced with neighborhood",
+      "question": "How many units at the South Loop building are on notice?",
+      "expected_candidates": [
+        "P07",
+        "P08"
+      ]
+    },
+    {
+      "id": "AMB-04",
+      "dropped_from": "T02",
+      "dropped_constraint": "the Point (building name) replaced with PMS",
+      "question": "How many units are on notice at the RealPage building?",
+      "expected_candidates": [
+        "P04",
+        "P08"
+      ]
+    },
+    {
+      "id": "AMB-05",
+      "dropped_from": "T07",
+      "dropped_constraint": "comparative 'which of the buildings' collapsed to a singular building",
+      "question": "How many leases did the building with EV charging sign from leads in Q3 2026?",
+      "expected_candidates": [
+        "P03",
+        "P06"
+      ]
+    },
+    {
+      "id": "AMB-06",
+      "dropped_from": "T08",
+      "dropped_constraint": "the Marlowe (building name) replaced with lake view amenity",
+      "question": "What was the tour-to-lease conversion rate for Zillow leads at the lakefront building from April to September 2026? Percent, one decimal.",
+      "expected_candidates": [
+        "P02",
+        "P04"
+      ]
+    },
+    {
+      "id": "AMB-07",
+      "dropped_from": "T08",
+      "dropped_constraint": "the Marlowe (building name) replaced with rooftop pool amenity",
+      "question": "What percent of Zillow tours converted to leases at the building with the rooftop pool, Apr-Sep 2026? One decimal.",
+      "expected_candidates": [
+        "P02",
+        "P07"
+      ]
+    },
+    {
+      "id": "AMB-08",
+      "dropped_from": "T09",
+      "dropped_constraint": "Armitage Commons (building name) replaced with dog run amenity",
+      "question": "What is the resident satisfaction score at the building with the dog run?",
+      "expected_candidates": [
+        "P03",
+        "P05"
+      ]
+    },
+    {
+      "id": "AMB-09",
+      "dropped_from": "T10",
+      "dropped_constraint": "the Marlowe (building name) replaced with PMS",
+      "question": "Set up the ad audience for the open units at our Entrata building so families with kids don't see them.",
+      "expected_candidates": [
+        "P02",
+        "P06"
+      ]
+    },
+    {
+      "id": "AMB-10",
+      "dropped_from": "T11",
+      "dropped_constraint": "plural 'buildings with coworking' collapsed to a singular building",
+      "question": "How many vacant studios are there in the building with the coworking lounge?",
+      "expected_candidates": [
+        "P01",
+        "P06"
+      ]
+    },
+    {
+      "id": "AMB-11",
+      "dropped_from": "T12",
+      "dropped_constraint": "Kedzie Works (building name) replaced with bike storage amenity",
+      "question": "How much monthly rent is at risk from residents who gave notice at the building with bike storage?",
+      "expected_candidates": [
+        "P04",
+        "P06"
+      ]
+    },
+    {
+      "id": "AMB-12",
+      "dropped_from": "T13",
+      "dropped_constraint": "Kedzie Works (building name) replaced with building class",
+      "question": "At the Class B building, which paid source had the lowest cost per signed lease from April to September 2026, and what was it?",
+      "expected_candidates": [
+        "P04",
+        "P05",
+        "P06",
+        "P08"
+      ]
+    },
+    {
+      "id": "AMB-13",
+      "dropped_from": "T05",
+      "dropped_constraint": "plural 'buildings on Yardi' collapsed to a singular building",
+      "question": "At the Yardi building, how many leases ending in December 2026 are still pending a renewal decision?",
+      "expected_candidates": [
+        "P01",
+        "P03",
+        "P07"
+      ]
+    },
+    {
+      "id": "AMB-14",
+      "dropped_from": "T06",
+      "dropped_constraint": "portfolio-wide 'which building' replaced with a singular Class A reference",
+      "question": "What was the average concession on new leases that started in Q3 2026 at the Class A building?",
+      "expected_candidates": [
+        "P01",
+        "P02",
+        "P03",
+        "P07"
+      ]
+    },
+    {
+      "id": "AMB-15",
+      "dropped_from": "T12",
+      "dropped_constraint": "Kedzie Works (building name) replaced with package lockers amenity",
+      "question": "How much monthly rent is at risk from on-notice leases at the building with package lockers?",
+      "expected_candidates": [
+        "P01",
+        "P05",
+        "P08"
+      ]
+    },
+    {
+      "id": "AMB-16",
+      "dropped_from": "T02",
+      "dropped_constraint": "the Point (building name) replaced with parking garage amenity",
+      "question": "How many units are on notice at the building with the parking garage?",
+      "expected_candidates": [
+        "P01",
+        "P02",
+        "P07",
+        "P08"
+      ]
+    },
+    {
+      "id": "AMB-17",
+      "dropped_from": "T13",
+      "dropped_constraint": "Kedzie Works (building name) replaced with year-built range",
+      "question": "At our newest building, the one built in 2018 or later, which paid source had the lowest cost per signed lease from April to September 2026, and what was it?",
+      "expected_candidates": [
+        "P02",
+        "P03",
+        "P06"
+      ]
+    },
+    {
+      "id": "AMB-18",
+      "dropped_from": "T11",
+      "dropped_constraint": "coworking replaced with gym amenity, singular",
+      "question": "How many vacant studios are in the building with the gym?",
+      "expected_candidates": [
+        "P01",
+        "P02",
+        "P03",
+        "P04",
+        "P07",
+        "P08"
+      ]
+    },
+    {
+      "id": "AMB-19",
+      "dropped_from": "T09",
+      "dropped_constraint": "Armitage Commons (building name) replaced with pre-2000 vintage",
+      "question": "What is the resident satisfaction score at our older pre-2000 building?",
+      "expected_candidates": [
+        "P04",
+        "P05"
+      ]
+    },
+    {
+      "id": "AMB-20",
+      "dropped_from": "B01",
+      "dropped_constraint": "superlative 'which operating building has the most' replaced with a singular 2010s-built reference",
+      "question": "How much monthly rent is on leases ending in Q1 2027 (January to March) at the building that was built in the 2010s?",
+      "expected_candidates": [
+        "P01",
+        "P02",
+        "P06",
+        "P07"
+      ]
+    }
+  ]
+}
