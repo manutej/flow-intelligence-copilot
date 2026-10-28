@@ -38,9 +38,9 @@ export async function generateAnswersJsonl(): Promise<string[]> {
     let jsonLine = JSON.stringify(lineObj);
     if (q.result_schema) {
       for (const [key, schemaType] of Object.entries(q.result_schema)) {
-        if (schemaType === "float") {
+        if (schemaType === 'float') {
           const val = (turn.envelope.result as Record<string, unknown>)[key];
-          if (typeof val === "number" && Number.isInteger(val)) {
+          if (typeof val === 'number' && Number.isInteger(val)) {
             const pattern = new RegExp(`"${key}":${val}([,}])`);
             jsonLine = jsonLine.replace(pattern, `"${key}":${val}.0$1`);
           }
@@ -71,17 +71,30 @@ if (isMain) {
       const repoRoot = path.resolve(new URL('..', import.meta.url).pathname);
       const outPath = path.join(repoRoot, 'answers.jsonl');
       fs.writeFileSync(outPath, `${lines.join('\n')}\n`, 'utf-8');
-      console.log(`Generated ${outPath} (${lines.length} lines):`);
+      console.log(`Generated ${outPath} (${lines.length} JSONL lines):\n`);
       for (const l of lines) {
         const parsed = JSON.parse(l) as {
           id: string;
+          answer?: string;
           result?: unknown;
+          citations?: string[];
           words?: unknown;
         };
-        console.log(
-          `  ${parsed.id.padEnd(5)} -> ${JSON.stringify(parsed.result ?? { words: parsed.words })}`,
-        );
+        if (parsed.words) {
+          console.log(`  [${parsed.id.padEnd(4)}] ${l}`);
+          continue;
+        }
+        const cites = parsed.citations ?? [];
+        const citePreview =
+          cites.length <= 6
+            ? JSON.stringify(cites)
+            : `[${cites.slice(0, 5).map((c) => `"${c}"`).join(',')}, ... +${cites.length - 5} more] (${cites.length} total)`;
+        console.log(`  [${parsed.id.padEnd(4)}] result    : ${JSON.stringify(parsed.result)}`);
+        console.log(`         citations : ${citePreview}`);
+        console.log(`         answer    : ${parsed.answer}\n`);
       }
+      console.log(`Each line written to answers.jsonl in exact KIT_README.md format:`);
+      console.log(`  {"id": "...", "answer": "...", "result": {...}, "citations": ["<table>:<id>", ...]}`);
     })
     .catch((err) => {
       console.error(err);

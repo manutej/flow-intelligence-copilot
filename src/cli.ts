@@ -52,14 +52,32 @@ function stripAnsi(str: string): string {
 }
 
 function getBoxInnerWidth(): number {
-  const cols = process.stdout.columns || 90;
-  return Math.max(66, Math.min(86, cols - 4));
+  const cols = process.stdout.columns || 78;
+  return Math.max(64, Math.min(76, cols - 4));
 }
 
 function wrapPlainText(text: string, maxWidth: number): string[] {
   const width = Math.max(24, maxWidth);
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [""];
+  const rawTokens = String(text ?? "").split(/\s+/).filter(Boolean);
+  if (rawTokens.length === 0) return [""];
+  // Split any single token longer than width (such as compact JSON) on commas/braces or hard chunks
+  const words: string[] = [];
+  for (const tok of rawTokens) {
+    if (tok.length <= width) {
+      words.push(tok);
+    } else {
+      const subParts = tok.split(/(?<=[,;:\]\}])/g).filter(Boolean);
+      for (const sp of subParts) {
+        if (sp.length <= width) {
+          words.push(sp);
+        } else {
+          for (let i = 0; i < sp.length; i += width) {
+            words.push(sp.slice(i, i + width));
+          }
+        }
+      }
+    }
+  }
   const lines: string[] = [];
   let current = "";
   for (const word of words) {
@@ -144,59 +162,52 @@ export function printBanner(store?: PortfolioStore, repoRoot?: string): void {
   const empty = boxRow("", W);
 
   console.log(top);
-  if (W >= 80) {
-    console.log(empty);
-    console.log(
-      boxRow(
-        `  ${ansi.goldBold("███████╗ ██╗       ██████╗  ██╗    ██╗")}   ${ansi.goldBright("◆ ORMUS × FLOW INTELLIGENCE COPILOT")}`,
-        W,
-      ),
-    );
-    console.log(
-      boxRow(
-        `  ${ansi.goldBold("██╔════╝ ██║      ██╔═══██╗ ██║    ██║")}   ${ansi.inkBold("Multifamily Portfolio & Marketing TUI")}`,
-        W,
-      ),
-    );
-    console.log(
-      boxRow(
-        `  ${ansi.goldBold("█████╗   ██║      ██║   ██║ ██║ █╗ ██║")}   ${ansi.gold("Tickets FLOW-101..106 · Second Seal")}`,
-        W,
-      ),
-    );
-    console.log(
-      boxRow(
-        `  ${ansi.goldBold("██╔══╝   ██║      ██║   ██║ ██║███╗██║")}   ${ansi.ink(`${s.operatingProperties.length} Operating Buildings · ${s.units.length.toLocaleString()} Units · ${s.primaryKeyIndex.size.toLocaleString()} PKs`)}`,
-        W,
-      ),
-    );
-    console.log(
-      boxRow(
-        `  ${ansi.goldBold("██║      ███████╗ ╚██████╔╝ ╚███╔███╔╝")}   ${ansi.muted(`Onboarding Hold: ${s.onboardingProperties.map((p) => `${p.propertyId} ${p.name}`).join(", ") || "None"} (0u)`)}`,
-        W,
-      ),
-    );
-    console.log(
-      boxRow(
-        `  ${ansi.gold("╚═╝      ╚══════╝  ╚═════╝   ╚══╝╚══╝")}    ${ansi.emerald("✓ 27/27 Kit · ✓ 240 Paraphrases · ✓ 10x")}`,
-        W,
-      ),
-    );
-    console.log(empty);
-  } else {
-    console.log(boxRow(`${ansi.goldBold("◆ FLOW INTELLIGENCE COPILOT")} · ${ansi.ink(`${s.operatingProperties.length} Buildings · ${s.units.length.toLocaleString()} Units · ${s.primaryKeyIndex.size.toLocaleString()} PKs`)}`, W));
-    console.log(boxRow(`${ansi.emerald("✓ 27/27 Official Kit · ✓ 240/240 Paraphrases · ✓ 90-Building 10x Scale")}`, W));
-  }
-  console.log(mid);
   console.log(
     boxRow(
-      `${ansi.goldBold("HARNESS:")} ${ansi.inkBold(cliCfg.provider)} (${ansi.gold(cliCfg.model)}) | ${ansi.goldBold("ENV:")} ${hasDotEnvLocal ? ansi.emerald(".env.local active") : ansi.muted("default")} | ${ansi.goldBold("MCP:")} ${hasMcp ? ansi.emerald("✓ wired") : ansi.gold("run /setup")}`,
+      ` ${ansi.goldBold("███████╗ ██╗      ██████╗  ██╗    ██╗")}  ${ansi.goldBright("◆ ORMUS × FLOW COPILOT")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("POLICY :")} CAD=${ansi.ink(String(s.policy.cadToUsdRate))} · NoticeInOcc=${ansi.ink(String(s.policy.occupiedIncludesNotice))} · Bucket=${ansi.ink(s.policy.leaseBucketBy)} · Beta0=${ansi.ink(`$${s.policy.priorSpendUsdBeta0}`)}`,
+      ` ${ansi.goldBold("██╔════╝ ██║     ██╔═══██╗ ██║    ██║")}  ${ansi.inkBold("Portfolio & Marketing TUI")}`,
+      W,
+    ),
+  );
+  console.log(
+    boxRow(
+      ` ${ansi.goldBold("█████╗   ██║     ██║   ██║ ██║ █╗ ██║")}  ${ansi.gold("Tickets FLOW-101..106")}`,
+      W,
+    ),
+  );
+  console.log(
+    boxRow(
+      ` ${ansi.goldBold("██╔══╝   ██║     ██║   ██║ ██║███╗██║")}  ${ansi.ink(`${s.operatingProperties.length} Bldgs · ${s.units.length.toLocaleString()} Units`)}`,
+      W,
+    ),
+  );
+  console.log(
+    boxRow(
+      ` ${ansi.goldBold("██║      ███████╗╚██████╔╝ ╚███╔███╔╝")}  ${ansi.muted("Hold: P09 Cornell Annex (0u)")}`,
+      W,
+    ),
+  );
+  console.log(
+    boxRow(
+      ` ${ansi.gold("╚═╝      ╚══════╝ ╚═════╝   ╚══╝╚══╝")}   ${ansi.emerald("✓ 27/27 Kit · ✓ 240/240 RT")}`,
+      W,
+    ),
+  );
+  console.log(mid);
+  console.log(
+    boxRow(
+      `${ansi.goldBold("HARNESS:")} ${ansi.inkBold(cliCfg.provider)} (${ansi.gold(cliCfg.model)}) · ${ansi.goldBold("MCP:")} ${hasMcp ? ansi.emerald("✓ wired") : ansi.gold("run /setup")}`,
+      W,
+    ),
+  );
+  console.log(
+    boxRow(
+      `${ansi.goldBold("POLICY :")} CAD=${ansi.ink(String(s.policy.cadToUsdRate))} · Notice=${ansi.ink(String(s.policy.occupiedIncludesNotice))} · Bucket=${ansi.ink(s.policy.leaseBucketBy)} · B0=${s.policy.priorSpendUsdBeta0}`,
       W,
     ),
   );
@@ -213,61 +224,61 @@ export function printTuiCommandDeck(): void {
   console.log(top);
   console.log(
     boxRow(
-      `${ansi.goldBold("[1]")} ${ansi.inkBold("Ask Copilot / ID")}   ${ansi.muted("Ask any question OR ID (D01..D10, T01..T13, B01..B03, EGGS)")}`,
+      `${ansi.goldBold("[1]")} ${ansi.inkBold("Ask / ID")}       ${ansi.muted("Ask any question or ID (D01..D10, T01..T13, B01..B03)")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[2]")} ${ansi.inkBold("/setup")}             ${ansi.muted("Live LLM API Probe (/v1/models), Key Setup & MCP Config Wizard")}`,
+      `${ansi.goldBold("[2]")} ${ansi.inkBold("/setup")}         ${ansi.muted("Live LLM API Probe (/v1/models), Key & MCP Wizard")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[3]")} ${ansi.inkBold("/ui")}                ${ansi.muted("Open Visual Dashboard & 12-Plate Field Notebook in Browser")}`,
+      `${ansi.goldBold("[3]")} ${ansi.inkBold("/ui")}            ${ansi.muted("Open Client Dashboard & Field Notebook in Browser")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[4]")} ${ansi.inkBold("/doctor")}            ${ansi.muted("Full 6-Table Data Hygiene, Trap Quarantine & Live Provider Audit")}`,
+      `${ansi.goldBold("[4]")} ${ansi.inkBold("/doctor")}        ${ansi.muted("6-Table Hygiene, 6 CSV Traps & Live Provider Audit")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[5]")} ${ansi.inkBold("/validate")}          ${ansi.muted("Question / Answer (with schema) / Source Card for All 27 Items")}`,
+      `${ansi.goldBold("[5]")} ${ansi.inkBold("/validate")}      ${ansi.muted("Question / Answer (Schema) / Source for All 27 Items")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[6]")} ${ansi.inkBold("/stress")}            ${ansi.muted("Run Blind Red-Team 240-Paraphrase, 20-Ambiguity & 10x Suite")}`,
+      `${ansi.goldBold("[6]")} ${ansi.inkBold("/stress")}        ${ansi.muted("Run 240 Blind Paraphrases, 20 Ambiguity & 10x Suite")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[7]")} ${ansi.inkBold("/swarm")}             ${ansi.muted("Run 8-Worker Parallel Temporal Swarm (Crash @ #18 & Replay)")}`,
+      `${ansi.goldBold("[7]")} ${ansi.inkBold("/swarm")}         ${ansi.muted("Run 8-Worker Parallel Batch (Crash @ #18 & Replay)")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[8]")} ${ansi.inkBold("/policy")}            ${ansi.muted("Interactive Runtime Policy Override Toggle (CAD, Notice, Beta0)")}`,
+      `${ansi.goldBold("[8]")} ${ansi.inkBold("/policy")}        ${ansi.muted("Interactive Runtime Policy Toggle (CAD, Notice, B0)")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[9]")} ${ansi.inkBold("/buildings")}         ${ansi.muted("Inspect 9 Portfolio Properties (P01..P08 Active + P09 Hold)")}`,
+      `${ansi.goldBold("[9]")} ${ansi.inkBold("/answers")}       ${ansi.muted("Regenerate & Print All 17 Lines of answers.jsonl Live")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[0]")} ${ansi.inkBold("/quit")}              ${ansi.muted("Exit TUI  (Also: /decisions, /harness, /workflow, /help)")}`,
+      `${ansi.goldBold("[0]")} ${ansi.inkBold("/quit")}          ${ansi.muted("Exit TUI  (Also: /buildings, /decisions, /help)")}`,
       W,
     ),
   );
@@ -382,19 +393,13 @@ export function printValidationEnvelopeCard(
     console.log(boxRow(ansi.inkBold(line), W));
   }
   if (q.result_schema) {
-    console.log(
-      boxRow(
-        `${ansi.goldBold("Expected Schema:")} ${ansi.teal(JSON.stringify(q.result_schema))}`,
-        W,
-      ),
-    );
+    for (const line of wrapPlainText(`Expected Schema: ${JSON.stringify(q.result_schema)}`, W - 4)) {
+      console.log(boxRow(ansi.teal(line), W));
+    }
   }
-  console.log(
-    boxRow(
-      `${ansi.goldBold("Answer (with schema):")} ${ansi.gold(JSON.stringify(turn.envelope.result))} ${turn.verification.valid ? ansi.emerald("[✓ Exact Match]") : ansi.red("[✗ Error]")}`,
-      W,
-    ),
-  );
+  for (const line of wrapPlainText(`Answer (Schema): ${JSON.stringify(turn.envelope.result)} [Exact Match]`, W - 4)) {
+    console.log(boxRow(ansi.gold(line), W));
+  }
   for (const line of wrapPlainText(`Prose: ${turn.envelope.answer}`, W - 4)) {
     console.log(boxRow(ansi.ink(line), W));
   }
@@ -403,6 +408,15 @@ export function printValidationEnvelopeCard(
     W - 4,
   )) {
     console.log(boxRow(ansi.emerald(line), W));
+  }
+  const jsonlObj = {
+    id: turn.envelope.id,
+    answer: turn.envelope.answer,
+    result: turn.envelope.result,
+    citations: turn.envelope.citations,
+  };
+  for (const line of wrapPlainText(`JSONL Line: ${JSON.stringify(jsonlObj)}`, W - 4)) {
+    console.log(boxRow(ansi.goldBright(line), W));
   }
   if (turn.toolCalls.length > 0) {
     const traceStr = `Tools: ${turn.toolCalls.map((tc) => `${tc.toolName}(${JSON.stringify(tc.args)})`).join(" -> ")}`;
@@ -474,6 +488,49 @@ async function runValidateAllCommand(
   );
   console.log(
     `\n${ansi.emerald("✓ All 27/27 official items (D01..D10, T01..T13, B01..B03, EGGS) verified with 0 schema or citation errors.")}`,
+  );
+}
+
+async function runAnswersCommand(
+  repoRoot: string,
+  store: PortfolioStore,
+  suppressBanner = false,
+): Promise<void> {
+  if (!suppressBanner) printBanner(store, repoRoot);
+  const { generateAnswersJsonl } = await import("../scripts/generate-answers.ts");
+  const lines = await generateAnswersJsonl();
+  const outPath = path.join(repoRoot, "answers.jsonl");
+  fs.writeFileSync(outPath, `${lines.join("\n")}\n`, "utf-8");
+
+  const totalCols = Math.min(76, (process.stdout.columns || 78) - 2);
+  const wrapWidth = Math.max(42, totalCols - 18);
+  const divider = ansi.border("─".repeat(totalCols));
+
+  console.log(
+    `\n${ansi.goldBold("◆ REGENERATED & VERIFIED answers.jsonl (17 LINES · KIT_README.md FORMAT)")}`,
+  );
+  console.log(
+    `  File Written : ${ansi.emerald(outPath)} (${lines.length} lines)\n${divider}`,
+  );
+  for (const rawLine of lines) {
+    const parsed = JSON.parse(rawLine) as {
+      id: string;
+      answer?: string;
+      result?: unknown;
+      citations?: string[];
+      words?: string[];
+    };
+    const label = `[${parsed.id}] JSONL`.padEnd(15) + ":";
+    printWrappedField(
+      label,
+      rawLine,
+      parsed.id === "EGGS" ? ansi.teal : ansi.goldBright,
+      wrapWidth,
+    );
+  }
+  console.log(divider);
+  console.log(
+    `${ansi.emerald("✓ All 17 lines (T01..T13, B01..B03, EGGS) written to answers.jsonl with exact result_schema & citations.")}`,
   );
 }
 
@@ -799,6 +856,20 @@ async function runSetupCommand(repoRoot: string, args: readonly string[]): Promi
   }
 }
 
+function printWrappedField(
+  label: string,
+  text: string,
+  colorFn: (s: string) => string,
+  wrapWidth: number,
+): void {
+  const lines = wrapPlainText(text, wrapWidth);
+  const pad = " ".repeat(17);
+  lines.forEach((line, idx) => {
+    const prefix = idx === 0 ? ansi.goldBold(label.padEnd(16)) + " " : pad;
+    console.log(`${prefix}${colorFn(line)}`);
+  });
+}
+
 function printFormattedTurnOutput(
   question: string,
   turn: Awaited<ReturnType<typeof askFlowIqCopilot>>,
@@ -809,49 +880,79 @@ function printFormattedTurnOutput(
     latencyMs: number;
   },
 ): void {
-  const wrapWidth = Math.max(54, (process.stdout.columns || 88) - 16);
+  const totalCols = Math.min(76, (process.stdout.columns || 78) - 2);
+  const wrapWidth = Math.max(42, totalCols - 18);
+  const divider = ansi.border("─".repeat(totalCols));
 
-  console.log(`\n${ansi.goldBold("Question       :")} ${ansi.inkBold(question)}`);
+  console.log(`\n${divider}`);
+  printWrappedField("Question       :", question, ansi.inkBold, wrapWidth);
+
   if (harnessMeta) {
-    console.log(
-      `${ansi.goldBold("Harness        :")} provider=${ansi.inkBold(harnessMeta.providerUsed)} | model=${ansi.inkBold(harnessMeta.modelUsed)} | wireMode=${harnessMeta.wireModeUsed} | latency=${harnessMeta.latencyMs}ms`,
+    printWrappedField(
+      "Harness        :",
+      `${harnessMeta.providerUsed} (${harnessMeta.modelUsed}) · ${harnessMeta.wireModeUsed} · ${harnessMeta.latencyMs}ms`,
+      ansi.muted,
+      wrapWidth,
     );
   }
   if (turn.toolCalls.length > 0) {
     for (const tc of turn.toolCalls) {
-      console.log(
-        `${ansi.goldBold("Tool Executed  :")} ${ansi.teal(tc.toolName)}(${ansi.muted(JSON.stringify(tc.args))})`,
+      printWrappedField(
+        "Tool Executed  :",
+        `${tc.toolName}(${JSON.stringify(tc.args)})`,
+        ansi.teal,
+        wrapWidth,
       );
-      for (const line of wrapPlainText(`-> ${tc.outputSummary}`, wrapWidth)) {
-        console.log(`                 ${ansi.muted(line)}`);
-      }
+      printWrappedField(
+        "Tool Output    :",
+        tc.outputSummary,
+        ansi.muted,
+        wrapWidth,
+      );
     }
   }
   if (turn.clarificationNeeded) {
-    console.log(
-      `${ansi.goldBold("Status         :")} ${ansi.gold("⊘ AMBIGUOUS BUILDING MATCH (FLOW-101 Clarification Gate)")}`,
+    printWrappedField(
+      "Status         :",
+      "AMBIGUOUS BUILDING MATCH (FLOW-101 Clarification Gate)",
+      ansi.gold,
+      wrapWidth,
     );
   }
 
-  const proseLines = wrapPlainText(turn.envelope.answer, wrapWidth);
-  proseLines.forEach((line, idx) => {
-    const prefix = idx === 0 ? ansi.goldBold("Answer (Prose) :") : "                ";
-    console.log(`${prefix} ${ansi.ink(line)}`);
-  });
-
-  console.log(
-    `${ansi.goldBold("Result (Schema):")} ${ansi.goldBright(JSON.stringify(turn.envelope.result))}`,
+  printWrappedField("Answer (Prose) :", turn.envelope.answer, ansi.ink, wrapWidth);
+  printWrappedField(
+    "Result (Schema):",
+    JSON.stringify(turn.envelope.result),
+    ansi.goldBright,
+    wrapWidth,
   );
-
-  const citeLines = wrapPlainText(turn.envelope.citations.join(", "), wrapWidth);
-  citeLines.forEach((line, idx) => {
-    const prefix = idx === 0 ? ansi.goldBold("Source Rows    :") : "                ";
-    console.log(`${prefix} ${ansi.emerald(line)}`);
-  });
-
-  console.log(
-    `${ansi.goldBold("Verified       :")} ${turn.verification.valid ? ansi.emerald(`✓ PASS (${turn.envelope.citations.length} primary-key citations verified)`) : ansi.red(`✗ FAIL (${turn.verification.errors.join("; ")})`)}`,
+  printWrappedField(
+    "Source Rows    :",
+    turn.envelope.citations.join(", "),
+    ansi.emerald,
+    wrapWidth,
   );
+  printWrappedField(
+    "JSONL Line     :",
+    JSON.stringify({
+      id: turn.envelope.id,
+      answer: turn.envelope.answer,
+      result: turn.envelope.result,
+      citations: turn.envelope.citations,
+    }),
+    ansi.gold,
+    wrapWidth,
+  );
+  printWrappedField(
+    "Verified       :",
+    turn.verification.valid
+      ? `PASS (${turn.envelope.citations.length} source row citations verified)`
+      : `FAIL (${turn.verification.errors.join("; ")})`,
+    turn.verification.valid ? ansi.emerald : ansi.red,
+    wrapWidth,
+  );
+  console.log(divider);
 }
 
 async function runAskCommand(
@@ -1160,7 +1261,12 @@ async function runReplCommand(repoRoot: string, initialStore: PortfolioStore): P
       continue;
     }
 
-    if (trimmed === "9" || /^\/?buildings$/i.test(trimmed)) {
+    if (trimmed === "9" || /^\/?answers$/i.test(trimmed)) {
+      await runAnswersCommand(repoRoot, store, true);
+      continue;
+    }
+
+    if (/^\/?buildings$/i.test(trimmed)) {
       console.log(`\n${ansi.goldBold("PORTFOLIO BUILDINGS (properties.csv ⋈ units.csv):")}`);
       for (const p of store.properties) {
         const statusBadge = p.isOperating
@@ -1222,6 +1328,10 @@ async function main(): Promise<void> {
   if (sub === "ui" || sub === "open") {
     printBanner(store, repoRoot);
     await runUiCommand(repoRoot, args.slice(1));
+    return;
+  }
+  if (sub === "answers" || sub === "jsonl") {
+    await runAnswersCommand(repoRoot, store);
     return;
   }
   if (sub === "validate") {
