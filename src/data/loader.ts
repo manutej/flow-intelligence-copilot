@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -160,20 +161,48 @@ export function resetPortfolioStoreCache(): void {
   storeCache.clear();
 }
 
+const REPO_ROOT_FALLBACK = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
+
+export function resolveDataDirectory(repoRootDir?: string): string {
+  if (repoRootDir) {
+    const explicitRoot = path.resolve(repoRootDir);
+    if (fs.existsSync(path.join(explicitRoot, "pms", "properties.csv"))) {
+      return explicitRoot;
+    }
+    return path.join(explicitRoot, "data");
+  }
+  if (process.env.FLOW_DATA_DIR) {
+    const envDir = path.resolve(process.env.FLOW_DATA_DIR);
+    if (fs.existsSync(path.join(envDir, "pms", "properties.csv"))) {
+      return envDir;
+    }
+    if (fs.existsSync(path.join(envDir, "data", "pms", "properties.csv"))) {
+      return path.join(envDir, "data");
+    }
+  }
+  const cwdData = path.resolve(process.cwd(), "data");
+  if (fs.existsSync(path.join(cwdData, "pms", "properties.csv"))) {
+    return cwdData;
+  }
+  return path.join(REPO_ROOT_FALLBACK, "data");
+}
+
 export function loadPortfolioStore(
   repoRootDir?: string,
   policyOverrides?: Partial<PortfolioPolicyConfig>,
 ): PortfolioStore {
-  const resolvedRoot = path.resolve(repoRootDir ?? process.cwd());
+  const dataDir = resolveDataDirectory(repoRootDir);
   const policy = resolvePolicyConfig(policyOverrides);
-  const cacheKey = `${resolvedRoot}::${policyFingerprint(policy)}`;
+  const cacheKey = `${dataDir}::${policyFingerprint(policy)}`;
 
   const existing = storeCache.get(cacheKey);
   if (existing) {
     return existing;
   }
 
-  const dataDir = path.join(resolvedRoot, 'data');
   const rawProperties = readCsvRecords(
     path.join(dataDir, 'pms', 'properties.csv'),
   );

@@ -1,20 +1,24 @@
+#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
 import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { askFlowIqCopilot } from '../agent/copilot.ts';
 import {
   type AgentToolName,
+  buildFlowIqToolDefinitions,
   executeAgentTool,
-  FLOWIQ_TOOL_DEFINITIONS,
 } from '../agent/tools.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
 
-interface JsonRpcRequest {
+export interface JsonRpcRequest {
   readonly jsonrpc: '2.0';
   readonly id?: string | number | null;
   readonly method: string;
   readonly params?: Record<string, unknown>;
 }
 
-interface JsonRpcResponse {
+export interface JsonRpcResponse {
   readonly jsonrpc: '2.0';
   readonly id: string | number | null;
   readonly result?: unknown;
@@ -25,35 +29,49 @@ interface JsonRpcResponse {
   };
 }
 
+const REPO_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../..',
+);
+
 /**
  * Handles a single JSON-RPC 2.0 MCP request (exported for unit tests and stdio loop).
+ * Resolves dataDir relative to `src/data/loader.ts` when `process.cwd()` is outside the repo.
  */
 export async function handleMcpJsonRpcRequest(
   req: JsonRpcRequest,
 ): Promise<JsonRpcResponse | null> {
   const store = loadPortfolioStore();
   const id = req.id ?? null;
+  const dynamicToolDefs = buildFlowIqToolDefinitions(store);
+
+  // Notifications without an id do not receive a response
+  if (req.method.startsWith('notifications/') || req.id === undefined) {
+    return null;
+  }
 
   switch (req.method) {
     case 'initialize': {
+      const clientProtocol =
+        typeof req.params?.protocolVersion === 'string'
+          ? req.params.protocolVersion
+          : '2024-11-05';
       return {
         jsonrpc: '2.0',
         id,
         result: {
-          protocolVersion: '2024-11-05',
+          protocolVersion: clientProtocol,
           serverInfo: {
             name: 'flow-intelligence-mcp',
-            version: '2.0.0',
+            version: '2.1.0',
           },
           capabilities: {
-            tools: {},
+            tools: { listChanged: false },
+            resources: { subscribe: false, listChanged: false },
+            prompts: { listChanged: false },
           },
         },
       };
-    }
-
-    case 'notifications/initialized': {
-      return null;
     }
 
     case 'ping': {
@@ -61,6 +79,128 @@ export async function handleMcpJsonRpcRequest(
         jsonrpc: '2.0',
         id,
         result: {},
+      };
+    }
+
+    case 'prompts/list': {
+      return {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          prompts: [
+            {
+              name: 'portfolio-executive-audit',
+              description:
+                'Run a complete executive audit across dead marketing spend, lease renewals, and Empirical-Bayes budget decisions.',
+            },
+          ],
+        },
+      };
+    }
+
+    case 'resources/list': {
+      return {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          resources: [
+            {
+              uri: 'flowiq://portfolio/summary',
+              name: 'FlowIQ Portfolio Summary & Policy State',
+              mimeType: 'application/json',
+              description:
+                'Live summary of operating buildings, quarantined onboarding buildings, unit counts, and active runtime policy knobs.',
+            },
+            {
+              uri: 'flowiq://reports/dead-spend',
+              name: 'FLOW-102 Dead-Spend & Reallocation Report',
+              mimeType: 'text/markdown',
+              description:
+                'Full breakdown of the 9 zero-lease paid (building, source) pairs ($46,599.90 USD) and +15 lease reallocation math.',
+            },
+            {
+              uri: 'flowiq://docs/notes',
+              name: 'FLOW-101..106 Engineering Field Notes (NOTES.md)',
+              mimeType: 'text/markdown',
+              description:
+                'Engineering notes covering architecture, prompt-injection defense, Bayesian decision learner, and P09 onboarding.',
+            },
+          ],
+        },
+      };
+    }
+
+    case 'resources/read': {
+      const uri = String(req.params?.uri ?? '');
+      if (uri === 'flowiq://portfolio/summary') {
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            contents: [
+              {
+                uri,
+                mimeType: 'application/json',
+                text: JSON.stringify(
+                  {
+                    operatingBuildings: store.operatingProperties.map((p) => ({
+                      propertyId: p.propertyId,
+                      name: p.name,
+                      neighborhood: p.neighborhood,
+                      class: p.buildingClass,
+                      pms: p.pms,
+                      units: p.actualUnitCount,
+                    })),
+                    onboardingBuildings: store.onboardingProperties.map((p) => ({
+                      propertyId: p.propertyId,
+                      name: p.name,
+                      pms: p.pms,
+                      units: p.actualUnitCount,
+                    })),
+                    totalIndexedPrimaryKeys: store.primaryKeyIndex.size,
+                    policy: store.policy,
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          },
+        };
+      }
+      if (uri === 'flowiq://reports/dead-spend') {
+        const p = path.join(REPO_ROOT, 'reports', 'dead-spend-and-decisions.md');
+        const text = fs.existsSync(p)
+          ? fs.readFileSync(p, 'utf-8')
+          : 'Dead-spend report: 9 zero-lease paid pairs = $46,599.90 USD -> +15 leases on Apartments.com ($2,915.86/lease).';
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            contents: [{ uri, mimeType: 'text/markdown', text }],
+          },
+        };
+      }
+      if (uri === 'flowiq://docs/notes') {
+        const p = path.join(REPO_ROOT, 'NOTES.md');
+        const text = fs.existsSync(p)
+          ? fs.readFileSync(p, 'utf-8')
+          : 'FlowIQ Engineering Notes (FLOW-101..106)';
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            contents: [{ uri, mimeType: 'text/markdown', text }],
+          },
+        };
+      }
+      return {
+        jsonrpc: '2.0',
+        id,
+        error: {
+          code: -32602,
+          message: `Unknown resource URI: ${uri}`,
+        },
       };
     }
 
@@ -82,7 +222,7 @@ export async function handleMcpJsonRpcRequest(
             required: ['question'],
           },
         },
-        ...FLOWIQ_TOOL_DEFINITIONS.map((t) => ({
+        ...dynamicToolDefs.map((t) => ({
           name: t.name,
           description: t.description,
           inputSchema: t.inputSchema,
@@ -132,9 +272,7 @@ export async function handleMcpJsonRpcRequest(
         };
       }
 
-      const validToolNames = new Set<string>(
-        FLOWIQ_TOOL_DEFINITIONS.map((t) => t.name),
-      );
+      const validToolNames = new Set<string>(dynamicToolDefs.map((t) => t.name));
       if (!validToolNames.has(toolName)) {
         return {
           jsonrpc: '2.0',
@@ -187,13 +325,20 @@ export async function handleMcpJsonRpcRequest(
   }
 }
 
-const isMain =
-  process.argv[1] &&
-  new URL(import.meta.url).pathname.endsWith(
-    process.argv[1].replace(/^.*\/(src\/mcp\/server\.ts)$/, '$1'),
-  );
+function isExecutedDirectly(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    const selfPath = fs.realpathSync(fileURLToPath(import.meta.url));
+    const argPath = fs.realpathSync(path.resolve(process.argv[1]));
+    return selfPath === argPath;
+  } catch {
+    return fileURLToPath(import.meta.url).endsWith(
+      process.argv[1].replace(/^.*\/(src\/mcp\/server\.ts)$/, '$1'),
+    );
+  }
+}
 
-if (isMain) {
+if (isExecutedDirectly()) {
   const rl = readline.createInterface({
     input: process.stdin,
     terminal: false,
@@ -201,7 +346,7 @@ if (isMain) {
 
   rl.on('line', async (line) => {
     const trimmed = line.trim();
-    if (!trimmed) {
+    if (!trimmed || /^content-length:/i.test(trimmed)) {
       return;
     }
     try {

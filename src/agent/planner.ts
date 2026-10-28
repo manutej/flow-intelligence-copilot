@@ -780,9 +780,28 @@ export function executeCompositionalPlan(
             ? b.totalMonthlyRentUsd - a.totalMonthlyRentUsd
             : a.totalMonthlyRentUsd - b.totalMonthlyRentUsd,
         );
+        if (intent.topK && intent.topK > 1 && !('property_id' in schema)) {
+          const topList = sorted.slice(0, intent.topK);
+          const combinedUsd = topList.reduce((acc, p) => acc + p.totalMonthlyRentUsd, 0);
+          const topCites = [...new Set(topList.flatMap((p) => p.citations.slice(0, 3)))];
+          return finalize(
+            `The top ${topList.length} operating buildings by ${intent.leaseEndWindow ? `monthly rent on leases ending in ${intent.dateWindow.label}` : 'active monthly contract lease rent roll (from data/pms/leases.csv)'} are: ${topList.map((p, idx) => `#${idx + 1} ${p.propertyName} (${p.propertyId}) at ${p.totalMonthlyRentUsd.toLocaleString('en-US')}/mo across ${p.matchingLeaseCount} leases`).join('; ')}.`,
+            {
+              property_ids: topList.map((p) => p.propertyId),
+              ranking: topList.map((p) => ({
+                property_id: p.propertyId,
+                name: p.propertyName,
+                monthly_rent_usd: p.totalMonthlyRentUsd,
+                leases: p.matchingLeaseCount,
+              })),
+              usd: combinedUsd,
+            },
+            topCites,
+          );
+        }
         const winner = sorted[0];
         return finalize(
-          `${winner.propertyName} (${winner.propertyId}) has the ${wantMax ? 'highest' : 'lowest'} monthly rent on leases ending in ${intent.dateWindow.label} at $${winner.totalMonthlyRentUsd.toLocaleString('en-US')} across ${winner.matchingLeaseCount} leases.`,
+          `${winner.propertyName} (${winner.propertyId}) has the ${wantMax ? 'highest' : 'lowest'} monthly rent on ${intent.leaseEndWindow ? `leases ending in ${intent.dateWindow.label}` : 'active leases'} at ${winner.totalMonthlyRentUsd.toLocaleString('en-US')} across ${winner.matchingLeaseCount} leases.`,
           {
             property_id: winner.propertyId,
             usd: winner.totalMonthlyRentUsd,

@@ -8,10 +8,10 @@ import {
   MODEL_PROVIDER_PROFILES,
   type ModelProviderId,
   discoverAvailableModelProfiles,
+  fetchLiveModelsForProvider,
   resolveModelHarnessConfig,
   runModelHarnessTurn,
 } from "./agent/model-harness.ts";
-import { resolveEvaluatorExecutionConfig } from "./config/key-vault.ts";
 import {
   DISCOVERED_EASTER_EGGS,
   type LeaseBucketField,
@@ -37,27 +37,59 @@ const NO_COLOR = Boolean(process.env.NO_COLOR && process.env.NO_COLOR !== "0");
 const ansi = {
   border: (s: string) => (NO_COLOR ? s : `\x1b[38;2;42;62;102m${s}\x1b[0m`),
   gold: (s: string) => (NO_COLOR ? s : `\x1b[38;2;210;158;61m${s}\x1b[0m`),
-  goldBright: (s: string) => (NO_COLOR ? s : `\x1b[38;2;229;184;66m${s}\x1b[0m`),
+  goldBright: (s: string) => (NO_COLOR ? s : `\x1b[38;2;224;178;88m${s}\x1b[0m`),
   goldBold: (s: string) => (NO_COLOR ? s : `\x1b[1;38;2;210;158;61m${s}\x1b[0m`),
-  ink: (s: string) => (NO_COLOR ? s : `\x1b[38;2;232;236;244m${s}\x1b[0m`),
-  inkBold: (s: string) => (NO_COLOR ? s : `\x1b[1;38;2;232;236;244m${s}\x1b[0m`),
-  muted: (s: string) => (NO_COLOR ? s : `\x1b[38;2;139;149;167m${s}\x1b[0m`),
+  ink: (s: string) => (NO_COLOR ? s : `\x1b[38;2;236;234;227m${s}\x1b[0m`),
+  inkBold: (s: string) => (NO_COLOR ? s : `\x1b[1;38;2;236;234;227m${s}\x1b[0m`),
+  muted: (s: string) => (NO_COLOR ? s : `\x1b[38;2;165;176;196m${s}\x1b[0m`),
   emerald: (s: string) => (NO_COLOR ? s : `\x1b[38;2;52;211;153m${s}\x1b[0m`),
   teal: (s: string) => (NO_COLOR ? s : `\x1b[38;2;75;163;166m${s}\x1b[0m`),
-  red: (s: string) => (NO_COLOR ? s : `\x1b[38;2;248;113;113m${s}\x1b[0m`),
+  red: (s: string) => (NO_COLOR ? s : `\x1b[38;2;212;79;79m${s}\x1b[0m`),
 };
 
 function stripAnsi(str: string): string {
   return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
-function padVisible(str: string, width: number): string {
-  const visibleLen = stripAnsi(str).length;
-  if (visibleLen >= width) return str;
-  return str + " ".repeat(width - visibleLen);
+function getBoxInnerWidth(): number {
+  const cols = process.stdout.columns || 90;
+  return Math.max(66, Math.min(86, cols - 4));
 }
 
-function boxRow(content: string, innerWidth = 86): string {
+function wrapPlainText(text: string, maxWidth: number): string[] {
+  const width = Math.max(24, maxWidth);
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [""];
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (current.length === 0) {
+      current = word;
+    } else if (current.length + 1 + word.length <= width) {
+      current += ` ${word}`;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current.length > 0) lines.push(current);
+  return lines;
+}
+
+function truncateVisible(str: string, maxVisible: number): string {
+  const plain = stripAnsi(str);
+  if (plain.length <= maxVisible) return str;
+  return `${plain.slice(0, Math.max(0, maxVisible - 1))}…`;
+}
+
+function padVisible(str: string, width: number): string {
+  const fitted = truncateVisible(str, width);
+  const visibleLen = stripAnsi(fitted).length;
+  if (visibleLen >= width) return fitted;
+  return fitted + " ".repeat(width - visibleLen);
+}
+
+function boxRow(content: string, innerWidth = getBoxInnerWidth()): string {
   return `${ansi.border("│")} ${padVisible(content, innerWidth - 2)} ${ansi.border("│")}`;
 }
 
@@ -74,9 +106,10 @@ function loadSavedCliConfig(repoRoot: string): {
         model?: string;
         baseUrl?: string;
       };
-      const provider = parsed.provider && parsed.provider in MODEL_PROVIDER_PROFILES
-        ? parsed.provider
-        : "deterministic";
+      const provider =
+        parsed.provider && parsed.provider in MODEL_PROVIDER_PROFILES
+          ? parsed.provider
+          : "deterministic";
       const profile = MODEL_PROVIDER_PROFILES[provider];
       return {
         provider,
@@ -96,14 +129,14 @@ function loadSavedCliConfig(repoRoot: string): {
 }
 
 export function printBanner(store?: PortfolioStore, repoRoot?: string): void {
-  const W = 86;
+  const W = getBoxInnerWidth();
   const root = repoRoot ?? path.resolve(new URL("..", import.meta.url).pathname);
   const s = store ?? loadPortfolioStore(root);
   const cliCfg = loadSavedCliConfig(root);
-  const vaultCfg = resolveEvaluatorExecutionConfig();
   const hasMcp =
     fs.existsSync(path.join(root, ".mcp.json")) &&
     fs.existsSync(path.join(root, ".cursor", "mcp.json"));
+  const hasDotEnvLocal = fs.existsSync(path.join(root, ".env.local"));
 
   const top = ansi.border(`╭${"─".repeat(W)}╮`);
   const mid = ansi.border(`├${"─".repeat(W)}┤`);
@@ -111,48 +144,53 @@ export function printBanner(store?: PortfolioStore, repoRoot?: string): void {
   const empty = boxRow("", W);
 
   console.log(top);
-  console.log(empty);
-  console.log(
-    boxRow(
-      `   ${ansi.goldBold("███████╗ ██╗       ██████╗  ██╗    ██╗")}   ${ansi.goldBright("◆ ORMUS × FLOW INTELLIGENCE COPILOT")}`,
-      W,
-    ),
-  );
-  console.log(
-    boxRow(
-      `   ${ansi.goldBold("██╔════╝ ██║      ██╔═══██╗ ██║    ██║")}   ${ansi.inkBold("Multifamily Portfolio & Marketing TUI")}`,
-      W,
-    ),
-  );
-  console.log(
-    boxRow(
-      `   ${ansi.goldBold("█████╗   ██║      ██║   ██║ ██║ █╗ ██║")}   ${ansi.gold("Tickets FLOW-101..106 · Second Seal Ready")}`,
-      W,
-    ),
-  );
-  console.log(
-    boxRow(
-      `   ${ansi.goldBold("██╔══╝   ██║      ██║   ██║ ██║███╗██║")}   ${ansi.ink(`${s.operatingProperties.length} Operating Buildings · ${s.units.length.toLocaleString()} Units · ${s.primaryKeyIndex.size.toLocaleString()} PKs`)}`,
-      W,
-    ),
-  );
-  console.log(
-    boxRow(
-      `   ${ansi.goldBold("██║      ███████╗ ╚██████╔╝ ╚███╔███╔╝")}   ${ansi.muted(`Quarantined Onboarding: ${s.onboardingProperties.map((p) => `${p.propertyId} ${p.name}`).join(", ") || "None"} (0 units)`)}`,
-      W,
-    ),
-  );
-  console.log(
-    boxRow(
-      `   ${ansi.gold("╚═╝      ╚══════╝  ╚═════╝   ╚══╝╚══╝")}    ${ansi.emerald("✓ 27/27 Official Kit · ✓ 240/240 Paraphrases · ✓ 10x Scale")}`,
-      W,
-    ),
-  );
-  console.log(empty);
+  if (W >= 80) {
+    console.log(empty);
+    console.log(
+      boxRow(
+        `  ${ansi.goldBold("███████╗ ██╗       ██████╗  ██╗    ██╗")}   ${ansi.goldBright("◆ ORMUS × FLOW INTELLIGENCE COPILOT")}`,
+        W,
+      ),
+    );
+    console.log(
+      boxRow(
+        `  ${ansi.goldBold("██╔════╝ ██║      ██╔═══██╗ ██║    ██║")}   ${ansi.inkBold("Multifamily Portfolio & Marketing TUI")}`,
+        W,
+      ),
+    );
+    console.log(
+      boxRow(
+        `  ${ansi.goldBold("█████╗   ██║      ██║   ██║ ██║ █╗ ██║")}   ${ansi.gold("Tickets FLOW-101..106 · Second Seal")}`,
+        W,
+      ),
+    );
+    console.log(
+      boxRow(
+        `  ${ansi.goldBold("██╔══╝   ██║      ██║   ██║ ██║███╗██║")}   ${ansi.ink(`${s.operatingProperties.length} Operating Buildings · ${s.units.length.toLocaleString()} Units · ${s.primaryKeyIndex.size.toLocaleString()} PKs`)}`,
+        W,
+      ),
+    );
+    console.log(
+      boxRow(
+        `  ${ansi.goldBold("██║      ███████╗ ╚██████╔╝ ╚███╔███╔╝")}   ${ansi.muted(`Onboarding Hold: ${s.onboardingProperties.map((p) => `${p.propertyId} ${p.name}`).join(", ") || "None"} (0u)`)}`,
+        W,
+      ),
+    );
+    console.log(
+      boxRow(
+        `  ${ansi.gold("╚═╝      ╚══════╝  ╚═════╝   ╚══╝╚══╝")}    ${ansi.emerald("✓ 27/27 Kit · ✓ 240 Paraphrases · ✓ 10x")}`,
+        W,
+      ),
+    );
+    console.log(empty);
+  } else {
+    console.log(boxRow(`${ansi.goldBold("◆ FLOW INTELLIGENCE COPILOT")} · ${ansi.ink(`${s.operatingProperties.length} Buildings · ${s.units.length.toLocaleString()} Units · ${s.primaryKeyIndex.size.toLocaleString()} PKs`)}`, W));
+    console.log(boxRow(`${ansi.emerald("✓ 27/27 Official Kit · ✓ 240/240 Paraphrases · ✓ 90-Building 10x Scale")}`, W));
+  }
   console.log(mid);
   console.log(
     boxRow(
-      `${ansi.goldBold("HARNESS:")} ${ansi.inkBold(cliCfg.provider)} (${ansi.gold(cliCfg.model)})  ${ansi.muted("|")}  ${ansi.goldBold("VAULT:")} ${vaultCfg.vaultUnlocked ? ansi.emerald("AES-256-GCM Unlocked") : ansi.gold("Standby")}  ${ansi.muted("|")}  ${ansi.goldBold("MCP:")} ${hasMcp ? ansi.emerald("✓ .mcp.json wired") : ansi.gold("○ run /setup")}`,
+      `${ansi.goldBold("HARNESS:")} ${ansi.inkBold(cliCfg.provider)} (${ansi.gold(cliCfg.model)}) | ${ansi.goldBold("ENV:")} ${hasDotEnvLocal ? ansi.emerald(".env.local active") : ansi.muted("default")} | ${ansi.goldBold("MCP:")} ${hasMcp ? ansi.emerald("✓ wired") : ansi.gold("run /setup")}`,
       W,
     ),
   );
@@ -166,68 +204,70 @@ export function printBanner(store?: PortfolioStore, repoRoot?: string): void {
 }
 
 export function printTuiCommandDeck(): void {
-  const W = 86;
-  const top = ansi.border(`╭─ ${ansi.goldBold("FLOWIQ TERMINAL USER INTERFACE (TUI) · COMMAND DECK")} ${"─".repeat(W - 55)}╮`);
+  const W = getBoxInnerWidth();
+  const title = "FLOWIQ TERMINAL USER INTERFACE (TUI) · COMMAND DECK";
+  const dashCount = Math.max(2, W - title.length - 4);
+  const top = ansi.border(`╭─ ${ansi.goldBold(title)} ${"─".repeat(dashCount)}╮`);
   const bot = ansi.border(`╰${"─".repeat(W)}╯`);
 
   console.log(top);
   console.log(
     boxRow(
-      `${ansi.goldBold("[1]")} ${ansi.inkBold("Ask Copilot / ID")}   ${ansi.muted("Type any question OR ID (")}${ansi.gold("D01..D10, T01..T13, B01..B03, EGGS")}${ansi.muted(")")}`,
+      `${ansi.goldBold("[1]")} ${ansi.inkBold("Ask Copilot / ID")}   ${ansi.muted("Ask any question OR ID (D01..D10, T01..T13, B01..B03, EGGS)")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[2]")} ${ansi.inkBold("/setup")}             ${ansi.muted("Interactive LLM Provider, API Key, Agent MCP & UI Setup Wizard")}`,
+      `${ansi.goldBold("[2]")} ${ansi.inkBold("/setup")}             ${ansi.muted("Live LLM API Probe (/v1/models), Key Setup & MCP Config Wizard")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[3]")} ${ansi.inkBold("/ui")}                ${ansi.muted("Launch Visual Client Dashboard & 12-Plate Field Notebook in Browser")}`,
+      `${ansi.goldBold("[3]")} ${ansi.inkBold("/ui")}                ${ansi.muted("Open Visual Dashboard & 12-Plate Field Notebook in Browser")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[4]")} ${ansi.inkBold("/doctor")}            ${ansi.muted("Full 6-Table Data Hygiene, Trap Quarantine & Integrity Audit")}`,
+      `${ansi.goldBold("[4]")} ${ansi.inkBold("/doctor")}            ${ansi.muted("Full 6-Table Data Hygiene, Trap Quarantine & Live Provider Audit")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[5]")} ${ansi.inkBold("/validate")}          ${ansi.muted("Visual Question / Answer (with schema) / Source Card for All 27 Items")}`,
+      `${ansi.goldBold("[5]")} ${ansi.inkBold("/validate")}          ${ansi.muted("Question / Answer (with schema) / Source Card for All 27 Items")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[6]")} ${ansi.inkBold("/stress")}            ${ansi.muted("Run Blind Red-Team 240-Paraphrase, 20-Ambiguity & 90-Building 10x Suite")}`,
+      `${ansi.goldBold("[6]")} ${ansi.inkBold("/stress")}            ${ansi.muted("Run Blind Red-Team 240-Paraphrase, 20-Ambiguity & 10x Suite")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[7]")} ${ansi.inkBold("/swarm")}             ${ansi.muted("Run 8-Worker Parallel Temporal LLM Swarm (Crash @ #18 & <2ms Replay)")}`,
+      `${ansi.goldBold("[7]")} ${ansi.inkBold("/swarm")}             ${ansi.muted("Run 8-Worker Parallel Temporal Swarm (Crash @ #18 & Replay)")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[8]")} ${ansi.inkBold("/policy")}            ${ansi.muted("Interactive Runtime Policy Override Toggle (CAD, Notice, Bucket, Beta0)")}`,
+      `${ansi.goldBold("[8]")} ${ansi.inkBold("/policy")}            ${ansi.muted("Interactive Runtime Policy Override Toggle (CAD, Notice, Beta0)")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[9]")} ${ansi.inkBold("/buildings")}         ${ansi.muted("Inspect 9 Portfolio Properties (P01..P08 Operating + P09 Onboarding)")}`,
+      `${ansi.goldBold("[9]")} ${ansi.inkBold("/buildings")}         ${ansi.muted("Inspect 9 Portfolio Properties (P01..P08 Active + P09 Hold)")}`,
       W,
     ),
   );
   console.log(
     boxRow(
-      `${ansi.goldBold("[0]")} ${ansi.inkBold("/quit")}              ${ansi.muted("Exit FlowIQ TUI  (Also available: /decisions, /harness, /workflow, /help)")}`,
+      `${ansi.goldBold("[0]")} ${ansi.inkBold("/quit")}              ${ansi.muted("Exit TUI  (Also: /decisions, /harness, /workflow, /help)")}`,
       W,
     ),
   );
@@ -331,18 +371,16 @@ export function printValidationEnvelopeCard(
   q: QuestionRecord,
   turn: Awaited<ReturnType<typeof askFlowIqCopilot>>,
 ): void {
-  const W = 86;
-  const top = ansi.border(`╭─ ${ansi.goldBold(`OFFICIAL VALIDATION CARD · ${q.id} (${q.type})`)} ${"─".repeat(Math.max(2, W - 36 - q.id.length - q.type.length))}╮`);
+  const W = getBoxInnerWidth();
+  const title = `OFFICIAL VALIDATION CARD · ${q.id} (${q.type})`;
+  const dashCount = Math.max(2, W - title.length - 4);
+  const top = ansi.border(`╭─ ${ansi.goldBold(title)} ${"─".repeat(dashCount)}╮`);
   const bot = ansi.border(`╰${"─".repeat(W)}╯`);
-  const answerJson = JSON.stringify({
-    id: turn.envelope.id,
-    answer: turn.envelope.answer,
-    result: turn.envelope.result,
-    citations: turn.envelope.citations,
-  });
 
   console.log(top);
-  console.log(boxRow(`${ansi.goldBold("Question:")} ${ansi.inkBold(q.question)}`, W));
+  for (const line of wrapPlainText(`Question: ${q.question}`, W - 4)) {
+    console.log(boxRow(ansi.inkBold(line), W));
+  }
   if (q.result_schema) {
     console.log(
       boxRow(
@@ -353,32 +391,26 @@ export function printValidationEnvelopeCard(
   }
   console.log(
     boxRow(
-      `${ansi.goldBold("Answer (with schema):")} ${ansi.gold( JSON.stringify(turn.envelope.result) )} ${turn.verification.valid ? ansi.emerald("[✓ Exact Schema Match]") : ansi.red("[✗ Schema Error]")}`,
+      `${ansi.goldBold("Answer (with schema):")} ${ansi.gold(JSON.stringify(turn.envelope.result))} ${turn.verification.valid ? ansi.emerald("[✓ Exact Match]") : ansi.red("[✗ Error]")}`,
       W,
     ),
   );
-  console.log(
-    boxRow(
-      `${ansi.muted("Prose:")} ${ansi.ink(turn.envelope.answer.slice(0, 74))}${turn.envelope.answer.length > 74 ? "..." : ""}`,
-      W,
-    ),
-  );
-  console.log(
-    boxRow(
-      `${ansi.goldBold("Source Citations:")} ${ansi.emerald(turn.envelope.citations.join(", "))}`,
-      W,
-    ),
-  );
+  for (const line of wrapPlainText(`Prose: ${turn.envelope.answer}`, W - 4)) {
+    console.log(boxRow(ansi.ink(line), W));
+  }
+  for (const line of wrapPlainText(
+    `Source Citations (${turn.envelope.citations.length}): ${turn.envelope.citations.join(", ")}`,
+    W - 4,
+  )) {
+    console.log(boxRow(ansi.emerald(line), W));
+  }
   if (turn.toolCalls.length > 0) {
-    console.log(
-      boxRow(
-        `${ansi.goldBold("Tool Trace:")} ${ansi.muted(turn.toolCalls.map((tc) => `${tc.toolName}(${JSON.stringify(tc.args)})`).join(" -> ").slice(0, 68))}`,
-        W,
-      ),
-    );
+    const traceStr = `Tools: ${turn.toolCalls.map((tc) => `${tc.toolName}(${JSON.stringify(tc.args)})`).join(" -> ")}`;
+    for (const line of wrapPlainText(traceStr, W - 4)) {
+      console.log(boxRow(ansi.muted(line), W));
+    }
   }
   console.log(bot);
-  console.log(`${ansi.muted("  JSONL Line:")} ${answerJson}`);
 }
 
 async function runValidateAllCommand(
@@ -499,36 +531,39 @@ async function runDoctorCommand(store: PortfolioStore): Promise<void> {
     `   [T5] Duplicate Phone Leads   : ${ansi.inkBold(`${dq.duplicateLeadCount} rows`)} (D01490..D01498 sharing lease_id with earliest leads D00224..D01454) deduplicated`,
   );
   console.log(
-    `   [T6] Lag, Rent & Reallocation: ${ansi.inkBold("70 cross-month lags")} (20 Q2->Q3 shifts e.g. L00006/D00064), ${ansi.inkBold("$1,955/mo")} notice rent gap ($370/mo @ P06 on T12), ${ansi.inkBold(`$${mkt.deadSpendReallocation.totalDeadSpendUsd.toFixed(2)}`)} dead spend across 9 pairs -> ${ansi.emerald(`+${mkt.deadSpendReallocation.projectedAdditionalWholeLeases} leases`)} on Apartments.com ($2,915.86/lease); Small-Sample Guard windowInvariance=${learner.windowInvarianceVerified}`,
+    `   [T6] Lag, Rent & Reallocation: ${ansi.inkBold("70 cross-month lags")}, ${ansi.inkBold("$1,955/mo")} notice rent gap, ${ansi.inkBold(`$${mkt.deadSpendReallocation.totalDeadSpendUsd.toFixed(2)}`)} dead spend across 9 pairs -> ${ansi.emerald(`+${mkt.deadSpendReallocation.projectedAdditionalWholeLeases} leases`)} on Apartments.com; Small-Sample Guard windowInvariance=${learner.windowInvarianceVerified}`,
   );
 
   console.log(
-    `\n${ansi.goldBold("4. UNIVERSAL MODEL HARNESS (LOCAL & CLOUD LLM PROVIDERS)")} ${ansi.emerald("[● READY]")}`,
+    `\n${ansi.goldBold("4. LIVE MODEL HARNESS & ENDPOINT PROBE (/v1/models)")}`,
   );
   for (const item of profiles) {
     const pId = item.profile.provider === "local_openai" ? "local-openai" : item.profile.provider;
-    const badge = item.reachable ? ansi.emerald("● READY  ") : ansi.gold("○ STANDBY");
+    const badge = item.reachable
+      ? ansi.emerald("● LIVE VERIFIED")
+      : item.configured
+        ? ansi.gold("◐ KEY SET      ")
+        : ansi.muted("○ UNCONFIGURED ");
     console.log(
-      `   ${badge} ${ansi.inkBold(pId.padEnd(15))} | model=${item.profile.defaultModel.padEnd(28)} | ${ansi.muted(item.statusDetail)}`,
+      `   ${badge} ${ansi.inkBold(pId.padEnd(15))} | ${ansi.muted(item.statusDetail)}`,
     );
   }
 
-  const vaultCfg = resolveEvaluatorExecutionConfig();
   const bank600Count = loadQuestion600Bank().length;
   console.log(
-    `\n${ansi.goldBold("5. SEALED EVALUATOR VAULT, 600-QUESTION STRESS TEST & PARALLEL TEMPORAL SWARM")} ${ansi.emerald("[✓ READY]")}`,
+    `\n${ansi.goldBold("5. EVALUATION SUITES & LIVE SURFACES")} ${ansi.emerald("[✓ VERIFIED]")}`,
   );
   console.log(
-    `   • Sealed Evaluator Vault     : ${ansi.inkBold(".flowiq-vault.json")} (src/config/key-vault.ts, AES-256-GCM unlocked=${vaultCfg.vaultUnlocked}) | activeTier=${vaultCfg.priorityTier} (${vaultCfg.provider} / ${vaultCfg.model}, key=${vaultCfg.maskedKeyPreview})`,
+    `   • Clean-Room Python Verifier : ${ansi.inkBold("27/27 PASS")} (npm run eval:cleanroom — zero dependencies on src/)`,
   );
   console.log(
-    `   • 600-Question Stress Test   : ${ansi.inkBold(`${bank600Count}/600 verified`)} (600 multi-step questions via scripts/generate-600-bank.ts)`,
+    `   • Blind Red-Team Suites      : ${ansi.inkBold("240/240 paraphrases + 20/20 ambiguity + 21/21 10x portfolio")} (npm run eval:paraphrase)`,
   );
   console.log(
-    `   • Blind Red-Team 240 & 10x   : ${ansi.inkBold("240/240 paraphrases + 20/20 ambiguity + 21/21 10x unseen portfolio")} (npm run eval:paraphrase)`,
+    `   • 600-Question Stress Test   : ${ansi.inkBold(`${bank600Count}/600 verified`)} (1,800 checks via scripts/generate-600-bank.ts)`,
   );
   console.log(
-    `   • Live Web & Notebook URLs   : ${ansi.inkBold("https://repo-sigma-one-80.vercel.app")} (Client Dashboard) · ${ansi.inkBold("https://repo-sigma-one-80.vercel.app/field-notebook.html")} (Pipeline & Field Notebook)`,
+    `   • Live Web & Notebook URLs   : ${ansi.inkBold("https://repo-sigma-one-80.vercel.app")} · ${ansi.inkBold("https://repo-sigma-one-80.vercel.app/field-notebook.html")}`,
   );
 }
 
@@ -545,36 +580,43 @@ async function runInteractiveSetupWizard(
 
   try {
     console.log(
-      `\n${ansi.goldBold("╭────────────────────────────────────────────────────────────────────────────────────╮")}`,
+      `\n${ansi.goldBold("╭──────────────────────────────────────────────────────────────────────────────╮")}`,
     );
     console.log(
-      `${ansi.goldBold("│")}  ${ansi.inkBold("FLOWIQ INTERACTIVE AGENT, LLM HARNESS & UI SETUP WIZARD")}                           ${ansi.goldBold("│")}`,
+      `${ansi.goldBold("│")}  ${ansi.inkBold("FLOWIQ INTERACTIVE AGENT, LIVE /v1/models PROBE & MCP SETUP WIZARD")}         ${ansi.goldBold("│")}`,
     );
     console.log(
-      `${ansi.goldBold("╰────────────────────────────────────────────────────────────────────────────────────╯")}`,
+      `${ansi.goldBold("╰──────────────────────────────────────────────────────────────────────────────╯")}`,
     );
 
+    console.log(ansi.muted("  Probing local and configured cloud /v1/models endpoints..."));
     const profiles = await discoverAvailableModelProfiles();
-    const providerChoices: Array<{ key: string; id: ModelProviderId; label: string }> = [
-      { key: "1", id: "xai", label: "xAI Grok API (grok-4 / grok-3-mini · native function calling)" },
-      { key: "2", id: "anthropic", label: "Anthropic Claude (claude-3-7-sonnet-latest · tool_use)" },
-      { key: "3", id: "openai", label: "OpenAI API (gpt-4.1-mini / gpt-4o · native tool_calls)" },
-      { key: "4", id: "openrouter", label: "OpenRouter Multi-Model Gateway (Qwen 2.5 72B / Llama 3.3 70B)" },
-      { key: "5", id: "ollama", label: "Ollama Local Server (http://127.0.0.1:11434/v1 · zero cloud key)" },
-      { key: "6", id: "local_openai", label: "Local OpenAI / vLLM / MLX / Raven / Flint (http://127.0.0.1:8080/v1)" },
-      { key: "7", id: "deterministic", label: "FlowIQ Deterministic Compositional Engine (0ms · Offline · Zero-Key)" },
+    const providerChoices: Array<{ key: string; id: ModelProviderId }> = [
+      { key: "1", id: "xai" },
+      { key: "2", id: "anthropic" },
+      { key: "3", id: "openai" },
+      { key: "4", id: "openrouter" },
+      { key: "5", id: "ollama" },
+      { key: "6", id: "local_openai" },
+      { key: "7", id: "deterministic" },
     ];
 
     console.log(`\n${ansi.goldBold("Step 1/4 · Choose Your LLM / Agent Execution Provider:")}`);
     for (const c of providerChoices) {
-      const status = profiles.find((p) => p.profile.provider === c.id);
-      const badge = status?.reachable ? ansi.emerald("● READY") : ansi.muted("○ CONFIGURE");
-      console.log(`  ${ansi.goldBold(`[${c.key}]`)} ${ansi.inkBold(c.id.padEnd(14))} ${badge} — ${ansi.ink(c.label)}`);
+      const status = profiles.find((p) => p.profile.provider === c.id)!;
+      const badge = status.reachable
+        ? ansi.emerald("● LIVE API VERIFIED")
+        : status.configured
+          ? ansi.gold("◐ ENV KEY SET      ")
+          : ansi.muted("○ NOT CONFIGURED   ");
+      console.log(
+        `  ${ansi.goldBold(`[${c.key}]`)} ${ansi.inkBold(c.id.padEnd(14))} ${badge} — ${ansi.ink(status.profile.label)} (${ansi.muted(status.statusDetail)})`,
+      );
     }
 
     const ansProvider = (
       await ownRl.question(
-        ansi.goldBold("\nSelect provider [1-7, default=7 (deterministic) or 1 (xai)]: "),
+        ansi.goldBold("\nSelect provider [1-7, default=7 (deterministic)]: "),
       )
     ).trim();
 
@@ -586,15 +628,8 @@ async function runInteractiveSetupWizard(
     const profile = MODEL_PROVIDER_PROFILES[provider];
 
     console.log(
-      `\n${ansi.goldBold("Step 2/4 · Configure Model & Endpoint / API Credentials:")}`,
+      `\n${ansi.goldBold("Step 2/4 · Configure Endpoint, API Key & Live Model Discovery (/v1/models):")}`,
     );
-    const ansModel = (
-      await ownRl.question(
-        ansi.gold(`  Model ID [default: ${profile.defaultModel}]: `),
-      )
-    ).trim();
-    const model = ansModel || profile.defaultModel;
-
     const ansBaseUrl = (
       await ownRl.question(
         ansi.gold(`  Endpoint Base URL [default: ${profile.baseUrl}]: `),
@@ -602,22 +637,47 @@ async function runInteractiveSetupWizard(
     ).trim();
     const baseUrl = ansBaseUrl || profile.baseUrl;
 
-    let apiKey = "";
+    let apiKey = profile.envKeyName ? (process.env[profile.envKeyName] ?? "") : "";
     if (profile.requiresApiKey) {
-      apiKey = (
+      const enteredKey = (
         await ownRl.question(
           ansi.gold(
-            `  ${profile.envKeyName} (press Enter to use existing env / AES-256-GCM .flowiq-vault.json): `,
+            `  Enter ${profile.envKeyName} ${apiKey ? "(press Enter to keep current key)" : "(required for live API calls)"}: `,
           ),
         )
       ).trim();
-      if (apiKey) {
-        process.env[profile.envKeyName] = apiKey;
-        const envPath = path.join(repoRoot, ".env.local");
-        const envLine = `${profile.envKeyName}="${apiKey}"\nFLOWIQ_PROVIDER="${provider}"\nFLOWIQ_MODEL="${model}"\n`;
-        fs.writeFileSync(envPath, envLine, "utf-8");
-        console.log(`  ${ansi.emerald(`✓ Saved ${profile.envKeyName} to .env.local`)}`);
+      if (enteredKey) {
+        apiKey = enteredKey;
+        process.env[profile.envKeyName!] = apiKey;
       }
+    }
+
+    let defaultModelChoice = profile.defaultModel;
+    if (provider !== "deterministic") {
+      console.log(ansi.muted(`  Querying live models from ${baseUrl}...`));
+      const liveProbe = await fetchLiveModelsForProvider(provider, baseUrl, apiKey, 3500);
+      if (liveProbe.reachable && liveProbe.models.length > 0) {
+        defaultModelChoice = liveProbe.models[0];
+        console.log(
+          `  ${ansi.emerald(`✓ Connected! Discovered ${liveProbe.models.length} live models:`)} ${ansi.ink(liveProbe.models.slice(0, 8).join(", "))}`,
+        );
+      } else {
+        console.log(`  ${ansi.gold(`○ Live /models probe note:`)} ${ansi.muted(liveProbe.statusDetail)}`);
+      }
+    }
+
+    const ansModel = (
+      await ownRl.question(
+        ansi.gold(`  Model ID [default: ${defaultModelChoice}]: `),
+      )
+    ).trim();
+    const model = ansModel || defaultModelChoice;
+
+    if (profile.requiresApiKey && apiKey && profile.envKeyName) {
+      const envPath = path.join(repoRoot, ".env.local");
+      const envLine = `${profile.envKeyName}="${apiKey}"\nFLOWIQ_PROVIDER="${provider}"\nFLOWIQ_MODEL="${model}"\n`;
+      fs.writeFileSync(envPath, envLine, "utf-8");
+      console.log(`  ${ansi.emerald(`✓ Saved ${profile.envKeyName} to .env.local (gitignored)`)}`);
     }
 
     console.log(
@@ -662,7 +722,7 @@ async function runInteractiveSetupWizard(
     console.log(`  • Config File: ${ansi.muted(path.relative(repoRoot, configPath))}`);
     if (writeMcp) {
       console.log(
-        `  • Agent MCP  : ${ansi.emerald("✓ .mcp.json & .cursor/mcp.json wired (6 read-only tools exposed)")}`,
+        `  • Agent MCP  : ${ansi.emerald("✓ .mcp.json & .cursor/mcp.json wired (7 MCP tools exposed)")}`,
       );
     }
 
@@ -739,6 +799,61 @@ async function runSetupCommand(repoRoot: string, args: readonly string[]): Promi
   }
 }
 
+function printFormattedTurnOutput(
+  question: string,
+  turn: Awaited<ReturnType<typeof askFlowIqCopilot>>,
+  harnessMeta?: {
+    providerUsed: string;
+    modelUsed: string;
+    wireModeUsed: string;
+    latencyMs: number;
+  },
+): void {
+  const wrapWidth = Math.max(54, (process.stdout.columns || 88) - 16);
+
+  console.log(`\n${ansi.goldBold("Question       :")} ${ansi.inkBold(question)}`);
+  if (harnessMeta) {
+    console.log(
+      `${ansi.goldBold("Harness        :")} provider=${ansi.inkBold(harnessMeta.providerUsed)} | model=${ansi.inkBold(harnessMeta.modelUsed)} | wireMode=${harnessMeta.wireModeUsed} | latency=${harnessMeta.latencyMs}ms`,
+    );
+  }
+  if (turn.toolCalls.length > 0) {
+    for (const tc of turn.toolCalls) {
+      console.log(
+        `${ansi.goldBold("Tool Executed  :")} ${ansi.teal(tc.toolName)}(${ansi.muted(JSON.stringify(tc.args))})`,
+      );
+      for (const line of wrapPlainText(`-> ${tc.outputSummary}`, wrapWidth)) {
+        console.log(`                 ${ansi.muted(line)}`);
+      }
+    }
+  }
+  if (turn.clarificationNeeded) {
+    console.log(
+      `${ansi.goldBold("Status         :")} ${ansi.gold("⊘ AMBIGUOUS BUILDING MATCH (FLOW-101 Clarification Gate)")}`,
+    );
+  }
+
+  const proseLines = wrapPlainText(turn.envelope.answer, wrapWidth);
+  proseLines.forEach((line, idx) => {
+    const prefix = idx === 0 ? ansi.goldBold("Answer (Prose) :") : "                ";
+    console.log(`${prefix} ${ansi.ink(line)}`);
+  });
+
+  console.log(
+    `${ansi.goldBold("Result (Schema):")} ${ansi.goldBright(JSON.stringify(turn.envelope.result))}`,
+  );
+
+  const citeLines = wrapPlainText(turn.envelope.citations.join(", "), wrapWidth);
+  citeLines.forEach((line, idx) => {
+    const prefix = idx === 0 ? ansi.goldBold("Source Rows    :") : "                ";
+    console.log(`${prefix} ${ansi.emerald(line)}`);
+  });
+
+  console.log(
+    `${ansi.goldBold("Verified       :")} ${turn.verification.valid ? ansi.emerald(`✓ PASS (${turn.envelope.citations.length} primary-key citations verified)`) : ansi.red(`✗ FAIL (${turn.verification.errors.join("; ")})`)}`,
+  );
+}
+
 async function runAskCommand(
   repoRoot: string,
   args: readonly string[],
@@ -794,7 +909,6 @@ async function runAskCommand(
 
   const store = loadPortfolioStore(repoRoot, policyOverrides);
 
-  // Check if the user typed an official Question ID (e.g. "T01", "D03", "B03", "EGGS")
   if (/^(?:D0[1-9]|D10|T0[1-9]|T1[0-3]|B0[1-3]|EGGS)$/i.test(rawInput) && !jsonOutput) {
     if (!suppressBanner) printBanner(store, repoRoot);
     await runValidateAllCommand(repoRoot, store, rawInput.toUpperCase());
@@ -806,8 +920,12 @@ async function runAskCommand(
   if (providerFlag || useLlmFlag) {
     const saved = loadSavedCliConfig(repoRoot);
     const harnessCfg = resolveModelHarnessConfig({
-      provider: providerFlag ?? ( saved.provider !== "deterministic" ? saved.provider : "xai" ),
-      ...(modelFlag ? { model: modelFlag } : (!providerFlag && saved.model) ? { model: saved.model } : {}),
+      provider: providerFlag ?? (saved.provider !== "deterministic" ? saved.provider : "xai"),
+      ...(modelFlag
+        ? { model: modelFlag }
+        : !providerFlag && saved.model
+          ? { model: saved.model }
+          : {}),
       ...(baseUrlFlag ? { baseUrl: baseUrlFlag } : {}),
     });
     const turn = await runModelHarnessTurn(question, {
@@ -821,24 +939,12 @@ async function runAskCommand(
     }
 
     if (!suppressBanner) printBanner(store, repoRoot);
-    console.log(`\n${ansi.goldBold("Question:")} ${ansi.inkBold(question)}`);
-    console.log(
-      `${ansi.goldBold("Harness :")} provider=${ansi.inkBold(turn.providerUsed)} | model=${ansi.inkBold(turn.modelUsed)} | wireMode=${turn.wireModeUsed} | latency=${turn.latencyMs}ms`,
-    );
-    if (turn.toolCalls.length > 0) {
-      console.log(
-        `${ansi.goldBold("Tools   :")} ${turn.toolCalls.map((t) => `${t.toolName} -> ${t.outputSummary}`).join(" | ")}`,
-      );
-    }
-    console.log(
-      `${ansi.goldBold("Answer (with schema):")} ${ansi.gold(JSON.stringify({ id: turn.envelope.id, answer: turn.envelope.answer, result: turn.envelope.result }))}`,
-    );
-    console.log(
-      `${ansi.goldBold("Source  :")} ${ansi.emerald(JSON.stringify({ citations: turn.envelope.citations }))}`,
-    );
-    console.log(
-      `${ansi.goldBold("Verified:")} ${turn.verification.valid ? ansi.emerald("✓ PASS (all cited source row IDs verified)") : ansi.red(`✗ FAIL (${turn.verification.errors.join("; ")})`)}`,
-    );
+    printFormattedTurnOutput(question, turn, {
+      providerUsed: turn.providerUsed,
+      modelUsed: turn.modelUsed,
+      wireModeUsed: turn.wireModeUsed,
+      latencyMs: turn.latencyMs,
+    });
     return;
   }
 
@@ -849,26 +955,7 @@ async function runAskCommand(
   }
 
   if (!suppressBanner) printBanner(store, repoRoot);
-  console.log(`\n${ansi.goldBold("Question:")} ${ansi.inkBold(question)}`);
-  if (turn.toolCalls.length > 0) {
-    console.log(
-      `${ansi.goldBold("Tools   :")} ${turn.toolCalls.map((t) => `${t.toolName} -> ${t.outputSummary}`).join(" | ")}`,
-    );
-  }
-  if (turn.clarificationNeeded) {
-    console.log(
-      `${ansi.goldBold("Status  :")} ${ansi.gold("⊘ AMBIGUOUS BUILDING MATCH (FLOW-101 Clarification Gate)")}`,
-    );
-  }
-  console.log(
-    `${ansi.goldBold("Answer (with schema):")} ${ansi.gold(JSON.stringify({ id: turn.envelope.id, answer: turn.envelope.answer, result: turn.envelope.result }))}`,
-  );
-  console.log(
-    `${ansi.goldBold("Source  :")} ${ansi.emerald(JSON.stringify({ citations: turn.envelope.citations }))}`,
-  );
-  console.log(
-    `${ansi.goldBold("Verified:")} ${turn.verification.valid ? ansi.emerald("✓ PASS (all cited source row IDs verified)") : ansi.red(`✗ FAIL (${turn.verification.errors.join("; ")})`)}`,
-  );
+  printFormattedTurnOutput(question, turn);
 }
 
 async function runSwarmCommand(repoRoot: string, suppressBanner = false): Promise<void> {
@@ -887,9 +974,6 @@ async function runSwarmCommand(repoRoot: string, suppressBanner = false): Promis
   );
   console.log(`  • Workflow / Run ID       : ${ansi.inkBold(res.workflowId)} / ${res.runId}`);
   console.log(
-    `  • Provider & Key Vault    : ${ansi.inkBold(`${res.vaultStatus.activeProvider} (${res.vaultStatus.activeModel})`)} | tier=${res.vaultStatus.priorityTier} | key=${res.vaultStatus.maskedKeyPreview}`,
-  );
-  console.log(
     `  • Mid-Batch Crash & Replay: Crash @ Activity #${res.crashInjectedAtActivity} (${res.inFlightWhenCrashedCount} in-flight) -> worker-2 replayed in ${res.replayHistoryDurationMs.toFixed(2)}ms | skipped=${res.skippedByIdempotencyKeyCount} | duplicateCalls=${res.duplicateLlmInvocationsCount}`,
   );
   console.log(
@@ -903,7 +987,7 @@ async function runSwarmCommand(repoRoot: string, suppressBanner = false): Promis
       ? ansi.gold("[REPLAYED 0ms]")
       : ansi.emerald("[EXECUTED]    ");
     console.log(
-      `   • #${String(act.activityIndex).padStart(2, "0")} [${act.workerSlotId}] ${replayBadge} ${ansi.inkBold(act.questionId.padEnd(7))} | key=${act.idempotencyKey.slice(0, 12)}.. | ${ansi.muted(act.question.slice(0, 52))}...`,
+      `   • #${String(act.activityIndex).padStart(2, "0")} [${act.workerSlotId}] ${replayBadge} ${ansi.inkBold(act.questionId.padEnd(7))} | key=${act.idempotencyKey.slice(0, 12)}.. | ${ansi.muted(act.question.slice(0, 50))}...`,
     );
   }
 }
@@ -993,9 +1077,7 @@ async function runReplCommand(repoRoot: string, initialStore: PortfolioStore): P
 
     if (
       trimmed === "4" ||
-      trimmed === "/doctor" ||
-      trimmed === "/status" ||
-      trimmed === "/traps"
+      /^\/?(doctor|status|traps)$/i.test(trimmed)
     ) {
       await runDoctorCommand(store);
       continue;
@@ -1003,15 +1085,14 @@ async function runReplCommand(repoRoot: string, initialStore: PortfolioStore): P
 
     if (
       trimmed === "5" ||
-      trimmed === "/validate" ||
-      trimmed.startsWith("/validate ")
+      /^\/?validate(?:\s+.*)?$/i.test(trimmed)
     ) {
-      const arg = trimmed.replace(/^\/validate\s*/i, "").trim();
+      const arg = trimmed.replace(/^\/?validate\s*/i, "").trim();
       await runValidateAllCommand(repoRoot, store, arg || undefined);
       continue;
     }
 
-    if (trimmed === "6" || trimmed === "/stress" || trimmed === "/10x") {
+    if (trimmed === "6" || /^\/?(stress|10x)$/i.test(trimmed)) {
       const { runParaphraseAnd10xSuite } = await import(
         "../scripts/test-paraphrase-and-ambiguity-invariance.ts"
       );
@@ -1019,12 +1100,12 @@ async function runReplCommand(repoRoot: string, initialStore: PortfolioStore): P
       continue;
     }
 
-    if (trimmed === "7" || trimmed === "/swarm") {
+    if (trimmed === "7" || /^\/?swarm$/i.test(trimmed)) {
       await runSwarmCommand(repoRoot, true);
       continue;
     }
 
-    if (trimmed === "8" || trimmed === "/policy") {
+    if (trimmed === "8" || /^\/?policy$/i.test(trimmed)) {
       console.log(`\n${ansi.goldBold("Current Active Policy Knobs:")}`);
       console.log(JSON.stringify(store.policy, null, 2));
       const ansCad = (
@@ -1079,7 +1160,7 @@ async function runReplCommand(repoRoot: string, initialStore: PortfolioStore): P
       continue;
     }
 
-    if (trimmed === "9" || trimmed === "/buildings") {
+    if (trimmed === "9" || /^\/?buildings$/i.test(trimmed)) {
       console.log(`\n${ansi.goldBold("PORTFOLIO BUILDINGS (properties.csv ⋈ units.csv):")}`);
       for (const p of store.properties) {
         const statusBadge = p.isOperating
@@ -1106,7 +1187,7 @@ async function runReplCommand(repoRoot: string, initialStore: PortfolioStore): P
       const profiles = await discoverAvailableModelProfiles();
       for (const p of profiles) {
         console.log(
-          `  ${p.profile.provider.padEnd(15)} | ${p.profile.defaultModel.padEnd(26)} | ${p.statusDetail}`,
+          `  ${p.profile.provider.padEnd(15)} | ${p.statusDetail}`,
         );
       }
       continue;

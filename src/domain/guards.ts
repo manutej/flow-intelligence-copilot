@@ -159,7 +159,7 @@ const UNMODELED_DATA_RULES: ReadonlyArray<{
   {
     category: 'Valuation, NOI, Debt Service & Unmodeled Resident Fees/Parking Leases',
     pattern:
-      /\b(cap\s+rate|capitalization\s+rate|noi\b|net\s+operating\s+income|dscr\b|debt[-\s]?service(\s+coverage\s+ratio)?|mortgage\s+payment|loan\s+balance|irr\b|cash[-\s]on[-\s]cash|security\s+deposit|pet\s+(fee|deposit|rent)|application\s+fee|move[-\s]?in\s+fee|lease\s+buyout\s+fee|buyout\s+fee|early\s+termination\s+fee|parking\s+(spots?|spaces?)\s+(leased|vacant|rented|available)|leased\s+parking)\b/i,
+      /\b(profit\w*|net\s+income|ebitda|operating\s+margin|profit\s+margin|p&l|profit\s+and\s+loss|net\s+revenue|cap\s+rate|capitalization\s+rate|noi\b|net\s+operating\s+income|dscr\b|debt[-\s]?service(\s+coverage\s+ratio)?|mortgage\s+payment|loan\s+balance|irr\b|cash[-\s]on[-\s]cash|security\s+deposit|pet\s+(fee|deposit|rent)|application\s+fee|move[-\s]?in\s+fee|lease\s+buyout\s+fee|buyout\s+fee|early\s+termination\s+fee|parking\s+(spots?|spaces?)\s+(leased|vacant|rented|available)|leased\s+parking)\b/i,
     missingDetail:
       'The PMS exports track unit market_rent, lease monthly_rent, and concession_usd, but do not include building valuation/NOI/cap-rate ledgers, ancillary fee schedules (pet/application/deposit/buyout fees), or separate parking-stall lease inventories.',
   },
@@ -210,10 +210,28 @@ export function checkUnknownDataGuard(
           ? ` at ${mentionedProps.matched[0].name} (${mentionedProps.matched[0].propertyId})`
           : '';
 
+      let rentRollSuffix = "";
+      if (/\b(profit\w*|revenue|grossing|noi\b|net\s+operating\s+income|net\s+income)\b/i.test(question)) {
+        const rentByProp = new Map<string, number>();
+        for (const l of store.leases) {
+          rentByProp.set(l.propertyId, (rentByProp.get(l.propertyId) ?? 0) + l.monthlyRent);
+        }
+        const topRentProps = [...store.operatingProperties]
+          .map((p) => ({
+            propertyId: p.propertyId,
+            name: p.name,
+            monthlyRent: Math.round(rentByProp.get(p.propertyId) ?? 0),
+          }))
+          .sort((a, b) => b.monthlyRent - a.monthlyRent)
+          .slice(0, 3);
+        if (topRentProps.length > 0) {
+          rentRollSuffix = ` (Note: while profit/NOI/OpEx ledgers are not in the exports, the top 3 operating buildings by active monthly contract lease rent roll in data/pms/leases.csv are: ${topRentProps.map((p, i) => `#${i + 1} ${p.name} [${p.propertyId}] at ${p.monthlyRent.toLocaleString("en-US")}/mo`).join(", ")}.)`;
+        }
+      }
       return {
         unknown: true,
         missingCategory: rule.category,
-        reason: `I don't know — the requested ${rule.category.toLowerCase()}${propName} cannot be answered from the available data. ${rule.missingDetail}`,
+        reason: `I don't know — the requested ${rule.category.toLowerCase()}${propName} cannot be answered from the available data. ${rule.missingDetail}${rentRollSuffix}`,
         citations,
       };
     }

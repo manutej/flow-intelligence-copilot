@@ -30,10 +30,10 @@ import {
  * Designed so FlowIQ runs with identical mathematical rigor across:
  * 1. `ollama` (`http://127.0.0.1:11434/v1` — e.g. `qwen2.5-coder:14b`, `llama3.1:8b`, `mistral-nemo`, `deepseek-r1`)
  * 2. `local_openai` / Raven / Flint local server (`http://127.0.0.1:8080/v1` — llama.cpp, vLLM, MLX, RecursiveSI Flint)
- * 3. `openrouter` (`https://openrouter.ai/api/v1` — `meta-llama/llama-3.3-70b-instruct`, `qwen/qwen-2.5-72b-instruct`, `x-ai/grok-3-mini`, `anthropic/claude-3.7-sonnet`)
+ * 3. `openrouter` (`https://openrouter.ai/api/v1` — `meta-llama/llama-3.3-70b-instruct`, `qwen/qwen-2.5-72b-instruct`, `x-ai/grok-3-mini`, `anthropic/claude-sonnet-4-5`)
  * 4. `xai` (`https://api.x.ai/v1` — `grok-4`, `grok-3-mini`)
  * 5. `openai` (`https://api.openai.com/v1` — `gpt-4.1-mini`, `gpt-4o`)
- * 6. `anthropic` (`https://api.anthropic.com/v1/messages` — `claude-3-7-sonnet-latest`)
+ * 6. `anthropic` (`https://api.anthropic.com/v1/messages` — `claude-sonnet-4-5`)
  * 7. `deterministic` (zero-key local TypeScript domain & cellular sheaf execution)
  *
  * Dual-Mode Tool Calling for Small / Local Models:
@@ -120,7 +120,7 @@ export const MODEL_PROVIDER_PROFILES: Readonly<
     recommendedModels: [
       'meta-llama/llama-3.3-70b-instruct',
       'qwen/qwen-2.5-72b-instruct',
-      'anthropic/claude-3.7-sonnet',
+      'anthropic/claude-sonnet-4-5',
       'x-ai/grok-3-mini',
     ],
     wireMode: 'native_tools',
@@ -158,8 +158,8 @@ export const MODEL_PROVIDER_PROFILES: Readonly<
     provider: 'anthropic',
     label: 'Anthropic Messages API',
     baseUrl: 'https://api.anthropic.com/v1/messages',
-    defaultModel: 'claude-3-7-sonnet-latest',
-    recommendedModels: ['claude-3-7-sonnet-latest', 'claude-3-5-haiku-latest'],
+    defaultModel: 'claude-sonnet-4-5',
+    recommendedModels: ['claude-sonnet-4-5', 'claude-haiku-4-5'],
     wireMode: 'anthropic_messages',
     requiresApiKey: true,
     envKeyName: 'ANTHROPIC_API_KEY',
@@ -1145,6 +1145,75 @@ function finalizeAndVerifyModelResponse(
 /**
  * Probes local and cloud endpoints to report which model providers are configured or reachable.
  */
+export async function fetchLiveModelsForProvider(
+  provider: ModelProviderId,
+  baseUrl: string,
+  apiKey?: string,
+  timeoutMs = 2000,
+): Promise<{
+  readonly reachable: boolean;
+  readonly models: readonly string[];
+  readonly statusDetail: string;
+}> {
+  if (provider === "deterministic") {
+    return {
+      reachable: true,
+      models: ["flowiq-deterministic-v2.0"],
+      statusDetail: "Ready in-process (0ms network latency, 100% deterministic)",
+    };
+  }
+
+  const cleanBase = baseUrl.replace(/\/$/, "");
+  const modelsUrl =
+    provider === "anthropic"
+      ? "https://api.anthropic.com/v1/models"
+      : cleanBase.endsWith("/v1")
+        ? `${cleanBase}/models`
+        : `${cleanBase}/v1/models`;
+
+  const headers: Record<string, string> = {};
+  if (provider === "anthropic") {
+    if (apiKey) headers["x-api-key"] = apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+  } else if (apiKey && apiKey.trim().length > 0 && apiKey !== "local-no-key-required") {
+    headers.Authorization = `Bearer ${apiKey.trim()}`;
+  }
+
+  try {
+    const res = await fetch(modelsUrl, {
+      method: "GET",
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) {
+      return {
+        reachable: false,
+        models: [],
+        statusDetail: `HTTP ${res.status} from ${modelsUrl} (check API key or endpoint)`,
+      };
+    }
+    const json = (await res.json()) as {
+      data?: Array<{ id?: string; name?: string }>;
+      models?: Array<{ id?: string; name?: string }>;
+    };
+    const rawList = json.data ?? json.models ?? [];
+    const ids = rawList
+      .map((m) => m.id ?? m.name ?? "")
+      .filter((id) => id.length > 0);
+    return {
+      reachable: true,
+      models: ids,
+      statusDetail: `Live API verified (${ids.length} models at ${modelsUrl})`,
+    };
+  } catch (err) {
+    return {
+      reachable: false,
+      models: [],
+      statusDetail: `Unreachable at ${modelsUrl} (${err instanceof Error ? err.message : "timeout"})`,
+    };
+  }
+}
+
 export async function discoverAvailableModelProfiles(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<
@@ -1152,71 +1221,82 @@ export async function discoverAvailableModelProfiles(
     readonly profile: ModelProviderProfile;
     readonly configured: boolean;
     readonly reachable: boolean;
+    readonly liveModels: readonly string[];
     readonly statusDetail: string;
   }>
 > {
-  const out: Array<{
-    readonly profile: ModelProviderProfile;
-    readonly configured: boolean;
-    readonly reachable: boolean;
-    readonly statusDetail: string;
-  }> = [];
+  const dotEnv = loadDotEnvLocal();
+  const mergedEnv: NodeJS.ProcessEnv = { ...dotEnv, ...env };
+  const profiles = Object.values(MODEL_PROVIDER_PROFILES);
 
-  for (const profile of Object.values(MODEL_PROVIDER_PROFILES)) {
-    if (profile.provider === 'deterministic') {
-      out.push({
+  return Promise.all(
+    profiles.map(async (profile) => {
+      if (profile.provider === "deterministic") {
+        return {
+          profile,
+          configured: true,
+          reachable: true,
+          liveModels: ["flowiq-deterministic-v2.0"],
+          statusDetail: "Ready in-process (0ms network latency, 100% deterministic)",
+        };
+      }
+
+      if (profile.provider === "ollama" || profile.provider === "local_openai") {
+        const url =
+          profile.provider === "ollama"
+            ? (mergedEnv.OLLAMA_HOST ?? profile.baseUrl).replace(/\/$/, "")
+            : (mergedEnv.LOCAL_LLM_BASE_URL ?? profile.baseUrl).replace(/\/$/, "");
+        const probe = await fetchLiveModelsForProvider(
+          profile.provider,
+          url,
+          mergedEnv.LOCAL_LLM_API_KEY,
+          650,
+        );
+        const configured = Boolean(
+          (profile.provider === "ollama" && (mergedEnv.OLLAMA_HOST || mergedEnv.OLLAMA_MODEL)) ||
+            (profile.provider === "local_openai" && mergedEnv.LOCAL_LLM_BASE_URL) ||
+            probe.reachable,
+        );
+        return {
+          profile,
+          configured,
+          reachable: probe.reachable,
+          liveModels: probe.models,
+          statusDetail: probe.reachable
+            ? `Local daemon online at ${url} (${probe.models.length} models: ${probe.models.slice(0, 3).join(", ") || profile.defaultModel})`
+            : `Not running at ${url} (start local server or configure in /setup)`,
+        };
+      }
+
+      const rawKey = profile.envKeyName ? (mergedEnv[profile.envKeyName] ?? "").trim() : "";
+      const hasKey = rawKey.length > 0;
+      if (!hasKey) {
+        return {
+          profile,
+          configured: false,
+          reachable: false,
+          liveModels: [],
+          statusDetail: `Not configured (set ${profile.envKeyName} in /setup or .env.local)`,
+        };
+      }
+
+      const probe = await fetchLiveModelsForProvider(
+        profile.provider,
+        profile.baseUrl,
+        rawKey,
+        2000,
+      );
+      return {
         profile,
         configured: true,
-        reachable: true,
-        statusDetail: 'Ready in-process (0ms network latency, 100% deterministic)',
-      });
-      continue;
-    }
-
-    if (profile.provider === 'ollama' || profile.provider === 'local_openai') {
-      const url =
-        profile.provider === 'ollama'
-          ? (env.OLLAMA_HOST ?? profile.baseUrl).replace(/\/$/, '')
-          : (env.LOCAL_LLM_BASE_URL ?? profile.baseUrl).replace(/\/$/, '');
-      const modelsUrl = url.endsWith('/v1') ? `${url}/models` : `${url}/v1/models`;
-      let reachable = false;
-      try {
-        const res = await fetch(modelsUrl, {
-          method: 'GET',
-          signal: AbortSignal.timeout(600),
-        });
-        reachable = res.ok;
-      } catch {
-        reachable = false;
-      }
-      const configured = Boolean(
-        (profile.provider === 'ollama' && (env.OLLAMA_HOST || env.OLLAMA_MODEL)) ||
-          (profile.provider === 'local_openai' && env.LOCAL_LLM_BASE_URL) ||
-          reachable,
-      );
-      out.push({
-        profile,
-        configured,
-        reachable,
-        statusDetail: reachable
-          ? `Local daemon online at ${url}`
-          : `Standby at ${url} (start local daemon or set ${profile.envKeyName})`,
-      });
-      continue;
-    }
-
-    const hasKey = Boolean(profile.envKeyName && env[profile.envKeyName]);
-    out.push({
-      profile,
-      configured: hasKey,
-      reachable: hasKey,
-      statusDetail: hasKey
-        ? `API key configured via ${profile.envKeyName}`
-        : `Set ${profile.envKeyName} to enable live ${profile.label}`,
-    });
-  }
-
-  return out;
+        reachable: probe.reachable,
+        liveModels: probe.models,
+        statusDetail: probe.reachable
+          ? `Live API verified via ${profile.envKeyName} (${probe.models.length} models: ${probe.models.slice(0, 3).join(", ")})`
+          : `${profile.envKeyName} set in env, but live /models check returned: ${probe.statusDetail}`,
+      };
+    }),
+  );
 }
 
 export const runModelHarnessTurn = runUniversalModelHarness;

@@ -60,6 +60,7 @@ export interface ParsedQueryIntent {
   readonly domain: IntentDomain;
   readonly measure: IntentMeasure;
   readonly aggregation: IntentAggregation;
+  readonly topK?: number;
   readonly isWholePortfolioExplicit: boolean;
   readonly isClassComparison: boolean;
   readonly buildingClass?: string;
@@ -101,6 +102,17 @@ const NUMBER_WORDS: Readonly<Record<string, number>> = {
 
 function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function parseTopKCount(question: string): number | undefined {
+  const m =
+    question.match(/\b(?:top|first|highest|lowest)\s+(\d+|two|three|four|five)\b/i) ??
+    question.match(/\b(two|three|four|five|\d+)\s+(?:highest|lowest|top|largest|biggest)\b/i);
+  if (!m) return undefined;
+  const raw = m[1].toLowerCase();
+  if (raw in NUMBER_WORDS) return NUMBER_WORDS[raw];
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 2 && n <= 10 ? n : undefined;
 }
 
 export function parseBedroomCount(question: string): number | undefined {
@@ -619,6 +631,7 @@ export function parseQueryIntent(
   question: string,
   store: PortfolioStore,
 ): ParsedQueryIntent {
+  const topK = parseTopKCount(question);
   const bedrooms = parseBedroomCount(question);
   const bathrooms = parseBathroomCount(question);
   const { sqftMin, sqftMax } = parseSqftBounds(question);
@@ -687,7 +700,7 @@ export function parseQueryIntent(
       question,
     ) ||
     (!hasExplicitPropertyCohort &&
-      /\b(which\s+(?:operating\s+)?(?:building|property)\s+(?:gave|offered|had|provided|has|carries|holds|topped|averaged)|across\s+operating\s+buildings|among\s+buildings\s+that\s+are\s+operating)\b/i.test(
+      /\b(which\s+(?:operating\s+)?(?:building|property)\s+(?:gave|offered|had|provided|has|carries|holds|topped|averaged)|what\s+(?:were|are)\s+the\s+(?:\w+\s+)?(?:highest|lowest|top)\s+(?:grossing\s+)?(?:properties|buildings)|across\s+operating\s+buildings|among\s+buildings\s+that\s+are\s+operating)\b/i.test(
         question,
       ) &&
       !/\b(with|offer|have\s+a|has\s+a|on\s+yardi|on\s+entrata|on\s+realpage|on\s+mri|on\s+appfolio|on\s+resman|running\s+on|in\s+the\s+south\s+loop|built\s+in|class\s+[a-z0-9+-]+)\b/i.test(
@@ -779,6 +792,7 @@ export function parseQueryIntent(
       domain: 'decisions',
       measure,
       aggregation,
+      topK,
       isWholePortfolioExplicit,
       isClassComparison,
       buildingClass,
@@ -900,6 +914,7 @@ export function parseQueryIntent(
       domain: 'marketing',
       measure,
       aggregation,
+      topK,
       isWholePortfolioExplicit:
         isWholePortfolioExplicit ||
         measure === 'reallocation_leases' ||
@@ -918,10 +933,13 @@ export function parseQueryIntent(
 
   // 4. Leases, Renewals, Concessions, and Rent at Risk
   const isRentAtRiskOrLeaseRent =
-    /\b(monthly\s+rent|rent\s+per\s+month|at[-\s]risk\s+monthly\s+rent|monthly\s+rent\s+exposure)\b/i.test(
+    (/\b(monthly\s+rent|rent\s+per\s+month|at[-\s]risk\s+monthly\s+rent|monthly\s+rent\s+exposure)\b/i.test(
       question,
     ) &&
-    /\b(at\s+risk|exposure|lose|leases?|notice|end|ending|ends|expir\w*|matur\w*|q1\s*2027|2027)\b/i.test(
+      /\b(at\s+risk|exposure|lose|leases?|notice|end|ending|ends|expir\w*|matur\w*|q1\s*2027|2027)\b/i.test(
+        question,
+      )) ||
+    /\b(highest[-\s]grossing|grossing\s+(?:properties|buildings)|rent\s+roll|(?:lease|rental)\s+revenue|total\s+monthly\s+(?:lease\s+)?rent)\b/i.test(
       question,
     );
 
@@ -1000,6 +1018,7 @@ export function parseQueryIntent(
       domain: 'leases',
       measure,
       aggregation,
+      topK,
       isWholePortfolioExplicit,
       isClassComparison,
       buildingClass,

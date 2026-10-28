@@ -195,3 +195,36 @@ To bring `P09` live alongside `P01`–`P08`, we request four standard exports fr
    - Keep the exact 5 tool contracts (`find_properties`, `query_units_and_occupancy`, `query_leases_and_renewals`, `query_marketing_spend_and_funnel`, `evaluate_budget_decisions`) as C# / TypeScript OpenAPI endpoints consumed by both the Next.js FlowIQ Copilot UI and the `FLOW-104` MCP server.
 4. **CI/CD Eval Gate on Every Pull Request:**
    - Run `npm run eval` (10 dev questions across 3 ablation stages + 6 safety probes + 25 unseen multi-hop red-team queries) in GitHub Actions / Azure DevOps as a required merge check.
+
+---
+
+## 60-Second MCP Server Quickstart (`FLOW-104` · Claude Code, Cursor, Claude Desktop, Grok CLI)
+
+The MCP server (`src/mcp/server.ts`) runs over JSON-RPC 2.0 stdio with **zero external `npm` dependencies** and resolves `data/` relative to `src/data/loader.ts`, so any external agent host can spawn it from **any working directory (`cwd`)** with zero environment variables required.
+
+### 1. One-Liner Setup for Claude Code, Cursor & Grok CLI
+```bash
+# Option A: Generate .mcp.json & .cursor/mcp.json automatically via the CLI Setup Wizard
+npm run setup -- --provider deterministic --write-mcp --non-interactive
+
+# Option B: Register directly in Claude Code (from any directory)
+claude mcp add flowiq-portfolio-copilot -- node --no-warnings "$(pwd)/src/mcp/server.ts"
+
+# Option C: Verify external MCP stdio handshake & all 7 tools from cwd="/tmp" in < 0.5s
+npm run mcp:smoke
+```
+
+### 2. Exposed MCP Tools (`tools/list` — 7 Tools) & Resources (`resources/list` — 3 Resources)
+- **Tools**:
+  1. `ask_flowiq`: End-to-end natural-language portfolio copilot with `FLOW-101` ambiguity clarification, `FLOW-102` dead-spend & reallocation math, `FLOW-103` Fair Housing refusal / unknown schema guard / citation verification, and `FLOW-105` Bayesian outcome learning.
+  2. `find_properties`: Dynamic column-set property resolver across `property_id`, `name`, `aka`, stem, `neighborhood`, `pms`, `buildingClass`, `yearBuilt`, and `amenities`.
+  3. `query_units_and_occupancy`: Unit counts, occupied share, vacancy rate, average market rent, and sqft.
+  4. `query_leases_and_renewals`: Renewals, concessions, rent at risk, and active monthly contract rent roll.
+  5. `query_marketing_spend_and_funnel`: Cross-system CPSL, CPL, CPT, tour-to-lease conversion, dead-spend pairs, and reallocation math.
+  6. `evaluate_budget_decisions`: Conjugate Gamma-Poisson Empirical-Bayes decision audit over `decisions.csv` (`X001..X010`).
+  7. `audit_sheaf_consistency`: 6-edge cross-table integrity & quarantine audit (`E1..E6`).
+- **Resources**: `flowiq://portfolio/summary`, `flowiq://reports/dead-spend`, `flowiq://docs/notes`.
+
+### 3. Independent Dummy-Folder Clone Verification (`/tmp/dummy-clone-claude` & `/tmp/dummy-clone-grok`)
+- **Claude CLI (`claude -p --mcp-config /tmp/dummy-clone-claude/.mcp.json` run from `cwd="/tmp"`)**: Connected to `flow-intelligence-mcp` over stdio from outside the repo and answered `T04` (`$46,599.90` across 9 dead-spend pairs), `T13` (`Google Ads` at `$2,005.00`, defeating `leads:D01011`), `B03` (`Apartments.com`, `15` whole leases), and `FLOW-101` (`ambiguous_match` between `P07` and `P08`).
+- **Grok CLI (`grok -p` in `/tmp/dummy-clone-grok`)**: Verified `npm run mcp:smoke` (`7/7` JSON-RPC checks in `0.401s` from `cwd="/tmp"`) and out-of-the-box CLI execution (`0.840s`).

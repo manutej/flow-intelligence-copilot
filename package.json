@@ -48,7 +48,8 @@
     "generate": "node --no-warnings scripts/generate-answers.ts",
     "generate:reports": "node --no-warnings scripts/generate-reports.ts",
     "build:ui": "node --no-warnings scripts/build-dashboard.ts && node --no-warnings scripts/build-field-notebook.ts",
-    "eval:600": "node --no-warnings scripts/generate-600-bank.ts"
+    "eval:600": "node --no-warnings scripts/generate-600-bank.ts",
+    "mcp:smoke": "node --no-warnings scripts/test-mcp-external.ts"
   },
   "engines": {
     "node": ">=22.6.0"
