@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "flowiq": {
+      "command": "node",
+      "args": ["--no-warnings", "src/mcp/server.ts"]
+    }
+  }
+}

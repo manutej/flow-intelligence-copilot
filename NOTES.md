@@ -178,9 +178,9 @@ To bring `P09` live alongside `P01`–`P08`, we request four standard exports fr
 
 ---
 
-## 5. Productionizing on the Real Stack (Next.js + .NET on Azure) & Week-1 Plan
+## 5. Moving from This Pilot to the Real Stack (Next.js + .NET on Azure)
 
-### What We Would Change for Production (`Next.js` + `.NET` on `Azure`)
+### What Changes Beyond This Local CSV Pilot (`Next.js` + `.NET` on `Azure`)
 1. **Replace CSV Snapshots with an Azure SQL / PostgreSQL Gold Semantic Layer (.NET EF Core / Dapper):**
    - Move `src/data/loader.ts` rules (`1 CAD = 0.73 USD` / live FX table, `status != 'void'`, earliest-lead window function `ROW_NUMBER() OVER (PARTITION BY lease_id ORDER BY created_date ASC)`, `is_operating` gate) into versioned SQL views (`vw_operating_properties`, `vw_sanitized_leads`, `vw_attributed_signed_leases`) managed by the `.NET` backend.
 2. **Structural Untrusted-Data Isolation in the Database:**

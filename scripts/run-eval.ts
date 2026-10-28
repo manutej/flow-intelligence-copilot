@@ -416,7 +416,7 @@ export async function runEvalHarness(): Promise<{
   );
 
   console.log(
-    '--- 2. Detailed Verification on questions/dev.jsonl (v2_guarded Production Build) ---',
+    '--- 2. Detailed Verification on questions/dev.jsonl (v2_guarded Default Build) ---',
   );
   let passed = 0;
   let totalCitationsVerified = 0;

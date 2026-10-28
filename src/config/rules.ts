@@ -120,7 +120,7 @@ export function policyFingerprint(policy: PortfolioPolicyConfig): string {
  * Canonical 3-Stage Eval Ablation Policy Presets (FLOW-101..103):
  * - `POLICY_V0_NAIVE`: Naive table lookup (scores 3/10 on dev.jsonl: D01, D05, D10 pass; 7 fail)
  * - `POLICY_V1_JOINED`: Rule-aligned cross-system joins (scores 8/10 on dev.jsonl; D08, D09 fail)
- * - `POLICY_V2_GUARDED`: Full v2 production rules + safety/schema/note guards (scores 10/10)
+ * - `POLICY_V2_GUARDED`: Full v2 kit rules + safety/schema/note guards (scores 10/10)
  */
 export const POLICY_V0_NAIVE: PortfolioPolicyConfig = resolvePolicyConfig({
   profileName: 'v0_naive',
