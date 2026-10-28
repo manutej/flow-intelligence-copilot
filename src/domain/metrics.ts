@@ -948,8 +948,9 @@ export function queryMarketingSpendAndFunnel(
       const pairCitations: CitationId[] = [
         prop.citationId,
         ...postedRows.slice(0, 3).map((s) => s.citationId),
-        ...signedLeases.slice(0, 3).map((sl) => sl.leaseCitationId),
-        ...signedLeases.slice(0, 2).map((sl) => sl.leadCitationId),
+        ...signedLeases.slice(0, 4).map((sl) => sl.leaseCitationId),
+        ...signedLeases.slice(0, 3).map((sl) => sl.leadCitationId),
+        ...touredLeads.slice(0, 3).map((l) => l.citationId),
         ...(signedLeases.length === 0
           ? createdLeads.slice(0, 3).map((l) => l.citationId)
           : []),
@@ -1027,17 +1028,33 @@ export function queryMarketingSpendAndFunnel(
         ? roundTo(spendUsd / touredCount, 2)
         : null;
 
-    // Gather citations including actual signed leases and spend rows across buildings
+    // Gather citations including actual signed leases, leads, properties, and spend rows across buildings
     const citations = new Set<CitationId>();
     for (const r of rows) {
-      for (const c of r.citations) {
-        if (c.startsWith('leases:')) {
-          citations.add(c);
+      if (r.signedLeasesInPeriod > 0) {
+        for (const c of r.citations) {
+          if (c.startsWith('leases:')) {
+            citations.add(c);
+          }
+        }
+        const firstLead = r.citations.find((c) => c.startsWith('leads:'));
+        if (firstLead) {
+          citations.add(firstLead);
+        }
+        citations.add(`properties:${r.propertyId}` as CitationId);
+        const firstSpend = r.citations.find((c) => c.startsWith('spend:'));
+        if (firstSpend) {
+          citations.add(firstSpend);
         }
       }
     }
     for (const r of rows) {
-      for (const c of r.citations.slice(0, 3)) {
+      citations.add(`properties:${r.propertyId}` as CitationId);
+      const firstSpend = r.citations.find((c) => c.startsWith('spend:'));
+      if (firstSpend) {
+        citations.add(firstSpend);
+      }
+      for (const c of r.citations.slice(0, 2)) {
         citations.add(c);
       }
     }
@@ -1097,6 +1114,29 @@ export function queryMarketingSpendAndFunnel(
     );
 
     const citations = new Set<CitationId>([prop.citationId]);
+    const propLeaseCites: CitationId[] = [];
+    const propLeadCites: CitationId[] = [];
+    for (const r of rows) {
+      if (r.signedLeasesInPeriod > 0) {
+        for (const c of r.citations) {
+          if (c.startsWith('leases:') && !propLeaseCites.includes(c)) {
+            propLeaseCites.push(c);
+          }
+        }
+        const firstSignedLead = r.citations.find((c) => c.startsWith('leads:'));
+        if (firstSignedLead && !propLeadCites.includes(firstSignedLead)) {
+          propLeadCites.push(firstSignedLead);
+        }
+      }
+    }
+    propLeaseCites.sort();
+    propLeadCites.sort();
+    for (const c of propLeaseCites.slice(0, 2)) {
+      citations.add(c);
+    }
+    for (const c of propLeadCites.slice(0, 1)) {
+      citations.add(c);
+    }
     for (const r of rows) {
       for (const c of r.citations.slice(0, 3)) {
         citations.add(c);
@@ -1196,6 +1236,12 @@ export function queryMarketingSpendAndFunnel(
     }
   }
   if (bestPaid) {
+    const firstSpend = bestPaid.citations.find((c) => c.startsWith('spend:'));
+    const firstLease = bestPaid.citations.find((c) => c.startsWith('leases:'));
+    const firstLead = bestPaid.citations.find((c) => c.startsWith('leads:'));
+    if (firstSpend) reallocCitations.add(firstSpend);
+    if (firstLease) reallocCitations.add(firstLease);
+    if (firstLead) reallocCitations.add(firstLead);
     for (const c of bestPaid.citations.slice(0, 3)) {
       reallocCitations.add(c);
     }

@@ -37,7 +37,18 @@
     "build:notebook": "node --no-warnings scripts/build-field-notebook.ts",
     "build-dashboard": "node --no-warnings scripts/build-dashboard.ts",
     "build:dashboard": "node --no-warnings scripts/build-dashboard.ts",
-    "swarm": "node --no-warnings src/cli.ts swarm"
+    "swarm": "node --no-warnings src/cli.ts swarm",
+    "eval:paraphrase": "node --no-warnings scripts/test-paraphrase-and-ambiguity-invariance.ts",
+    "eval:10x": "node --no-warnings scripts/test-paraphrase-and-ambiguity-invariance.ts",
+    "eval:cleanroom": "python3 scripts/blind-cleanroom-verify.py",
+    "ui": "node --no-warnings src/cli.ts ui",
+    "validate": "node --no-warnings src/cli.ts validate",
+    "stress": "node --no-warnings src/cli.ts stress",
+    "generate:answers": "node --no-warnings scripts/generate-answers.ts",
+    "generate": "node --no-warnings scripts/generate-answers.ts",
+    "generate:reports": "node --no-warnings scripts/generate-reports.ts",
+    "build:ui": "node --no-warnings scripts/build-dashboard.ts && node --no-warnings scripts/build-field-notebook.ts",
+    "eval:600": "node --no-warnings scripts/generate-600-bank.ts"
   },
   "engines": {
     "node": ">=22.6.0"

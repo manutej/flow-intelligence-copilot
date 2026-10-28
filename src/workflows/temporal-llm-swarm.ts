@@ -1303,3 +1303,5 @@ export function writeTemporalLlmSwarmArtifacts(
   fs.writeFileSync(reportPath, md, "utf8");
   return { tracePath, reportPath };
 }
+
+export const loadQuestion600Bank = loadOperadic600Bank;

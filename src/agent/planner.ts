@@ -373,7 +373,7 @@ export function executeCompositionalPlan(
           source: realloc.bestPortfolioPaidSource,
           leases: realloc.projectedAdditionalWholeLeases,
         },
-        realloc.citations.slice(0, 12),
+        realloc.citations.slice(0, 18),
       );
     }
 
@@ -428,7 +428,7 @@ export function executeCompositionalPlan(
         {
           percent: row.tourToLeaseConversionPercent,
         },
-        row.citations.slice(0, 8),
+        row.citations.slice(0, 12),
       );
     }
 
@@ -544,11 +544,18 @@ export function executeCompositionalPlan(
       const citations = [
         ...new Set([
           ...winner.citations.slice(0, 4),
-          ...(runnerUp ? runnerUp.citations.slice(0, 3) : []),
+          ...(runnerUp ? runnerUp.citations.slice(0, 4) : []),
         ]),
       ];
+      const allZero = sortedProps.every((p) => p.signedLeasesInPeriod === 0);
+      const isTie = runnerUp && winner.signedLeasesInPeriod === runnerUp.signedLeasesInPeriod;
+      const prose = allZero
+        ? `Among the operating buildings matching the criteria (${sortedProps.map((p) => `${p.propertyName} [${p.propertyId}]: 0 signed leases`).join(' vs. ')}), 0 leases from leads were signed in ${mkt.windowLabel} (a 0-0 tie across the candidate buildings; note that the CRM/PMS lead-to-lease export covers through ${store.policy.asOfDate})${buildExcludedOnboardingSuffix(store)}.`
+        : isTie
+          ? `Among the operating buildings matching the criteria (${sortedProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.signedLeasesInPeriod} signed leases`).join(' vs. ')}), ${winner.propertyName} (${winner.propertyId}) and ${runnerUp.propertyName} (${runnerUp.propertyId}) tied with ${winner.signedLeasesInPeriod} signed leases in ${mkt.windowLabel}${buildExcludedOnboardingSuffix(store)}.`
+          : `Among the operating buildings matching the criteria (${sortedProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.signedLeasesInPeriod} signed leases`).join(' vs. ')}), ${winner.propertyName} (${winner.propertyId}) signed the most leases in ${mkt.windowLabel} with ${winner.signedLeasesInPeriod} signed leases${buildExcludedOnboardingSuffix(store)}.`;
       return finalize(
-        `Among the operating buildings matching the criteria (${sortedProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.signedLeasesInPeriod} signed leases`).join(' vs. ')}), ${winner.propertyName} (${winner.propertyId}) signed the most leases in ${mkt.windowLabel} with ${winner.signedLeasesInPeriod} signed leases${buildExcludedOnboardingSuffix(store)}.`,
+        prose,
         {
           property_id: winner.propertyId,
         },
@@ -610,7 +617,7 @@ export function executeCompositionalPlan(
           : '';
 
       return finalize(
-        `At ${best.propertyName} (${best.propertyId}) in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${(best?.costPerSignedLeaseUsd ?? 0).toFixed(2)} (${(best?.spendUsd ?? 0).toFixed(2)} spend across ${best?.signedLeasesInPeriod ?? 0} signed leases).${zeroNote}`,
+        `At ${best.propertyName} (${best.propertyId}) in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at $${(best?.costPerSignedLeaseUsd ?? 0).toFixed(2)} ($${(best?.spendUsd ?? 0).toFixed(2)} spend across ${best?.signedLeasesInPeriod ?? 0} signed leases).${zeroNote}`,
         {
           source: best?.source ?? "Apartments.com",
           usd: best?.costPerSignedLeaseUsd ?? 0,
@@ -995,10 +1002,61 @@ export function executeCompositionalPlan(
     );
   }
 
+  const asksHowManyBuildings =
+    /\b(how\s+many|which)\s+(?:operating\s+)?(?:buildings|properties)\b/i.test(
+      question,
+    ) && !/\b(units?|apartments?|studios?|bedrooms?|1br|2br|3br|4br)\b/i.test(question);
+
   // Default Unit Count / Cohort Property Discovery
   const nonZeroProps = unitSummary.byProperty.filter(
     (p) => p.filteredUnitCount > 0,
   );
+  if ('property_ids' in schema && !('count' in schema)) {
+    const ids = nonZeroProps.map((p) => p.propertyId);
+    return finalize(
+      `The matching operating buildings are ${nonZeroProps.map((p) => `${p.propertyName} (${p.propertyId})`).join(', ')}${buildExcludedOnboardingSuffix(store)}.`,
+      {
+        property_ids: ids,
+      },
+      unitSummary.citations.slice(0, 8),
+    );
+  }
+  if (asksHowManyBuildings) {
+    const ids = nonZeroProps.map((p) => p.propertyId);
+    return finalize(
+      `The ${ids.length} matching operating buildings are ${nonZeroProps.map((p) => `${p.propertyName} (${p.propertyId})`).join(', ')}${buildExcludedOnboardingSuffix(store)}.`,
+      {
+        count: ids.length,
+        property_ids: ids,
+      },
+      unitSummary.citations.slice(0, 8),
+    );
+  }
+  if (
+    /\bhow\s+many\s+total\s+units\b.*\bhow\s+many\s+are\s+occupied\b/i.test(
+      question,
+    )
+  ) {
+    const ids = nonZeroProps.map((p) => p.propertyId);
+    const totalUnits = nonZeroProps.reduce((acc, p) => acc + p.totalUnits, 0);
+    const occupiedUnits = nonZeroProps.reduce(
+      (acc, p) =>
+        acc +
+        (store.policy.occupiedIncludesNotice
+          ? p.occupiedUnits + p.noticeUnits
+          : p.occupiedUnits),
+      0,
+    );
+    return finalize(
+      `Across the ${ids.length} matching operating buildings (${ids.join(', ')}), there are ${totalUnits} total units and ${occupiedUnits} occupied units.`,
+      {
+        property_ids: ids,
+        total_units: totalUnits,
+        occupied_units: occupiedUnits,
+      },
+      unitSummary.citations.slice(0, 8),
+    );
+  }
   if ('property_ids' in schema && !('count' in schema)) {
     const ids = nonZeroProps.map((p) => p.propertyId);
     return finalize(

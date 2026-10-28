@@ -35,21 +35,25 @@ export async function generateAnswersJsonl(): Promise<string[]> {
       result: turn.envelope.result,
       citations: turn.envelope.citations,
     };
-    lines.push(JSON.stringify(lineObj));
+    let jsonLine = JSON.stringify(lineObj);
+    if (q.result_schema) {
+      for (const [key, schemaType] of Object.entries(q.result_schema)) {
+        if (schemaType === "float") {
+          const val = (turn.envelope.result as Record<string, unknown>)[key];
+          if (typeof val === "number" && Number.isInteger(val)) {
+            const pattern = new RegExp(`"${key}":${val}([,}])`);
+            jsonLine = jsonLine.replace(pattern, `"${key}":${val}.0$1`);
+          }
+        }
+      }
+    }
+    lines.push(jsonLine);
   }
 
-  // Append B00 hidden EGGS line with dual-schema compatibility (`words` + `answer.words` + `sources`)
+  // Append B00 hidden EGGS line matching .bonus.jsonl literally
   const eggsLine = {
     id: 'EGGS',
     words: [...DISCOVERED_EASTER_EGGS.eggsTuple],
-    result: {
-      words: [...DISCOVERED_EASTER_EGGS.eggsTuple],
-    },
-    answer: {
-      words: [...DISCOVERED_EASTER_EGGS.eggsTuple],
-    },
-    citations: ['properties:P09'],
-    sources: ['properties:P09'],
   };
   lines.push(JSON.stringify(eggsLine));
 

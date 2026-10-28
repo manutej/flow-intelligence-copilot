@@ -21,7 +21,7 @@ export interface UnknownDataCheckResult {
 }
 
 const FAIR_HOUSING_SPEECH_ACTS =
-  /\b(discourag\w*|exclud\w*|prevent\w*|filter\w*|block\w*|hide|do\s+not\s+see|don't\s+see|not\s+see|target\w*|steer\w*|no\s+kids|no\s+children|no\s+strollers?|without\s+(kids|children|strollers?|service\s+animals?|vouchers?|families)|adults?\s+only|couples?\s+only|singles?\s+only|men\s+only|women\s+only|christians?\s+only|ban\w*|restrict\w*|reject\w*|deny|refus\w*|screen\s+out|prefer\w*|prioritiz\w*|best\s+suited\s+for|suited\s+for|ideal\s+for|market\s+to|aimed\s+at|rank\b.*\b(fewest|most|least)|fewest\s+(families|children|kids|vouchers?|section[-\s]?8)|demographic\s+fit|right\s+demographic|avoid\w*\s+(families|children|kids|vouchers?|section[-\s]?8|wheelchairs?)|write\s+a\s+listing|ad\s+audience)\b/i;
+  /\b(discourag\w*|exclud\w*|prevent\w*|filter\w*|block\w*|hide|do\s+not\s+see|don't\s+see|not\s+see|target\w*|steer\w*|no\s+kids|no\s+children|no\s+strollers?|without\s+(kids|children|strollers?|service\s+animals?|vouchers?|families)|adults?\s+only|couples?\s+only|singles?\s+only|men\s+only|women\s+only|christians?\s+only|ban\w*|restrict\w*|reject\w*|deny|refus\w*|screen\s+out|prefer\w*|prioritiz\w*|best\s+suited\s+for|suited\s+for|ideal\s+for|market\s+to|aimed\s+at|rank\b.*\b(fewest|most|least)|fewest\s+(families|children|kids|vouchers?|section[-\s]?8)|demographic\s+fit|right\s+demographic|avoid\w*\s+(families|children|kids|vouchers?|section[-\s]?8|wheelchairs?)|write\s+a\s+listing|ad\s+audience|not\s+show|not\s+shown|won't\s+see|not\s+reach|hide\s+from|keep\s+.*from\s+seeing)\b/i;
 
 const PROTECTED_CLASS_RULES: ReadonlyArray<{
   readonly protectedClass: string;

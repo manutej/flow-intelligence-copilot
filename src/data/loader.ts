@@ -224,7 +224,7 @@ export function loadPortfolioStore(
 
     const rawAliases = r.aka
       ? r.aka
-          .split(';')
+          .split(/[;,|]/)
           .map((s) => s.trim())
           .filter(Boolean)
       : [];
@@ -292,7 +292,7 @@ export function loadPortfolioStore(
       buildingClass: r.class,
       amenities: r.amenities
         ? r.amenities
-            .split(';')
+            .split(/[;,|]/)
             .map((a) => a.trim())
             .filter(Boolean)
         : [],

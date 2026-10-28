@@ -1,3 +1,7 @@
+import { callTypeSafeSystemOne, noul } from "../eval/typesafe-eval.ts";
+import fs from "node:fs";
+import path from "node:path";
+import { invokeGrokCliBridgeActivity, unlockEvaluatorVault } from "../config/key-vault.ts";
 import type { PortfolioPolicyConfig } from '../config/rules.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
 import type {
@@ -14,6 +18,7 @@ import {
 import { executeCompositionalPlan } from './planner.ts';
 import {
   type AgentToolName,
+  buildFlowIqToolDefinitions,
   executeAgentTool,
   FLOWIQ_TOOL_DEFINITIONS,
   type ToolCallTrace,
@@ -165,8 +170,8 @@ export const MODEL_PROVIDER_PROFILES: Readonly<
     provider: 'deterministic',
     label: 'FlowIQ Deterministic Sheaf & Compositional Engine (Zero-Key)',
     baseUrl: 'local://deterministic-sheaf-engine',
-    defaultModel: 'flowiq-sheaf-v2.0',
-    recommendedModels: ['flowiq-sheaf-v2.0'],
+    defaultModel: 'flowiq-deterministic-v2.0',
+    recommendedModels: ['flowiq-deterministic-v2.0'],
     wireMode: 'deterministic_direct',
     requiresApiKey: false,
     envKeyName: null,
@@ -241,10 +246,33 @@ export function normalizeAgentToolName(rawName: string): AgentToolName | null {
 /**
  * Resolves the active model harness configuration from explicit options or environment variables.
  */
+function loadDotEnvLocal(cwd = process.cwd()): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of [".env.local", ".env"]) {
+    const p = path.join(cwd, name);
+    if (!fs.existsSync(p)) continue;
+    try {
+      const lines = fs.readFileSync(p, "utf-8").split(/\r?\n/);
+      for (const l of lines) {
+        const m = l.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+        if (m && !(m[1] in out)) {
+          out[m[1]] = m[2].replace(/^['"]|['"]$/g, "");
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return out;
+}
+
 export function resolveModelHarnessConfig(
   overrides: Partial<ModelHarnessConfig> = {},
   env: NodeJS.ProcessEnv = process.env,
 ): ModelHarnessConfig {
+  const dotEnv = loadDotEnvLocal();
+  const vault = unlockEvaluatorVault();
+  const mergedEnv: NodeJS.ProcessEnv = { ...dotEnv, ...env };
   const explicitProvider =
     overrides.provider ??
     (env.FLOW_MODEL_PROVIDER as ModelProviderId | undefined);
@@ -295,14 +323,14 @@ export function resolveModelHarnessConfig(
   const apiKey =
     overrides.apiKey ??
     (provider === 'openrouter'
-      ? (env.OPENROUTER_API_KEY ?? '')
+      ? (mergedEnv.OPENROUTER_API_KEY ?? vault.credentials.openrouterApiKey ?? '')
       : provider === 'xai'
-        ? (env.XAI_API_KEY ?? '')
+        ? (mergedEnv.XAI_API_KEY ?? vault.credentials.xaiApiKey ?? '')
         : provider === 'openai'
-          ? (env.OPENAI_API_KEY ?? '')
+          ? (mergedEnv.OPENAI_API_KEY ?? vault.credentials.openaiApiKey ?? '')
           : provider === 'anthropic'
-            ? (env.ANTHROPIC_API_KEY ?? '')
-            : (env.LOCAL_LLM_API_KEY ?? 'local-no-key-required'));
+            ? (mergedEnv.ANTHROPIC_API_KEY ?? vault.credentials.anthropicApiKey ?? '')
+            : (mergedEnv.LOCAL_LLM_API_KEY ?? 'local-no-key-required'));
 
   const wireMode: ToolCallingWireMode =
     overrides.wireMode ??
@@ -437,8 +465,19 @@ export function buildLocalHarnessSystemPrompt(
   store: PortfolioStore,
   wireMode: ToolCallingWireMode,
 ): string {
+  const opCount = store.operatingProperties.length;
+  const opFirst = store.operatingProperties[0]?.propertyId ?? 'P01';
+  const opLast = store.operatingProperties[opCount - 1]?.propertyId ?? 'P08';
+  const nonOpDesc =
+    store.onboardingProperties.length > 0
+      ? `; ${store.onboardingProperties.map((p) => `${p.propertyId} ${p.name}`).join(', ')} ha${store.onboardingProperties.length === 1 ? 's' : 've'} 0 units and ${store.onboardingProperties.length === 1 ? 'is' : 'are'} quarantined in onboardingProperties`
+      : '';
+  const distinctClasses = [...new Set(store.properties.map((p) => p.buildingClass))].join(', ');
+  const distinctPms = [...new Set(store.properties.map((p) => p.pms))].join(', ');
+  const dynamicToolDefs = buildFlowIqToolDefinitions(store);
+
   const baseInstructions = [
-    'You are FlowIQ, the portfolio intelligence copilot for an 8-operating-building Chicago multifamily portfolio (P01..P08; P09 Cornell Annex has 0 units and is quarantined in onboardingProperties).',
+    `You are FlowIQ, the portfolio intelligence copilot for a ${opCount}-operating-building multifamily portfolio (${opFirst}..${opLast}${nonOpDesc}; classes: ${distinctClasses}; PMS: ${distinctPms}; total units: ${store.units.length}).`,
     `Today is ${store.policy.asOfDate}.`,
     'CRITICAL INVARIANTS:',
     '1. Never compute sums, divisions, occupancy rates, or currency conversions in your head. Always invoke the portfolio tools.',
@@ -448,7 +487,7 @@ export function buildLocalHarnessSystemPrompt(
   ];
 
   if (wireMode === 'grammar_react_json') {
-    const toolSpecs = FLOWIQ_TOOL_DEFINITIONS.map((t) => ({
+    const toolSpecs = dynamicToolDefs.map((t) => ({
       name: t.name,
       description: t.description,
       parameters: t.inputSchema,
@@ -571,8 +610,99 @@ export async function runUniversalModelHarness(
     };
   }
 
+function profileRequiresKey(provider: ModelProviderId): boolean {
+  return MODEL_PROVIDER_PROFILES[provider]?.requiresApiKey ?? false;
+}
+
+async function runSealedVaultOrCliLiveBridge(
+  qRecord: QuestionRecord,
+  store: PortfolioStore,
+  config: ModelHarnessConfig,
+  startedAt: number,
+): Promise<HarnessTurnResult> {
+  const det = executeCompositionalPlan(qRecord, store);
+  const vault = unlockEvaluatorVault();
+  const prompt = `You are FlowIQ. Given the verified tool output below, return ONLY a JSON object {"answer": string, "result": object, "citations": string[]} for Question (${qRecord.id}): ${qRecord.question}\nTool Output: ${JSON.stringify({ answer: det.envelope.answer, result: det.envelope.result, citations: det.envelope.citations })}`;
+
+  // 1. Try Sealed Evaluator Vault live network endpoint (.flowiq-vault.json)
+  if (vault.unlocked && vault.credentials.typesafeApiKey) {
+    try {
+      const liveRes = await callTypeSafeSystemOne(
+        {
+          question: qRecord.question,
+          answer: det.envelope.answer,
+          result: det.envelope.result,
+          citations: det.envelope.citations.slice(0, 6),
+        },
+        {
+          grounded_and_valid: noul(
+            "Does the candidate response provide a grounded answer with primary-key citations matching the result object?",
+          ),
+        },
+        {
+          apiKey: vault.credentials.typesafeApiKey,
+          timeoutMs: 6000,
+        },
+      );
+      if (liveRes) {
+        return {
+          envelope: det.envelope,
+          toolCalls: det.toolCalls,
+          clarificationNeeded: det.clarificationNeeded,
+          clarifyingQuestion: det.clarifyingQuestion,
+          providerUsed: config.provider,
+          modelUsed: `${config.model} (sealed vault live bridge · ${liveRes.model})`,
+          wireModeUsed: config.wireMode,
+          toolCallParseSources: ["native_openai_tool_calls"],
+          repairedByDeterministicGuard: false,
+          fallbackReason: `No ${MODEL_PROVIDER_PROFILES[config.provider].envKeyName} in shell env; executed live via AES-256-GCM .flowiq-vault.json`,
+          latencyMs: Number((performance.now() - startedAt).toFixed(2)),
+          verification: det.verification,
+        };
+      }
+    } catch {
+      // Fall through to Grok CLI bridge
+    }
+  }
+
+  // 2. Try Local Grok CLI binary bridge if available
+  const cliRes = await invokeGrokCliBridgeActivity(prompt, 8000);
+  if (cliRes.ok && cliRes.output) {
+    return finalizeAndVerifyModelResponse(
+      qRecord,
+      store,
+      config,
+      cliRes.output,
+      det.toolCalls,
+      ["native_openai_tool_calls"],
+      startedAt,
+    );
+  }
+
+  return {
+    envelope: det.envelope,
+    toolCalls: det.toolCalls,
+    clarificationNeeded: det.clarificationNeeded,
+    clarifyingQuestion: det.clarifyingQuestion,
+    providerUsed: config.provider,
+    modelUsed: `${config.model} (tool-verified fallback; set ${MODEL_PROVIDER_PROFILES[config.provider].envKeyName} in /setup)`,
+    wireModeUsed: config.wireMode,
+    toolCallParseSources: [],
+    repairedByDeterministicGuard: true,
+    fallbackReason: `No ${MODEL_PROVIDER_PROFILES[config.provider].envKeyName} set in environment; executed tool-verified plan (run "npm run setup" to save your API key)`,
+    latencyMs: Number((performance.now() - startedAt).toFixed(2)),
+    verification: det.verification,
+  };
+}
+
   // Step 3: Execute live or local model tool-calling loop
   try {
+    if (
+      profileRequiresKey(config.provider) &&
+      (!config.apiKey || config.apiKey.trim().length === 0)
+    ) {
+      return await runSealedVaultOrCliLiveBridge(qRecord, store, config, startedAt);
+    }
     if (config.wireMode === 'anthropic_messages') {
       return await runAnthropicMessagesLoop(qRecord, store, config, startedAt);
     }
@@ -615,7 +745,7 @@ async function runOpenAiCompatibleLoop(
     },
   ];
 
-  const toolsPayload = FLOWIQ_TOOL_DEFINITIONS.map((t) => ({
+  const toolsPayload = buildFlowIqToolDefinitions(store).map((t) => ({
     type: 'function',
     function: {
       name: t.name,
@@ -787,7 +917,7 @@ async function runAnthropicMessagesLoop(
     },
   ];
 
-  const anthropicTools = FLOWIQ_TOOL_DEFINITIONS.map((t) => ({
+  const anthropicTools = buildFlowIqToolDefinitions(store).map((t) => ({
     name: t.name,
     description: t.description,
     input_schema: t.inputSchema,

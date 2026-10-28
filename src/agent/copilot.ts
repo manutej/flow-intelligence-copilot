@@ -86,7 +86,7 @@ export async function askFlowIqCopilot(
       clarifyingQuestion: null,
       modeUsed: 'deterministic',
       providerUsed: 'deterministic',
-      modelUsed: 'flowiq-sheaf-v2.0',
+      modelUsed: 'flowiq-deterministic-v2.0',
       llmFallbackReason: null,
       verification: verifyAnswerEnvelope(
         envelope,
@@ -113,7 +113,7 @@ export async function askFlowIqCopilot(
       clarifyingQuestion: null,
       modeUsed: 'deterministic',
       providerUsed: 'deterministic',
-      modelUsed: 'flowiq-sheaf-v2.0',
+      modelUsed: 'flowiq-deterministic-v2.0',
       llmFallbackReason: null,
       verification: verifyAnswerEnvelope(
         envelope,
@@ -171,7 +171,7 @@ export function runDeterministicToolRouter(
     ...out,
     modeUsed: 'deterministic',
     providerUsed: 'deterministic',
-    modelUsed: 'flowiq-sheaf-v2.0',
+    modelUsed: 'flowiq-deterministic-v2.0',
     llmFallbackReason,
   };
 }

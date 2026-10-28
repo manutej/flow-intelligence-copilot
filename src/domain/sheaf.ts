@@ -946,3 +946,10 @@ export function evaluateGenericAllocationAndLearner(
     posteriorByEntityChannel,
   };
 }
+
+export const FLOW_PORTFOLIO_INTEGRITY_EDGES = FLOW_PORTFOLIO_SHEAF_EDGES;
+export const evaluateCrossTableIntegrity = evaluateSheafCoboundary;
+
+export function getIntegrityEdgeSummary(edge: { readonly edgeId: string; readonly leftStalk: string; readonly rightStalk: string }): { readonly displayId: string; readonly tablePair: string } {
+  return { displayId: edge.edgeId.replace("_PULLBACK", "_JOIN"), tablePair: `${edge.leftStalk} -> ${edge.rightStalk}` };
+}

@@ -628,7 +628,7 @@ export function resolveEvaluatorExecutionConfig(
   return {
     priorityTier: "4_deterministic_fallback",
     provider: "deterministic-core",
-    model: "flowiq-sheaf-v2.0",
+    model: "flowiq-deterministic-v2.0",
     baseUrl: "local://deterministic-sheaf-engine",
     apiKey: "",
     typesafeApiKey,

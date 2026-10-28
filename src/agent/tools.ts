@@ -44,319 +44,408 @@ export interface ToolCallTrace {
   readonly rawOutput: unknown;
 }
 
-export const FLOWIQ_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
-  {
-    name: 'find_properties',
-    description:
-      'FLOW-101: Resolve one or more buildings by property_id (P01..P09), name, nickname/alias (aka), neighborhood, PMS (Yardi, Entrata, RealPage, MRI, AppFolio), buildingClass (A or B), yearBuiltMin/yearBuiltMax, or amenities (lake view, rooftop pool, doorman, dog run, EV charging, coworking, courtyard, etc.). In single_building mode, returns status="ambiguous_match" with a clarifying question when multiple operating buildings match.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        propertyId: {
-          type: 'string',
-          description: 'Exact property ID (e.g. P01..P09)',
-        },
-        queryText: {
-          type: 'string',
-          description:
-            'Natural language building description or alias (e.g. "the Halsted", "South Loop building with a doorman")',
-        },
-        neighborhood: {
-          type: 'string',
-          description:
-            'Neighborhood name (e.g. South Loop, West Loop, Streeterville, Logan Square, Lincoln Park, Uptown, Lakeview, Hyde Park)',
-        },
-        pms: {
-          type: 'string',
-          description:
-            'Property management system (Yardi, Entrata, RealPage, MRI, AppFolio)',
-        },
-        buildingClass: {
-          type: 'string',
-          enum: ['A', 'B'],
-          description: 'Building class from properties.csv (A or B)',
-        },
-        yearBuiltMin: {
-          type: 'integer',
-          description: 'Inclusive lower bound on year_built',
-        },
-        yearBuiltMax: {
-          type: 'integer',
-          description: 'Inclusive upper bound on year_built',
-        },
-        amenities: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
-            'Required building amenities (e.g. ["lake view", "rooftop pool"])',
-        },
-        includeOnboarding: {
-          type: 'boolean',
-          description:
-            'Include non-operating onboarding properties with 0 units (P09 Cornell Annex)',
-        },
-        resolutionMode: {
-          type: 'string',
-          enum: ['single_building', 'portfolio_filter'],
-          description:
-            'Use single_building when the operator refers to one building ("the South Loop building") to trigger ambiguity clarification if >1 match.',
-        },
-      },
-    },
-  },
-  {
-    name: 'query_units_and_occupancy',
-    description:
-      'Query apartment units, occupied share ((occupied + notice) / total), vacancy rate (vacant / total), unit counts, average market_rent, average sqft, and rent per sqft filtered by propertyIds, buildingClass (A|B), bedrooms (0=studio, 1, 2, 3), bathrooms (1, 1.5, 2), sqftMin/sqftMax, floorMin/floorMax, view (lake, city, park, courtyard, none), and status (occupied, notice, vacant).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        propertyIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
-            'Optional list of operating property IDs (defaults to P01..P08)',
-        },
-        buildingClass: {
-          type: 'string',
-          enum: ['A', 'B'],
-          description: 'Filter buildings by class (A or B)',
-        },
-        bedrooms: {
-          type: 'integer',
-          description:
-            'Filter by bedroom count (0 = studio, 1 = 1BR, 2 = 2BR, 3 = 3BR)',
-        },
-        bathrooms: {
-          type: 'number',
-          description: 'Filter by bathroom count (e.g. 1, 1.5, 2)',
-        },
-        sqftMin: {
-          type: 'integer',
-          description: 'Minimum unit square footage (inclusive)',
-        },
-        sqftMax: {
-          type: 'integer',
-          description: 'Maximum unit square footage (inclusive)',
-        },
-        floorMin: {
-          type: 'integer',
-          description: 'Minimum floor number (inclusive)',
-        },
-        floorMax: {
-          type: 'integer',
-          description: 'Maximum floor number (inclusive)',
-        },
-        view: {
-          type: 'string',
-          enum: ['lake', 'city', 'park', 'courtyard', 'none'],
-          description:
-            'Filter by unit view (lake, city, park, courtyard, none)',
-        },
-        status: {
-          type: 'string',
-          enum: ['occupied', 'notice', 'vacant'],
-          description: 'Filter by unit status',
-        },
-      },
-    },
-  },
-  {
-    name: 'query_leases_and_renewals',
-    description:
-      'Query leases by propertyIds, PMS, buildingClass (A|B), unit attributes (bedrooms, bathrooms, view, floorMin/Max), leaseType (new or renewal), start_date range, end_date range, or renewalStatus (renewed, pending, notice_given, not_due). Returns counts, renewalRatePercent, total monthly_rent at risk, and average concession_usd (zeros included).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        propertyIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional list of operating property IDs',
-        },
-        pms: {
-          type: 'string',
-          description: 'Filter buildings by PMS (Yardi, Entrata, RealPage, MRI)',
-        },
-        buildingClass: {
-          type: 'string',
-          enum: ['A', 'B'],
-          description: 'Filter buildings by class (A or B)',
-        },
-        bedrooms: {
-          type: 'integer',
-          description: 'Filter leases by unit bedroom count (0, 1, 2, 3)',
-        },
-        bathrooms: {
-          type: 'number',
-          description: 'Filter leases by unit bathroom count',
-        },
-        view: {
-          type: 'string',
-          description:
-            'Filter leases by unit view (lake, city, park, courtyard, none)',
-        },
-        floorMin: {
-          type: 'integer',
-          description: 'Minimum unit floor number',
-        },
-        floorMax: {
-          type: 'integer',
-          description: 'Maximum unit floor number',
-        },
-        leaseType: {
-          type: 'string',
-          enum: ['new', 'renewal'],
-          description: 'Filter by lease_type',
-        },
-        startDateFrom: {
-          type: 'string',
-          description: 'YYYY-MM-DD inclusive lower bound on start_date',
-        },
-        startDateTo: {
-          type: 'string',
-          description: 'YYYY-MM-DD inclusive upper bound on start_date',
-        },
-        endDateFrom: {
-          type: 'string',
-          description: 'YYYY-MM-DD inclusive lower bound on end_date',
-        },
-        endDateTo: {
-          type: 'string',
-          description: 'YYYY-MM-DD inclusive upper bound on end_date',
-        },
-        renewalStatus: {
-          type: 'string',
-          enum: ['renewed', 'pending', 'notice_given', 'not_due'],
-          description: 'Filter by renewal_status',
-        },
-        signedFromLeadsOnly: {
-          type: 'boolean',
-          description:
-            'Restrict to leases linked from CRM leads (leads.lease_id)',
+/**
+ * Dynamically builds the 6 read-only portfolio tool schemas and descriptions directly from
+ * the distinct column values in `store` (`properties.csv`, `units.csv`, `leases.csv`, `leads.csv`,
+ * `spend.csv`, `decisions.csv`), so 10x or unseen datasets with new building classes (`C`, `A+`),
+ * new unit views (`river`, `harbor`, `skyline`), new PMS adapters (`ResMan`, `Buildium`),
+ * new amenities (`pickleball court`, `cold plunge`), or new listing sources (`StreetEasy`, `TikTok Ads`)
+ * are immediately exposed in strict LLM function-calling schemas with zero hardcoded bottlenecks.
+ */
+export function buildFlowIqToolDefinitions(
+  store?: PortfolioStore,
+): readonly ToolDefinition[] {
+  const allPropIds = store
+    ? store.properties.map((p) => p.propertyId)
+    : ['P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08', 'P09'];
+  const opPropIds = store
+    ? store.operatingProperties.map((p) => p.propertyId)
+    : ['P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08'];
+  const nonOpSummary =
+    store && store.onboardingProperties.length > 0
+      ? store.onboardingProperties
+          .map((p) => `${p.propertyId} ${p.name}`)
+          .join(', ')
+      : 'P09 Cornell Annex';
+
+  const propIdRangeLabel =
+    allPropIds.length > 0
+      ? `${allPropIds[0]}..${allPropIds[allPropIds.length - 1]}`
+      : 'P01..P09';
+  const opIdRangeLabel =
+    opPropIds.length > 0
+      ? `${opPropIds[0]}..${opPropIds[opPropIds.length - 1]}`
+      : 'P01..P08';
+
+  const distinctNeighborhoods = store
+    ? [...new Set(store.properties.map((p) => p.neighborhood))]
+    : [
+        'South Loop',
+        'West Loop',
+        'Streeterville',
+        'Fulton Market',
+        'Edgewater',
+        'Lincoln Park',
+        'Logan Square',
+        'Hyde Park',
+      ];
+  const distinctPms = store
+    ? [...new Set(store.properties.map((p) => p.pms))]
+    : ['Yardi', 'Entrata', 'RealPage', 'MRI', 'AppFolio'];
+  const distinctClasses = store
+    ? [...new Set(store.properties.map((p) => p.buildingClass))].sort()
+    : ['A', 'B'];
+  const distinctAmenities = store
+    ? [...new Set(store.properties.flatMap((p) => p.amenities))]
+    : [
+        'lake view',
+        'rooftop pool',
+        'rooftop deck',
+        'gym',
+        'doorman',
+        'parking garage',
+        'dog run',
+        'EV charging',
+        'coworking',
+        'package lockers',
+        'bike storage',
+        'courtyard',
+      ];
+  const distinctBedrooms = store
+    ? [...new Set(store.units.map((u) => u.bedrooms))].sort((a, b) => a - b)
+    : [0, 1, 2, 3];
+  const distinctBathrooms = store
+    ? [...new Set(store.units.map((u) => u.bathrooms))].sort((a, b) => a - b)
+    : [1, 1.5, 2];
+  const distinctViews = store
+    ? [...new Set(store.units.map((u) => u.view))]
+    : ['lake', 'city', 'park', 'courtyard', 'none'];
+  const distinctStatuses = store
+    ? [...new Set(store.units.map((u) => u.status))]
+    : ['occupied', 'notice', 'vacant'];
+  const distinctSources = store
+    ? [...new Set([...store.paidSources, ...store.organicSources])]
+    : [
+        'Apartments.com',
+        'Zillow',
+        'Rent.',
+        'Apartment List',
+        'Facebook Ads',
+        'Google Ads',
+        'Website',
+        'Referral',
+      ];
+  const distinctDecisionIds = store
+    ? store.decisions.map((d) => d.decisionId)
+    : ['X001', 'X002', 'X003', 'X004', 'X005', 'X006', 'X007', 'X008', 'X009', 'X010'];
+  const decisionRangeLabel =
+    distinctDecisionIds.length > 0
+      ? `${distinctDecisionIds[0]}..${distinctDecisionIds[distinctDecisionIds.length - 1]}`
+      : 'X001..X010';
+
+  return [
+    {
+      name: 'find_properties',
+      description: `FLOW-101: Resolve one or more buildings by property_id (${propIdRangeLabel}), name, nickname/alias (aka), neighborhood (${distinctNeighborhoods.slice(0, 10).join(', ')}), PMS (${distinctPms.join(', ')}), buildingClass (${distinctClasses.join(' | ')}), yearBuiltMin/yearBuiltMax, or amenities (${distinctAmenities.slice(0, 12).join(', ')}). In single_building mode, returns status="ambiguous_match" with a clarifying question when multiple operating buildings match.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          propertyId: {
+            type: 'string',
+            description: `Exact property ID (e.g. ${propIdRangeLabel})`,
+          },
+          queryText: {
+            type: 'string',
+            description:
+              'Natural language building description, stem, or alias (e.g. "the Halsted", "South Loop building with a doorman")',
+          },
+          neighborhood: {
+            type: 'string',
+            description: `Neighborhood name (${distinctNeighborhoods.slice(0, 12).join(', ')})`,
+          },
+          pms: {
+            type: 'string',
+            description: `Property management system (${distinctPms.join(', ')})`,
+          },
+          buildingClass: {
+            type: 'string',
+            enum: distinctClasses,
+            description: `Building class from properties.csv (${distinctClasses.join(', ')})`,
+          },
+          yearBuiltMin: {
+            type: 'integer',
+            description: 'Inclusive lower bound on year_built',
+          },
+          yearBuiltMax: {
+            type: 'integer',
+            description: 'Inclusive upper bound on year_built',
+          },
+          amenities: {
+            type: 'array',
+            items: { type: 'string' },
+            description: `Required building amenities (e.g. ${JSON.stringify(distinctAmenities.slice(0, 4))})`,
+          },
+          includeOnboarding: {
+            type: 'boolean',
+            description: `Include non-operating onboarding properties with 0 units (${nonOpSummary})`,
+          },
+          resolutionMode: {
+            type: 'string',
+            enum: ['single_building', 'portfolio_filter'],
+            description:
+              'Use single_building when the operator refers to one building ("the South Loop building") to trigger ambiguity clarification if >1 match.',
+          },
         },
       },
     },
-  },
-  {
-    name: 'query_marketing_spend_and_funnel',
-    description:
-      'FLOW-102/103: Join ILS/ad spend (1 CAD = 0.73 USD, void invoices = $0), deduplicated CRM leads (notes quarantined), and PMS signed leases (bucketed by lease.start_date, credited to earliest lead). Computes Cost Per Signed Lease (CPSL), Cost Per Lead (CPL), Cost Per Tour (CPT), apply rate, tour-to-lease conversion, dead-spend pairs, portfolio reallocation math, and data-quality audits.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        propertyIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional list of operating property IDs',
-        },
-        buildingClass: {
-          type: 'string',
-          enum: ['A', 'B'],
-          description: 'Filter buildings by class (A or B)',
-        },
-        sources: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
-            'Optional list of lead/spend sources (e.g. ["Zillow", "Google Ads"])',
-        },
-        period: {
-          type: 'string',
-          description:
-            'Analysis period window (e.g. "Apr-Sep 2026", "Q3 2026", "Q2 2026", "H1 2026", "2026-08", "August 2026", "September 2026")',
-        },
-        startDate: {
-          type: 'string',
-          description: 'Optional YYYY-MM-DD start date override',
-        },
-        endDate: {
-          type: 'string',
-          description: 'Optional YYYY-MM-DD end date override',
-        },
-        paidOnly: {
-          type: 'boolean',
-          description:
-            'Restrict to paid sources appearing in spend.csv (excludes Website & Referral)',
-        },
-        bedroomsWanted: {
-          type: 'integer',
-          description:
-            'Filter CRM leads by bedrooms_wanted (0 = studio, 1, 2, 3)',
-        },
-        appliedOnly: {
-          type: 'boolean',
-          description: 'Filter CRM leads to applied=true',
-        },
-        appliedWithoutTourOnly: {
-          type: 'boolean',
-          description:
-            'Filter CRM leads to applied=true AND toured=false (funnel contradiction check)',
-        },
-        includeDataQualityAudit: {
-          type: 'boolean',
-          description:
-            'Include counts of void spend rows, duplicate leads, CAD rows, and quarantined prompt injections',
+    {
+      name: 'query_units_and_occupancy',
+      description: `Query apartment units, occupied share ((occupied + notice) / total), vacancy rate (vacant / total), unit counts, average market_rent, average sqft, and rent per sqft filtered by propertyIds (${opIdRangeLabel}), buildingClass (${distinctClasses.join('|')}), bedrooms (${distinctBedrooms.join(', ')}), bathrooms (${distinctBathrooms.join(', ')}), sqftMin/sqftMax, floorMin/floorMax, view (${distinctViews.join(', ')}), and status (${distinctStatuses.join(', ')}).`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          propertyIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: `Optional list of operating property IDs (defaults to ${opIdRangeLabel})`,
+          },
+          buildingClass: {
+            type: 'string',
+            enum: distinctClasses,
+            description: `Filter buildings by class (${distinctClasses.join(', ')})`,
+          },
+          bedrooms: {
+            type: 'integer',
+            description: `Filter by bedroom count (${distinctBedrooms.map((b) => (b === 0 ? '0 = studio' : `${b} = ${b}BR`)).join(', ')})`,
+          },
+          bathrooms: {
+            type: 'number',
+            description: `Filter by bathroom count (e.g. ${distinctBathrooms.join(', ')})`,
+          },
+          sqftMin: {
+            type: 'integer',
+            description: 'Minimum unit square footage (inclusive)',
+          },
+          sqftMax: {
+            type: 'integer',
+            description: 'Maximum unit square footage (inclusive)',
+          },
+          floorMin: {
+            type: 'integer',
+            description: 'Minimum floor number (inclusive)',
+          },
+          floorMax: {
+            type: 'integer',
+            description: 'Maximum floor number (inclusive)',
+          },
+          view: {
+            type: 'string',
+            enum: distinctViews,
+            description: `Filter by unit view (${distinctViews.join(', ')})`,
+          },
+          status: {
+            type: 'string',
+            enum: distinctStatuses,
+            description: `Filter by unit status (${distinctStatuses.join(', ')})`,
+          },
         },
       },
     },
-  },
-  {
-    name: 'evaluate_budget_decisions',
-    description:
-      'FLOW-105: Run the conjugate Gamma-Poisson / Empirical-Bayes outcome learner over data/ops/decisions.csv (X001..X010). Supports filtering by propertyId, decisionIds (e.g. ["X004"]), accepted ("yes"|"no"|"all"), recommendation ("increase"|"decrease"), source, and month. Evaluates pre/post outcomes, Poisson zero-lease tail probabilities Pr(K=0), small-sample shrinkage guards, counterfactual regret, ranking changes, and generates new logged recommendations.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        propertyId: {
-          type: 'string',
-          description: 'Optional property ID filter (e.g. P01, P06)',
-        },
-        propertyIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional list of property IDs',
-        },
-        decisionIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional list of decision IDs (e.g. ["X004", "X006"])',
-        },
-        accepted: {
-          type: 'string',
-          enum: ['yes', 'no', 'all'],
-          description: 'Filter decisions by accepted status',
-        },
-        recommendation: {
-          type: 'string',
-          enum: ['increase', 'decrease'],
-          description: 'Filter decisions by recommendation direction',
-        },
-        source: {
-          type: 'string',
-          description: 'Filter decisions by marketing source',
-        },
-        month: {
-          type: 'string',
-          description: 'Filter decisions by decision month (YYYY-MM)',
+    {
+      name: 'query_leases_and_renewals',
+      description: `Query leases by propertyIds (${opIdRangeLabel}), PMS (${distinctPms.join(', ')}), buildingClass (${distinctClasses.join('|')}), unit attributes (bedrooms, bathrooms, view, floorMin/Max), leaseType (new or renewal), start_date range, end_date range, or renewalStatus (renewed, pending, notice_given, not_due). Returns counts, renewalRatePercent, total monthly_rent at risk, and average concession_usd (zeros included).`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          propertyIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional list of operating property IDs',
+          },
+          pms: {
+            type: 'string',
+            description: `Filter buildings by PMS (${distinctPms.join(', ')})`,
+          },
+          buildingClass: {
+            type: 'string',
+            enum: distinctClasses,
+            description: `Filter buildings by class (${distinctClasses.join(', ')})`,
+          },
+          bedrooms: {
+            type: 'integer',
+            description: `Filter leases by unit bedroom count (${distinctBedrooms.join(', ')})`,
+          },
+          bathrooms: {
+            type: 'number',
+            description: 'Filter leases by unit bathroom count',
+          },
+          view: {
+            type: 'string',
+            enum: distinctViews,
+            description: `Filter leases by unit view (${distinctViews.join(', ')})`,
+          },
+          floorMin: {
+            type: 'integer',
+            description: 'Minimum unit floor number',
+          },
+          floorMax: {
+            type: 'integer',
+            description: 'Maximum unit floor number',
+          },
+          leaseType: {
+            type: 'string',
+            enum: ['new', 'renewal'],
+            description: 'Filter by lease_type',
+          },
+          startDateFrom: {
+            type: 'string',
+            description: 'YYYY-MM-DD inclusive lower bound on start_date',
+          },
+          startDateTo: {
+            type: 'string',
+            description: 'YYYY-MM-DD inclusive upper bound on start_date',
+          },
+          endDateFrom: {
+            type: 'string',
+            description: 'YYYY-MM-DD inclusive lower bound on end_date',
+          },
+          endDateTo: {
+            type: 'string',
+            description: 'YYYY-MM-DD inclusive upper bound on end_date',
+          },
+          renewalStatus: {
+            type: 'string',
+            enum: ['renewed', 'pending', 'notice_given', 'not_due'],
+            description: 'Filter by renewal_status',
+          },
+          signedFromLeadsOnly: {
+            type: 'boolean',
+            description:
+              'Restrict to leases linked from CRM leads (leads.lease_id)',
+          },
         },
       },
     },
-  },
-  {
-    name: 'audit_sheaf_consistency',
-    description:
-      'Cellular Sheaf Coboundary & Quarantine Audit: Evaluates all 6 restriction edges (E1..E6) and stalk quarantine functors across properties, units, leases, leads, spend, and decisions in O(N) time, returning exact primary-key citations for every coboundary residual ||delta_s||.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        includeGenericReport: {
-          type: 'boolean',
-          description: 'Include generic schema-driven consistency report',
+    {
+      name: 'query_marketing_spend_and_funnel',
+      description: `FLOW-102/103: Join ILS/ad spend (1 CAD = ${store?.policy.cadToUsdRate ?? 0.73} USD, void invoices = $0), deduplicated CRM leads (notes quarantined), and PMS signed leases (bucketed by ${store?.policy.leaseBucketBy ?? 'lease.start_date'}, credited to earliest lead). Computes Cost Per Signed Lease (CPSL), Cost Per Lead (CPL), Cost Per Tour (CPT), apply rate, tour-to-lease conversion, dead-spend pairs, portfolio reallocation math, and data-quality audits across sources (${distinctSources.join(', ')}).`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          propertyIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional list of operating property IDs',
+          },
+          buildingClass: {
+            type: 'string',
+            enum: distinctClasses,
+            description: `Filter buildings by class (${distinctClasses.join(', ')})`,
+          },
+          sources: {
+            type: 'array',
+            items: { type: 'string' },
+            description: `Optional list of lead/spend sources (${distinctSources.join(', ')})`,
+          },
+          period: {
+            type: 'string',
+            description:
+              'Analysis period window (e.g. "Apr-Sep 2026", "Q3 2026", "Q2 2026", "H1 2026", "2026-08", "August 2026", "September 2026")',
+          },
+          startDate: {
+            type: 'string',
+            description: 'Optional YYYY-MM-DD start date override',
+          },
+          endDate: {
+            type: 'string',
+            description: 'Optional YYYY-MM-DD end date override',
+          },
+          paidOnly: {
+            type: 'boolean',
+            description:
+              'Restrict to paid sources appearing in spend.csv (excludes organic sources)',
+          },
+          bedroomsWanted: {
+            type: 'integer',
+            description: `Filter CRM leads by bedrooms_wanted (${distinctBedrooms.join(', ')})`,
+          },
+          appliedOnly: {
+            type: 'boolean',
+            description: 'Filter CRM leads to applied=true',
+          },
+          appliedWithoutTourOnly: {
+            type: 'boolean',
+            description:
+              'Filter CRM leads to applied=true AND toured=false (funnel contradiction check)',
+          },
+          includeDataQualityAudit: {
+            type: 'boolean',
+            description:
+              'Include counts of void spend rows, duplicate leads, CAD rows, and quarantined prompt injections',
+          },
         },
       },
     },
-  },
-];
+    {
+      name: 'evaluate_budget_decisions',
+      description: `FLOW-105: Run the conjugate Gamma-Poisson / Empirical-Bayes outcome learner over data/ops/decisions.csv (${decisionRangeLabel}). Supports filtering by propertyId, decisionIds, accepted ("yes"|"no"|"all"), recommendation ("increase"|"decrease"), source, and month. Evaluates pre/post outcomes, Poisson zero-lease tail probabilities Pr(K=0), small-sample shrinkage guards, counterfactual regret, ranking changes, and generates new logged recommendations.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          propertyId: {
+            type: 'string',
+            description: `Optional property ID filter (e.g. ${opPropIds.slice(0, 3).join(', ')})`,
+          },
+          propertyIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional list of property IDs',
+          },
+          decisionIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: `Optional list of decision IDs (${decisionRangeLabel})`,
+          },
+          accepted: {
+            type: 'string',
+            enum: ['yes', 'no', 'all'],
+            description: 'Filter decisions by accepted status',
+          },
+          recommendation: {
+            type: 'string',
+            enum: ['increase', 'decrease'],
+            description: 'Filter decisions by recommendation direction',
+          },
+          source: {
+            type: 'string',
+            description: 'Filter decisions by marketing source',
+          },
+          month: {
+            type: 'string',
+            description: 'Filter decisions by decision month (YYYY-MM)',
+          },
+        },
+      },
+    },
+    {
+      name: 'audit_sheaf_consistency',
+      description:
+        'Cross-Table Data Integrity & Quarantine Audit: Evaluates all 6 cross-table restriction edges (E1..E6) and quarantine rules across properties, units, leases, leads, spend, and decisions in O(N) time, returning exact primary-key citations for every residual.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          includeGenericReport: {
+            type: 'boolean',
+            description: 'Include generic schema-driven consistency report',
+          },
+        },
+      },
+    },
+  ];
+}
+
+export const FLOWIQ_TOOL_DEFINITIONS: readonly ToolDefinition[] =
+  buildFlowIqToolDefinitions();
 
 export function executeAgentTool(
   store: PortfolioStore,
@@ -507,11 +596,12 @@ export function executeAgentTool(
         sources: Array.isArray(args.sources)
           ? (args.sources as string[])
           : undefined,
-        period: typeof args.period === 'string' ? args.period : 'Apr-Sep 2026',
+        period: typeof args.period === 'string' ? args.period : undefined,
         startDate:
           typeof args.startDate === 'string' ? args.startDate : undefined,
         endDate: typeof args.endDate === 'string' ? args.endDate : undefined,
-        paidOnly: args.paidOnly !== undefined ? Boolean(args.paidOnly) : false,
+        paidOnly:
+          typeof args.paidOnly === 'boolean' ? args.paidOnly : undefined,
         bedroomsWanted:
           typeof args.bedroomsWanted === 'number'
             ? args.bedroomsWanted
@@ -523,21 +613,21 @@ export function executeAgentTool(
             ? args.appliedWithoutTourOnly
             : undefined,
       });
+
       const dq = args.includeDataQualityAudit
         ? queryDataQualityAudit(store)
         : undefined;
-      const citations = [
-        ...new Set([
-          ...mkt.citations,
-          ...(dq ? dq.citations : []),
-        ]),
-      ];
+      const combinedOutput = dq ? { ...mkt, dataQualityAudit: dq } : mkt;
+      const citations = dq
+        ? [...new Set([...mkt.citations, ...dq.citations])]
+        : mkt.citations;
+
       return {
         toolName,
         args,
-        outputSummary: `Window=${mkt.windowLabel}, spend=$${mkt.totalSpendUsd.toFixed(2)}, leads=${mkt.totalLeadsCreated}, leases=${mkt.totalSignedLeases}, deadPairs=${mkt.deadSpendReallocation.deadPairs.length} ($${mkt.deadSpendReallocation.totalDeadSpendUsd.toFixed(2)})`,
+        outputSummary: `Window=${mkt.windowLabel}, totalSpendUsd=$${mkt.totalSpendUsd.toFixed(2)}, totalSignedLeases=${mkt.totalSignedLeases}, deadPairs=${mkt.deadSpendReallocation.deadPairs.length} ($${mkt.deadSpendReallocation.totalDeadSpendUsd.toFixed(2)})`,
         citations,
-        rawOutput: dq ? { ...mkt, dataQualityAudit: dq } : mkt,
+        rawOutput: combinedOutput,
       };
     }
 
@@ -554,9 +644,8 @@ export function executeAgentTool(
         accepted:
           args.accepted === 'yes' ||
           args.accepted === 'no' ||
-          args.accepted === 'all' ||
-          typeof args.accepted === 'boolean'
-            ? (args.accepted as 'yes' | 'no' | 'all' | boolean)
+          args.accepted === 'all'
+            ? args.accepted
             : undefined,
         recommendation:
           args.recommendation === 'increase' ||

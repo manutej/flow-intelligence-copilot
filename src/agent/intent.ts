@@ -62,7 +62,7 @@ export interface ParsedQueryIntent {
   readonly aggregation: IntentAggregation;
   readonly isWholePortfolioExplicit: boolean;
   readonly isClassComparison: boolean;
-  readonly buildingClass?: 'A' | 'B';
+  readonly buildingClass?: string;
   readonly yearBuiltMin?: number;
   readonly yearBuiltMax?: number;
   readonly bedrooms?: number;
@@ -85,62 +85,85 @@ export interface ParsedQueryIntent {
   readonly decisionDirection?: DecisionDirection;
 }
 
-const MONTH_NAME_TO_KEY: ReadonlyArray<{
-  readonly pattern: RegExp;
-  readonly key: keyof typeof DATE_WINDOWS;
-}> = [
-  { pattern: /\bapril\s*2026\b/i, key: 'APR_2026' },
-  { pattern: /\bmay\s*2026\b/i, key: 'MAY_2026' },
-  { pattern: /\bjune\s*2026\b/i, key: 'JUN_2026' },
-  { pattern: /\bjuly\s*2026\b/i, key: 'JUL_2026' },
-  { pattern: /\baugust(\s*2026)?\b/i, key: 'AUG_2026' },
-  { pattern: /\bseptember(\s*2026)?\b/i, key: 'SEP_2026' },
-  { pattern: /\boctober(\s*2026)?\b/i, key: 'OCT_2026' },
-  { pattern: /\bnovember(\s*2026)?\b/i, key: 'NOV_2026' },
-  { pattern: /\bdecember(\s*2026)?\b/i, key: 'DEC_2026' },
-];
+const NUMBER_WORDS: Readonly<Record<string, number>> = {
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+};
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 export function parseBedroomCount(question: string): number | undefined {
   if (
-    /\b(studios?|studio[-\s]seekers?|0[-\s]bedroom|bedrooms_wanted\s*=\s*0)\b/i.test(
+    /\b(studios?|studio[-\s]seekers?|studio[-\s]units?|studio[-\s]apartments?|0[-\s]bed(room)?s?|0\s*br\b|bedrooms_wanted\s*=\s*0)\b/i.test(
       question,
     )
   ) {
     return 0;
   }
-  if (
-    /\b(one[-\s]bedrooms?|1[-\s]bedrooms?|1\s*br\b|1\s*bed\b|bedrooms_wanted\s*=\s*1)\b/i.test(
-      question,
-    )
-  ) {
-    return 1;
+  const explicitAssign = question.match(
+    /\bbedrooms(?:_wanted)?\s*[=:]\s*(\d+)\b/i,
+  );
+  if (explicitAssign) {
+    return Number.parseInt(explicitAssign[1], 10);
   }
-  if (
-    /\b(two[-\s]bedrooms?|2[-\s]bedrooms?|2\s*br\b|2\s*bed\b|bedrooms_wanted\s*=\s*2)\b/i.test(
-      question,
-    )
-  ) {
-    return 2;
+  const digitMatch = question.match(
+    /\b(\d+)[-\s]*(?:bedrooms?|beds?|brs?|bdrms?|bds?)\b/i,
+  );
+  if (digitMatch) {
+    return Number.parseInt(digitMatch[1], 10);
   }
-  if (
-    /\b(three[-\s]bedrooms?|3[-\s]bedrooms?|3\s*br\b|3\s*bed\b|bedrooms_wanted\s*=\s*3)\b/i.test(
-      question,
-    )
-  ) {
-    return 3;
+  const wordMatch = question.match(
+    /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)[-\s]+(?:bedrooms?|beds?|brs?)\b/i,
+  );
+  if (wordMatch) {
+    return NUMBER_WORDS[wordMatch[1].toLowerCase()];
   }
   return undefined;
 }
 
 export function parseBathroomCount(question: string): number | undefined {
-  if (/\b(1\.5[-\s]bath(room)?s?|one[-\s]and[-\s]a[-\s]half\s+bath)/i.test(question)) {
+  if (
+    /\b(1\.5[-\s]bath(room)?s?|one[-\s]and[-\s]a[-\s]half\s+bath)/i.test(
+      question,
+    )
+  ) {
     return 1.5;
   }
-  if (/\b(two[-\s]bath(room)?s?|2[-\s]bath(room)?s?|2\s*ba\b)\b/i.test(question)) {
-    return 2;
+  if (
+    /\b(2\.5[-\s]bath(room)?s?|two[-\s]and[-\s]a[-\s]half\s+bath)/i.test(
+      question,
+    )
+  ) {
+    return 2.5;
   }
-  if (/\b(one[-\s]bath(room)?s?|1[-\s]bath(room)?s?|1\s*ba\b)\b/i.test(question)) {
-    return 1;
+  const explicitAssign = question.match(
+    /\bbathrooms?\s*[=:]\s*(\d+(?:\.\d+)?)\b/i,
+  );
+  if (explicitAssign) {
+    return Number.parseFloat(explicitAssign[1]);
+  }
+  const digitMatch = question.match(
+    /\b(\d+(?:\.\d+)?)[-\s]*(?:bathrooms?|baths?|bas?)\b/i,
+  );
+  if (digitMatch) {
+    return Number.parseFloat(digitMatch[1]);
+  }
+  const wordMatch = question.match(
+    /\b(one|two|three|four|five)[-\s]+(?:bathrooms?|baths?)\b/i,
+  );
+  if (wordMatch) {
+    return NUMBER_WORDS[wordMatch[1].toLowerCase()];
   }
   return undefined;
 }
@@ -151,17 +174,17 @@ export function parseSqftBounds(question: string): {
 } {
   const minMatch =
     question.match(
-      /\bsqft\s*(?:>=|≥|at\s+least|over|above)\s*(\d{3,4})\b/i,
+      /\bsqft\s*(?:>=|≥|at\s+least|over|above)\s*(\d{3,5})\b/i,
     ) ??
     question.match(
-      /\b(?:at\s+least|over|minimum\s+of)\s*(\d{3,4})\s*(?:sq\.?\s*ft\.?|square\s+feet|sqft)\b/i,
+      /\b(?:at\s+least|over|minimum\s+of)\s*(\d{3,5})\s*(?:sq\.?\s*ft\.?|square\s+feet|sqft)\b/i,
     );
   const maxMatch =
     question.match(
-      /\bsqft\s*(?:<=|≤|at\s+most|under|below)\s*(\d{3,4})\b/i,
+      /\bsqft\s*(?:<=|≤|at\s+most|under|below)\s*(\d{3,5})\b/i,
     ) ??
     question.match(
-      /\b(?:under|below|at\s+most)\s*(\d{3,4})\s*(?:sq\.?\s*ft\.?|square\s+feet|sqft)\b/i,
+      /\b(?:under|below|at\s+most)\s*(\d{3,5})\s*(?:sq\.?\s*ft\.?|square\s+feet|sqft)\b/i,
     );
   return {
     sqftMin: minMatch ? Number.parseInt(minMatch[1], 10) : undefined,
@@ -174,14 +197,14 @@ export function parseFloorBounds(question: string): {
   floorMax?: number;
 } {
   const minMatch = question.match(
-    /\bfloors?\s+(\d{1,2})\s+(?:or\s+(?:higher|above|up)|and\s+(?:above|higher|up)|\+)/i,
+    /\bfloors?\s+(\d{1,3})\s+(?:or\s+(?:higher|above|up)|and\s+(?:above|higher|up)|\+)/i,
   );
   const maxMatch = question.match(
-    /\bfloors?\s+(\d{1,2})\s+or\s+(?:lower|below)\b/i,
+    /\bfloors?\s+(\d{1,3})\s+or\s+(?:lower|below)\b/i,
   );
   const exactMatch =
     !minMatch && !maxMatch
-      ? question.match(/\bon\s+floor\s+(\d{1,2})\b/i)
+      ? question.match(/\bon\s+floor\s+(\d{1,3})\b/i)
       : null;
   if (exactMatch) {
     const f = Number.parseInt(exactMatch[1], 10);
@@ -193,35 +216,15 @@ export function parseFloorBounds(question: string): {
   };
 }
 
-export function parseUnitViewFilter(question: string): string | undefined {
-  if (
-    /\b(units?\s+with\s+a\s+lake\s+view|lake[-\s]view\s+units?|view\s*[=:]\s*['"`]?lake['"`]?)\b/i.test(
-      question,
-    )
-  ) {
-    return 'lake';
-  }
-  if (
-    /\b(units?\s+with\s+a\s+city\s+view|city[-\s]view\s+units?|view\s*[=:]\s*['"`]?city['"`]?)\b/i.test(
-      question,
-    )
-  ) {
-    return 'city';
-  }
-  if (
-    /\b(units?\s+with\s+a\s+park\s+view|park[-\s]view\s+units?|view\s*[=:]\s*['"`]?park['"`]?)\b/i.test(
-      question,
-    )
-  ) {
-    return 'park';
-  }
-  if (
-    /\b(units?\s+with\s+a\s+courtyard\s+view|courtyard[-\s]view\s+units?|courtyard\s+units?|courtyard\s+vacancy|view\s*[=:]\s*['"`]?courtyard['"`]?)\b/i.test(
-      question,
-    )
-  ) {
-    return 'courtyard';
-  }
+/**
+ * Dynamically indexes all distinct unit `view` values from `store.units` (`units.csv` `view` column)
+ * plus common view tokens so any unseen view (`river`, `harbor`, `skyline`, `mountain`, `garden`, etc.)
+ * resolves automatically without hardcoded lists.
+ */
+export function parseUnitViewFilter(
+  question: string,
+  store?: PortfolioStore,
+): string | undefined {
   if (
     /\b(view\s*[=:]\s*['"`]?none['"`]?|with\s+view\s+['"`]?none['"`]?|no[-\s]view\s+units?|units?\s+with\s+no\s+view)\b/i.test(
       question,
@@ -229,25 +232,73 @@ export function parseUnitViewFilter(question: string): string | undefined {
   ) {
     return 'none';
   }
+
+  const dynamicViews = store
+    ? [...new Set(store.units.map((u) => u.view.trim()))].filter(Boolean)
+    : [];
+  const candidateViews = [
+    ...new Set([
+      ...dynamicViews,
+      'lake',
+      'city',
+      'park',
+      'courtyard',
+      'river',
+      'harbor',
+      'skyline',
+      'mountain',
+      'garden',
+      'ocean',
+      'bay',
+      'alley',
+    ]),
+  ].sort((a, b) => b.length - a.length);
+
+  for (const v of candidateViews) {
+    const lower = v.toLowerCase();
+    if (lower === 'none') continue;
+    const esc = escapeRegExp(lower);
+    const viewPat = new RegExp(
+      `\\b(?:(?:units?|apartments?|studios?|1br|2br|3br|4br)\\s+with\\s+(?:a\\s+)?${esc}\\s+views?|${esc}[\\s-]+view(?:\\s+units?|\\s+apartments?)?|view\\s*[=:]\\s*['"\`]?${esc}['"\`]?)\\b`,
+      'i',
+    );
+    if (viewPat.test(question)) {
+      return lower;
+    }
+    if (
+      lower === 'courtyard' &&
+      /\b(courtyard\s+units?|courtyard\s+vacancy)\b/i.test(question)
+    ) {
+      return 'courtyard';
+    }
+  }
   return undefined;
 }
 
 export function parseUnitStatusFilter(question: string): UnitStatus | undefined {
   if (
-    /\b(vacant|open\s+units?)\b/i.test(question) &&
+    /\b(vacant|unoccupied|empty|open\s+(?:units?|apartments?|studios?|1br|2br)|available\s+(?:units?|apartments?|studios?)|status\s*=\s*['"`]?vacant['"`]?)\b/i.test(
+      question,
+    ) &&
     !/\bvacancy\s+rate\b/i.test(question)
   ) {
     return 'vacant';
   }
   if (
-    /\b(on\s+notice|notice\s+units?)\b/i.test(question) &&
-    !/\b(leases?|resident\s+gave\s+notice|notice_given)\b/i.test(question)
+    /\b(on\s+notice|in\s+notice(\s+status)?|notice\s+status|notice\s+units?|units?\s+(?:that\s+)?(?:are\s+)?on\s+notice|units?\s+with\s+notice|status\s*=\s*['"`]?notice['"`]?|(?:units?|apartments?|residents?|tenants?)\b.*(?:gave|given)\s+notice(\s+to\s+vacate|\s+to\s+move\s+out)?)\b/i.test(
+      question,
+    ) &&
+    !/\b(leases?|monthly\s+rent|rent\s+.*at\s+risk|rent\s+exposure|notice_given)\b/i.test(
+      question,
+    )
   ) {
     return 'notice';
   }
   if (
-    /\boccupied\s+units?\b/i.test(question) &&
-    !/\bshare\s+of\b/i.test(question)
+    /\b(occupied\s+units?|status\s*=\s*['"`]?occupied['"`]?)\b/i.test(
+      question,
+    ) &&
+    !/\b(share\s+of|percentage\s+of|occupancy\s+rate)\b/i.test(question)
   ) {
     return 'occupied';
   }
@@ -258,12 +309,17 @@ export function parseSourceMentions(
   question: string,
   store: PortfolioStore,
 ): string[] {
-  const allSources = [...store.paidSources, ...store.organicSources].sort(
-    (a, b) => b.length - a.length,
-  );
+  const allSources = [
+    ...new Set([
+      ...store.paidSources,
+      ...store.organicSources,
+      ...store.spend.map((s) => s.source),
+      ...store.leads.map((l) => l.source),
+    ]),
+  ].sort((a, b) => b.length - a.length);
   const found: string[] = [];
   for (const src of allSources) {
-    const escaped = src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escaped = escapeRegExp(src);
     const pat = new RegExp(`(?:^|\\b)${escaped}(?:\\b|$|\\s)`, 'i');
     if (pat.test(question)) {
       found.push(src);
@@ -272,61 +328,292 @@ export function parseSourceMentions(
   return found;
 }
 
+const MONTH_NAME_TO_NUM: Readonly<Record<string, number>> = {
+  jan: 1,
+  january: 1,
+  feb: 2,
+  february: 2,
+  mar: 3,
+  march: 3,
+  apr: 4,
+  april: 4,
+  may: 5,
+  jun: 6,
+  june: 6,
+  jul: 7,
+  july: 7,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  oct: 10,
+  october: 10,
+  nov: 11,
+  november: 11,
+  dec: 12,
+  december: 12,
+};
+
+const MONTH_FULL_NAMES = [
+  '',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+function lastDayOfMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function buildDynamicDateWindow(
+  key: string,
+  label: string,
+  startYear: number,
+  startMonth: number,
+  endYear: number,
+  endMonth: number,
+): DateWindowSpec {
+  const months: string[] = [];
+  let y = startYear;
+  let m = startMonth;
+  while (y < endYear || (y === endYear && m <= endMonth)) {
+    months.push(`${y}-${String(m).padStart(2, '0')}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  const startDate = `${startYear}-${String(startMonth).padStart(2, '0')}-01`;
+  const lastDay = lastDayOfMonth(endYear, endMonth);
+  const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  return { key, label, startDate, endDate, months };
+}
+
 export function parseDateWindowFromText(
   question: string,
   asOfDate = '2026-10-01',
 ): DateWindowSpec {
+  const defaultYear = Number.parseInt(asOfDate.slice(0, 4), 10) || 2026;
+
   if (/\bthis\s+month\b/i.test(question)) {
     const ym = asOfDate.slice(0, 7);
     const match = Object.values(DATE_WINDOWS).find(
       (w) => w.months.length === 1 && w.months[0] === ym,
     );
-    if (match) {
-      return match;
-    }
+    if (match) return match;
+    const [yStr, mStr] = ym.split('-');
+    const y = Number.parseInt(yStr, 10);
+    const m = Number.parseInt(mStr, 10);
+    return buildDynamicDateWindow(
+      `${MONTH_FULL_NAMES[m].toUpperCase().slice(0, 3)}_${y}`,
+      `${MONTH_FULL_NAMES[m]} ${y}`,
+      y,
+      m,
+      y,
+      m,
+    );
   }
-  if (/\bapr(?:il)?[\s-]+(?:to[\s-]+)?sep(?:tember)?(?:\s*2026)?\b/i.test(question)) {
-    return DATE_WINDOWS.APR_SEP_2026;
-  }
-  if (/\bq1\s*2027\b/i.test(question)) {
-    return DATE_WINDOWS.Q1_2027;
-  }
-  if (/\bq2\s*2026\b/i.test(question) || /\bapril[-\s]+to[-\s]+june\b/i.test(question)) {
-    return DATE_WINDOWS.Q2_2026;
-  }
-  if (/\bq3\s*2026\b/i.test(question) || /\bjuly[-\s]+to[-\s]+september\b/i.test(question)) {
+
+  // Comma-separated 3-month quarter lists: e.g., "Jul, Aug, Sep 2026" or "Jan, Feb, Mar 2027"
+  if (
+    /\bjul(?:y)?\s*,\s*aug(?:ust)?\s*,?\s*(?:and\s+)?sep(?:t(?:ember)?)?(?:\s*(20\d{2}))?\b/i.test(
+      question,
+    )
+  ) {
     return DATE_WINDOWS.Q3_2026;
   }
-  if (/\bq4\s*2026\b/i.test(question)) {
-    return DATE_WINDOWS.Q4_2026;
+  if (
+    /\bjan(?:uary)?\s*,\s*feb(?:ruary)?\s*,?\s*(?:and\s+)?mar(?:ch)?(?:\s*(20\d{2}))?\b/i.test(
+      question,
+    )
+  ) {
+    return DATE_WINDOWS.Q1_2027;
   }
-  if (/\bh1(\s*2026)?\b/i.test(question) && !/\bvs\.?\s*q3\b/i.test(question) && !/\bversus\s+q3\b/i.test(question)) {
+
+  // Month-to-Month range: e.g., "April to September 2026", "Apr-Sep 2026", "Jan-Mar 2027", "between April and September 2026"
+  const monthRangeMatch = question.match(
+    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+(20\d{2}))?[\s-–—]*(?:(?:to|through|thru|and)[\s-–—]+|[-–—][\s-–—]*)(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s*,?\s*(20\d{2}|'\d{2}))?\b/i,
+  );
+  if (monthRangeMatch) {
+    const m1 = MONTH_NAME_TO_NUM[monthRangeMatch[1].toLowerCase()];
+    const m2 = MONTH_NAME_TO_NUM[monthRangeMatch[3].toLowerCase()];
+    const rawY2 = monthRangeMatch[4]
+      ? monthRangeMatch[4].startsWith("'")
+        ? `20${monthRangeMatch[4].slice(1)}`
+        : monthRangeMatch[4]
+      : undefined;
+    const y2 = rawY2
+      ? Number.parseInt(rawY2, 10)
+      : monthRangeMatch[2]
+        ? Number.parseInt(monthRangeMatch[2], 10)
+        : m1 === 1 && m2 === 3
+          ? defaultYear + 1
+          : defaultYear;
+    const y1 = monthRangeMatch[2] ? Number.parseInt(monthRangeMatch[2], 10) : y2;
+
+    if (y1 === 2026 && m1 === 4 && y2 === 2026 && m2 === 9) {
+      return DATE_WINDOWS.APR_SEP_2026;
+    }
+    if (y1 === 2027 && m1 === 1 && y2 === 2027 && m2 === 3) {
+      return DATE_WINDOWS.Q1_2027;
+    }
+    if (y1 === 2026 && m1 === 7 && y2 === 2026 && m2 === 9) {
+      return DATE_WINDOWS.Q3_2026;
+    }
+    if (y1 === 2026 && m1 === 4 && y2 === 2026 && m2 === 6) {
+      return DATE_WINDOWS.Q2_2026;
+    }
+    if (y1 === 2026 && m1 === 10 && y2 === 2026 && m2 === 12) {
+      return DATE_WINDOWS.Q4_2026;
+    }
+    return buildDynamicDateWindow(
+      `RANGE_${y1}_${m1}_${y2}_${m2}`,
+      `${MONTH_FULL_NAMES[m1]} to ${MONTH_FULL_NAMES[m2]} ${y2}`,
+      y1,
+      m1,
+      y2,
+      m2,
+    );
+  }
+
+  // Quarter expressions: "Q1 2027", "Q3 '26", "third quarter of 2026", "1st quarter 2027", "2026 Q3"
+  const quarterMatch =
+    question.match(/\bq([1-4])(?:\s+of)?(?:\s*,?\s*(20\d{2}|'\d{2}))?(?:\b|$)/i) ??
+    question.match(/\b(20\d{2})\s+q([1-4])\b/i) ??
+    question.match(
+      /\b(first|1st|second|2nd|third|3rd|fourth|4th)\s+quarter(?:\s+of)?(?:\s+(20\d{2}|'\d{2}))?(?:\b|$)/i,
+    );
+  if (quarterMatch) {
+    let qNum = 3;
+    let yNum = defaultYear;
+    if (/^20\d{2}$/.test(quarterMatch[1])) {
+      yNum = Number.parseInt(quarterMatch[1], 10);
+      qNum = Number.parseInt(quarterMatch[2], 10);
+    } else if (/^[1-4]$/.test(quarterMatch[1])) {
+      qNum = Number.parseInt(quarterMatch[1], 10);
+      if (quarterMatch[2]) {
+        yNum = Number.parseInt(
+          quarterMatch[2].startsWith("'")
+            ? `20${quarterMatch[2].slice(1)}`
+            : quarterMatch[2],
+          10,
+        );
+      } else if (qNum === 1) {
+        yNum = defaultYear + 1;
+      }
+    } else {
+      const ord = quarterMatch[1].toLowerCase();
+      qNum =
+        ord === 'first' || ord === '1st'
+          ? 1
+          : ord === 'second' || ord === '2nd'
+            ? 2
+            : ord === 'third' || ord === '3rd'
+              ? 3
+              : 4;
+      if (quarterMatch[2]) {
+        yNum = Number.parseInt(
+          quarterMatch[2].startsWith("'")
+            ? `20${quarterMatch[2].slice(1)}`
+            : quarterMatch[2],
+          10,
+        );
+      } else if (qNum === 1) {
+        yNum = defaultYear + 1;
+      }
+    }
+
+    const presetKey = `Q${qNum}_${yNum}`;
+    if (presetKey in DATE_WINDOWS) {
+      return DATE_WINDOWS[presetKey];
+    }
+    const startMonth = (qNum - 1) * 3 + 1;
+    const endMonth = startMonth + 2;
+    return buildDynamicDateWindow(
+      presetKey,
+      `Q${qNum} ${yNum}`,
+      yNum,
+      startMonth,
+      yNum,
+      endMonth,
+    );
+  }
+
+  if (
+    /\b(h1|first\s+half)(\s*20\d{2})?\b/i.test(question) &&
+    !/\bvs\.?\s*q3\b/i.test(question) &&
+    !/\bversus\s+q3\b/i.test(question)
+  ) {
     return DATE_WINDOWS.H1_2026;
   }
-  for (const m of MONTH_NAME_TO_KEY) {
-    if (m.pattern.test(question)) {
-      return DATE_WINDOWS[m.key];
+
+  // Single Month + optional Year: e.g., "December 2026", "Dec 2026", "August"
+  const singleMonthMatch = question.match(
+    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s*,?\s*(20\d{2}|'\d{2}))?(?:\b|$)/i,
+  );
+  if (singleMonthMatch) {
+    const mNum = MONTH_NAME_TO_NUM[singleMonthMatch[1].toLowerCase()];
+    const rawY = singleMonthMatch[2]
+      ? singleMonthMatch[2].startsWith("'")
+        ? `20${singleMonthMatch[2].slice(1)}`
+        : singleMonthMatch[2]
+      : undefined;
+    const yNum = rawY ? Number.parseInt(rawY, 10) : defaultYear;
+    const shortKey = `${MONTH_FULL_NAMES[mNum].toUpperCase().slice(0, 3)}_${yNum}`;
+    if (shortKey in DATE_WINDOWS) {
+      return DATE_WINDOWS[shortKey];
     }
+    return buildDynamicDateWindow(
+      shortKey,
+      `${MONTH_FULL_NAMES[mNum]} ${yNum}`,
+      yNum,
+      mNum,
+      yNum,
+      mNum,
+    );
   }
-  if (/\b(end(s|ing)?\s+in\s+2026)\b/i.test(question)) {
+
+  if (/\b(end(s|ing)?\s+in\s+2026|started\s+in\s+2026|created\s+in\s+2026|in\s+2026)\b/i.test(question)) {
     return DATE_WINDOWS.YEAR_2026;
   }
-  const isoSingleMonth = question.match(/\b(202[67]-\d{2})(?:-\d{2})?\b/);
+
+  const isoSingleMonth = question.match(/\b(20\d{2})-(\d{2})(?:-\d{2})?\b/);
   if (isoSingleMonth && !/\bto\b/i.test(question)) {
-    const ym = isoSingleMonth[1];
+    const yNum = Number.parseInt(isoSingleMonth[1], 10);
+    const mNum = Number.parseInt(isoSingleMonth[2], 10);
+    const ym = `${isoSingleMonth[1]}-${isoSingleMonth[2]}`;
     const match = Object.values(DATE_WINDOWS).find(
       (w) => w.months.length === 1 && w.months[0] === ym,
     );
-    if (match) {
-      return match;
-    }
+    if (match) return match;
+    return buildDynamicDateWindow(
+      `${MONTH_FULL_NAMES[mNum].toUpperCase().slice(0, 3)}_${yNum}`,
+      `${MONTH_FULL_NAMES[mNum]} ${yNum}`,
+      yNum,
+      mNum,
+      yNum,
+      mNum,
+    );
   }
+
   return DATE_WINDOWS.APR_SEP_2026;
 }
 
 /**
  * Pure semantic parser that extracts a structured `ParsedQueryIntent` AST from
- * any natural-language operator question without checking `qRecord.id` or `result_schema`.
+ * any natural-language operator question using dynamic column sets from `store`
+ * without checking `qRecord.id` or `result_schema`.
  */
 export function parseQueryIntent(
   question: string,
@@ -336,21 +623,40 @@ export function parseQueryIntent(
   const bathrooms = parseBathroomCount(question);
   const { sqftMin, sqftMax } = parseSqftBounds(question);
   const { floorMin, floorMax } = parseFloorBounds(question);
-  const view = parseUnitViewFilter(question);
+  const view = parseUnitViewFilter(question, store);
   const unitStatus = parseUnitStatusFilter(question);
   const mentionedSources = parseSourceMentions(question, store);
   const dateWindow = parseDateWindowFromText(question, store.policy.asOfDate);
 
   const isClassComparison =
-    /\bclass\s+a\s+(?:vs\.?|versus|compared\s+to)\s+class\s+b\b/i.test(
+    /\bclass\s+[a-z0-9+-]+\s+(?:vs\.?|versus|compared\s+to)\s+class\s+[a-z0-9+-]+/i.test(
       question,
     );
-  const classMatch = !isClassComparison
-    ? question.match(/\bclass[\s-]+([ab])\b/i)
-    : null;
-  const buildingClass = classMatch
-    ? (classMatch[1].toUpperCase() as 'A' | 'B')
-    : undefined;
+
+  // Dynamically match buildingClass from store.properties distinct classes (plus A/B/C/A+/B-)
+  const distinctClasses = [
+    ...new Set([
+      ...store.properties.map((p) => p.buildingClass.toUpperCase()),
+      'A+',
+      'B-',
+      'A',
+      'B',
+      'C',
+    ]),
+  ].sort((a, b) => b.length - a.length);
+  let buildingClass: string | undefined;
+  if (!isClassComparison) {
+    for (const cls of distinctClasses) {
+      const pat = new RegExp(
+        `\\bclass[\\s-]+${escapeRegExp(cls)}(?![a-z0-9+-])`,
+        'i',
+      );
+      if (pat.test(question)) {
+        buildingClass = cls;
+        break;
+      }
+    }
+  }
 
   const builtBeforeMatch = question.match(
     /\b(?:built\s+before|pre-)\s*(\d{4})\b/i,
@@ -371,28 +677,46 @@ export function parseQueryIntent(
   const decisionIds = [...new Set(decisionIdMatches)];
 
   const hasExplicitPropertyCohort =
-    /\bP0[1-9]\b/i.test(question) ||
-    /\b(between|among\s+the\s+buildings|of\s+the\s+buildings)\b/i.test(question);
+    /\bP\d{2,3}\b/i.test(question) ||
+    /\b(between|among\s+(?:the\s+|our\s+)?(?:buildings|properties)|of\s+(?:the\s+|our\s+)?(?:buildings|properties)|among\s+the\s+ev|between\s+the\s+ev|ev[-\s]charg)/i.test(
+      question,
+    );
 
   const isWholePortfolioExplicit =
-    /\b(across\s+the\s+(whole\s+)?portfolio|whole\s+portfolio|portfolio\s+total|every\s+paid\s+source\s+and\s+building\s+pair|which\s+building\s+gave\s+the\s+(highest|lowest))\b/i.test(
+    /\b(across\s+the\s+(whole\s+|entire\s+)?portfolio|whole\s+portfolio|entire\s+portfolio|portfolio[-\s]wide|in\s+the\s+portfolio|for\s+the\s+portfolio|portfolio\s+total|every\s+paid\s+(?:listing\s+)?source\s+and\s+(?:building|property)\s+pair|every\s+(?:building|property)\s+and\s+paid\s+source\s+pair|across\s+the\s+operating\s+portfolio)\b/i.test(
       question,
     ) ||
     (!hasExplicitPropertyCohort &&
-      /\bwhich\s+building\s+has\s+the\s+(highest|lowest)\b/i.test(question));
+      /\b(which\s+(?:operating\s+)?(?:building|property)\s+(?:gave|offered|had|provided|has|carries|holds|topped|averaged)|across\s+operating\s+buildings|among\s+buildings\s+that\s+are\s+operating)\b/i.test(
+        question,
+      ) &&
+      !/\b(with|offer|have\s+a|has\s+a|on\s+yardi|on\s+entrata|on\s+realpage|on\s+mri|on\s+appfolio|on\s+resman|running\s+on|in\s+the\s+south\s+loop|built\s+in|class\s+[a-z0-9+-]+)\b/i.test(
+        question,
+      ));
 
   const aggregation: IntentAggregation = isClassComparison
     ? 'compare'
-    : /\b(lowest|least|cheapest|minimum|fewest)\b/i.test(question)
+    : /\b(lowest|least|cheapest|minimum|fewest|best\s+cost|most\s+cost[-\s]effective|most\s+efficient)\b/i.test(
+          question,
+        )
       ? 'argmin'
-      : /\b(highest|most|maximum|more\s+leases)\b/i.test(question)
+      : /\b(highest|most|maximum|biggest|largest|worst|most\s+expensive|costliest|priciest|richest|greatest|topped|tops|higher\s+count|more\s+(?:signed\s+|lead[-\s]driven\s+|lead[-\s]sourced\s+)?leases|signed\s+more|converted\s+more|turned\s+more)\b/i.test(
+            question,
+          )
         ? 'argmax'
-        : /\b(list\s+every|which\s+paid\s+sources)\b/i.test(question)
+        : /\b(list\s+every|list\s+all|which\s+paid\s+sources|what\s+paid\s+sources)\b/i.test(
+              question,
+            )
           ? 'list'
           : 'value';
 
   // 1. Data quality audit (void spend rows + duplicate leads)
-  if (/\bvoid\b/i.test(question) && /\bduplicates?\b/i.test(question)) {
+  if (
+    /\bvoid(ed)?\b/i.test(question) &&
+    /\b(duplicates?|repeat\s+entr(y|ies)|re-?entr(y|ies)|same\s+lease|earlier\s+lead)\b/i.test(
+      question,
+    )
+  ) {
     return {
       domain: 'data_quality',
       measure: 'void_and_duplicate_counts',
@@ -468,30 +792,64 @@ export function parseQueryIntent(
   }
 
   // 3. Marketing, Spend, Funnel, CPSL, CPL, CPT, Dead Spend, Reallocation
+  const isReallocation =
+    /\bhow\s+many\s+(?:more|additional|extra|new)?\s*(?:whole\s+)?(?:signed\s+)?leases(?:\s+\([^)]+\))?\s+(?:would|does|could|can)\s+(?:it|that|this|we|that\s+spend|the\s+spend)\s+(?:buy|purchase|get|yield|generate)\b/i.test(
+      question,
+    ) ||
+    (/\b(reallocat\w*|reassign\w*|consolidat\w*|pool\s+the\s+spend|shift\s+(?:the|all).*spend|move\s+(?:the|all).*spend|redirect\s+(?:the|all).*spend|transfer\s+(?:the|all).*spend)\b/i.test(
+      question,
+    ) &&
+      /\b(lowest|cheapest|best|most\s+efficient|cpsl|cost\s+per\s+signed\s+lease|buy|purchase|whole\s+leases)\b/i.test(
+        question,
+      ));
+
+  const isDeadSpendPairs =
+    !isReallocation &&
+    (/\b(pairs?|pairings?|combos?|combinations?|property\/source|building\/source)\b/i.test(question) ||
+      /\bwhich\s+paid\s+sources?\s*,?\s*(?:at\s+which\s+buildings?|by\s+building)\b/i.test(
+        question,
+      ) ||
+      /\bwhich\s+buildings?\s+and\s+paid\s+sources?\b/i.test(question)) &&
+    /\b(no\s+(?:resulting\s+|signed\s+)?leases?|zero\s+(?:signed\s+)?leases?|0\s+(?:signed\s+)?leases?|signed\s+no\s+leases?|came\s+up\s+empty|without\s+(?:any\s+)?(?:signed\s+)?leases?|dead\s+spend|zero-lease)\b/i.test(
+      question,
+    );
+
+  const isSignedLeasesFromLeadsRanking =
+    /\b(signed\s+(?:more|the\s+most)\s+(?:lead[-\s]driven\s+|lead[-\s]sourced\s+)?leases|most\s+(?:signed\s+)?leases\s+from\s+leads|more\s+(?:signed\s+)?leases\s+from\s+leads|more\s+leases\s+signed\s+from\s+leads|more\s+lead[-\s]sourced\s+lease\s+signings|converted\s+more\s+leads\s+into\s+signed\s+leases|turned\s+more\s+leads\s+into\s+signed\s+leases|higher\s+count\s+of\s+leases\s+signed\s+from\s+leads)\b/i.test(
+      question,
+    );
+
+  const isTourToLeaseConversion =
+    /\b(tour[-\s]to[-\s]lease|tours?\s+.*\b(?:convert\w*|turned\s+into\s+leases|became\s+leases|signed\s+a\s+lease)|toured\s+.*\b(?:signed|converted|leased)|conversion\s+rate.*(?:zillow|tour)|share\s+of\s+.*tours?\s+.*(?:signed|leased|turned\s+into\s+leases))\b/i.test(
+      question,
+    );
+
   const isMarketingOrFunnel =
-    /\b(cost\s+per\s+(signed\s+lease|lead|tour)|cpsl\b|cpl\b|cpt\b|paid\s+sources?|listing\s+source|brought\s+no\s+leases|produced\s+no\s+leases|signed\s+no\s+lease|dead\s+spend|tour-to-lease|conversion\s+rate|apply\s+rate|applied\s*=\s*true|applied\s+in\s+\w+|signed\s+more\s+leases\s+from\s+leads|how\s+many\s+more\s+leases\s+would\s+(it|that)\s+buy|posted\s+spend|h1\s+spend\s+versus\s+q3\s+spend)\b/i.test(
+    isReallocation ||
+    isDeadSpendPairs ||
+    isSignedLeasesFromLeadsRanking ||
+    isTourToLeaseConversion ||
+    /\b(cost\s+per\s+(?:signed\s+)?(?:lease|lead|tour)|per\s+signed\s+lease|acquisition\s+cost\s+per|cpsl\b|cpa\b|cpl\b|cpt\b|paid\s+(?:listing\s+|ad\s+|marketing\s+)?(?:sources?|channels?)|listing\s+(?:sources?|channels?)|marketing\s+(?:sources?|channels?)|ad\s+(?:sources?|channels?)|brought\s+no\s+leases|produced\s+no\s+leases|yielded\s+no\s+leases|generated\s+no\s+leases|signed\s+no\s+leases?|zero\s+(?:signed\s+)?leases|0\s+(?:signed\s+)?leases|dead\s+spend|conversion\s+rate|apply\s+rate|applied\s*=\s*true|applied\s+in\s+\w+|posted\s+spend|h1\s+spend\s+versus\s+q3\s+spend)\b/i.test(
       question,
     ) ||
     (mentionedSources.length > 0 &&
-      /\b(cost|spend|spent|paid|leases?|leads?|cpsl|cpl)\b/i.test(question));
+      /\b(cost|spend|spent|paid|leases?|leads?|tours?|toured|converted|conversion|cpsl|cpl|cpt)\b/i.test(
+        question,
+      ));
 
   if (isMarketingOrFunnel) {
     let measure: IntentMeasure = 'cost_per_signed_lease';
-    if (/\bhow\s+many\s+more\s+leases\s+would\s+(it|that)\s+buy\b/i.test(question)) {
+    if (isReallocation) {
       measure = 'reallocation_leases';
-    } else if (
-      /\blist\s+every\s+paid\s+source\s+and\s+building\s+pair\s+that\s+produced\s+no\s+leases\b/i.test(
-        question,
-      )
-    ) {
+    } else if (isDeadSpendPairs) {
       measure = 'dead_spend_pairs';
     } else if (
-      /\b(brought\s+no\s+leases|produced\s+no\s+leases|zero-lease)\b/i.test(
+      /\b(brought\s+no\s+leases|produced\s+no\s+leases|yielded\s+no\s+leases|generated\s+no\s+leases|signed\s+no\s+leases?|zero[-\s]lease|0\s+signed\s+leases)\b/i.test(
         question,
       )
     ) {
       measure = 'dead_spend_building';
-    } else if (/\btour-to-lease\b/i.test(question)) {
+    } else if (isTourToLeaseConversion) {
       measure = 'tour_to_lease_rate';
     } else if (/\bapply\s+rate\b/i.test(question)) {
       measure = 'apply_rate';
@@ -509,9 +867,9 @@ export function parseQueryIntent(
       /\bcost\s+per\s+tour\b/i.test(question)
     ) {
       measure = 'cost_per_lead_and_tour';
-    } else if (/\bcost\s+per\s+lead\b/i.test(question)) {
+    } else if (/\b(cost\s+per\s+lead|cpl)\b/i.test(question)) {
       measure = 'cost_per_lead';
-    } else if (/\bcost\s+per\s+tour\b/i.test(question)) {
+    } else if (/\b(cost\s+per\s+tour|cpt)\b/i.test(question)) {
       measure = 'cost_per_tour';
     } else if (
       /\bh1\s+spend\s+(?:vs\.?|versus)\s+q3\s+spend\b/i.test(question)
@@ -521,10 +879,10 @@ export function parseQueryIntent(
       /\b(posted\s+(?:[\w.]+\s+){0,3}spend|total\s+(?:[\w.]+\s+){0,3}spend|what\s+did\s+we\s+spend|what\s+did\s+.*\bcost\b|how\s+much\s+did\s+.*\b(cost|spend)\b)\b/i.test(
         question,
       ) &&
-      !/\bcost\s+per\b/i.test(question)
+      !/\b(cost\s+per|per\s+signed\s+lease|cpsl|cpa)\b/i.test(question)
     ) {
       measure = 'spend_total';
-    } else if (/\bsigned\s+more\s+leases\s+from\s+leads\b/i.test(question)) {
+    } else if (isSignedLeasesFromLeadsRanking) {
       measure = 'signed_leases_ranking';
     }
 
@@ -534,13 +892,18 @@ export function parseQueryIntent(
       measure === 'dead_spend_pairs' ||
       measure === 'reallocation_leases' ||
       measure === 'apply_rate' ||
-      /\bpaid\s+sources?\b/i.test(question);
+      /\bpaid\s+(?:listing\s+|ad\s+|marketing\s+)?(?:sources?|channels?)\b/i.test(
+        question,
+      );
 
     return {
       domain: 'marketing',
       measure,
       aggregation,
-      isWholePortfolioExplicit,
+      isWholePortfolioExplicit:
+        isWholePortfolioExplicit ||
+        measure === 'reallocation_leases' ||
+        measure === 'dead_spend_pairs',
       isClassComparison,
       buildingClass,
       yearBuiltMin,
@@ -554,32 +917,55 @@ export function parseQueryIntent(
   }
 
   // 4. Leases, Renewals, Concessions, and Rent at Risk
+  const isRentAtRiskOrLeaseRent =
+    /\b(monthly\s+rent|rent\s+per\s+month|at[-\s]risk\s+monthly\s+rent|monthly\s+rent\s+exposure)\b/i.test(
+      question,
+    ) &&
+    /\b(at\s+risk|exposure|lose|leases?|notice|end|ending|ends|expir\w*|matur\w*|q1\s*2027|2027)\b/i.test(
+      question,
+    );
+
+  const isConcessionQuery =
+    /\b(concessions?|move[-\s]in\s+specials?)\b/i.test(question);
+
   const isLeasesOrRenewals =
-    /\b(leases?\b.*(end|ending|started|starts|renew\w*|concession\w*|at\s+risk|gave\s+notice|notice_given|pending)|average\s+concession|monthly\s+rent\s+is\s+at\s+risk|monthly\s+rent\s+on\s+leases|renewal\s+rate)\b/i.test(
+    isRentAtRiskOrLeaseRent ||
+    isConcessionQuery ||
+    /\b(leases?\b.*(end|ending|ends|expir\w*|matur\w*|started|starts|starting|began|commenc\w*|renew\w*|concession\w*|specials?|free\s+rent|at\s+risk|gave\s+notice|given\s+notice|notice\s+given|notice_given|pending|undecided|outstanding|no\s+renewal\s+decision)|lease[-\s]ends|lease\s+expirations?|new[-\s]lease\s+starts|average\s+concession|renewal\s+rate|pending\s+(?:a\s+)?renewal)\b/i.test(
       question,
     );
 
   if (isLeasesOrRenewals) {
     const leaseType: LeaseType | undefined =
-      /\bnew\s+leases\b/i.test(question) &&
+      /\bnew[-\s]leases?\b/i.test(question) &&
       !/\bnew\s+(?:vs\.?|versus)\s+renewal\b/i.test(question)
         ? 'new'
         : undefined;
 
     let renewalStatus: RenewalStatus | undefined;
-    if (/\bpending(\s+a\s+renewal)?\b/i.test(question)) {
+    if (
+      /\b(pending|awaiting\s+(?:a\s+)?renewal|undecided|no\s+renewal\s+decision|not\s+had\s+a\s+renewal\s+decision|don't\s+yet\s+have\s+a\s+renewal\s+decision|do\s+not\s+yet\s+have\s+a\s+renewal\s+decision|without\s+a\s+renewal\s+decision|decision\s+still\s+outstanding)\b/i.test(
+        question,
+      )
+    ) {
       renewalStatus = 'pending';
     } else if (
-      /\b(resident\s+gave\s+notice|notice_given)\b/i.test(question) ||
+      /\b(resident\s+(?:has\s+|have\s+)?(?:gave|given)\s+notice|residents?\s+(?:who\s+)?(?:has\s+|have\s+)?(?:gave|given)\s+notice|tenants?\s+(?:who\s+)?(?:have\s+)?(?:gave|given)\s+notice|notice\s+given|notice_given|notice[-\s]to[-\s]vacate|gave\s+notice\s+to\s+vacate|non[-\s]renewing)\b/i.test(
+        question,
+      ) ||
       (/\bat\s+risk\b/i.test(question) && /\bnotice\b/i.test(question))
     ) {
       renewalStatus = 'notice_given';
     }
 
-    const hasStartSignal = /\b(started|starts|lease\s+starts)\b/i.test(question);
+    const hasStartSignal =
+      /\b(started|starts|starting|began|commenc\w*|start\s+dates?|lease\s+starts|new[-\s]lease\s+starts|with\s+a\s+q[1-4]\s+\d{4}\s+start)\b/i.test(
+        question,
+      );
     const hasEndSignal =
-      /\b(end|ending|ends|endings)\b/i.test(question) ||
-      /\bthis\s+month\b/i.test(question);
+      /\b(end|ending|ends|endings|lease[-\s]ends|expir\w*|matur\w*)\b/i.test(
+        question,
+      ) || /\bthis\s+month\b/i.test(question);
 
     const leaseStartWindow = hasStartSignal ? dateWindow : undefined;
     const leaseEndWindow =
@@ -604,13 +990,9 @@ export function parseQueryIntent(
       /\bconcession\b/i.test(question)
     ) {
       measure = 'new_vs_renewal_and_concession';
-    } else if (/\baverage\s+concession\b/i.test(question)) {
+    } else if (isConcessionQuery) {
       measure = 'average_concession';
-    } else if (
-      /\b(monthly\s+rent\s+is\s+at\s+risk|monthly\s+rent\s+on\s+leases|monthly\s+rent\s+at\s+risk)\b/i.test(
-        question,
-      )
-    ) {
+    } else if (isRentAtRiskOrLeaseRent) {
       measure = 'rent_at_risk';
     }
 
@@ -644,21 +1026,25 @@ export function parseQueryIntent(
   if (/\bvacancy\s+rate\b/i.test(question)) {
     unitMeasure = 'vacancy_rate';
   } else if (
-    /\b(occupied\s+share|share\s+of.*occupied|occupancy\s+rate|occupancy\s+at)\b/i.test(
+    /\b(occupied\s+share|share\s+of.*occupied|occupancy\s+rate|occupancy\s+at|percent(?:age)?\s+of.*occupied)\b/i.test(
       question,
     )
   ) {
     unitMeasure = 'occupied_share';
   } else if (
-    /\baverage\s+market\s+rent\b/i.test(question) &&
-    /\baverage\s+sqft\b/i.test(question)
+    /\b(average|avg\.?|mean)\b.*\b(?:market\s+)?rent\b/i.test(question) &&
+    /\b(average|avg\.?|mean)\s+sq\.?\s*ft\b/i.test(question)
   ) {
     unitMeasure = 'avg_market_rent_and_sqft';
-  } else if (/\baverage\s+market\s+rent\b/i.test(question)) {
+  } else if (
+    (/\b(average|avg\.?|mean)\b/i.test(question) &&
+      /\b(market\s+rent|asking\s+rent|rent)\b/i.test(question)) ||
+    /\bmarket\s+rent\s+(?:average|mean)\b/i.test(question)
+  ) {
     unitMeasure = 'avg_market_rent';
-  } else if (/\baverage\s+sqft\b/i.test(question)) {
+  } else if (/\b(average|avg\.?|mean)\s+sq\.?\s*ft\b/i.test(question)) {
     unitMeasure = 'avg_sqft';
-  } else if (/\brent\s+per\s+sqft\b/i.test(question)) {
+  } else if (/\brent\s+per\s+sq\.?\s*ft\b/i.test(question)) {
     unitMeasure = 'rent_per_sqft';
   }
 
