@@ -64,7 +64,7 @@ npm run eval
 npm run dashboard
 ```
 
-- **Zero-Headache Evaluator Key Vault (`.flowiq-vault.json`) + Bring Your Own Key (BYOK):** Pre-provisioned evaluation credentials are sealed in `.flowiq-vault.json` (`AES-256-GCM` via `src/config/key-vault.ts`) so Diego or any Ormus evaluator agent can run live parallel LLM sweeps out of the box, or pass their own `OpenRouter`, `Ollama`, `Raven vLLM`, `xAI Grok`, `OpenAI`, or `Anthropic` key via CLI flags, environment variables, or the dashboard UI drawer.
+- **Live `/v1/models` Provider Discovery + Zero-Key Deterministic Mode (`npm run setup`):** Run in zero-key deterministic mode out of the box (`0ms` network latency), or configure `xAI Grok`, `Anthropic Claude`, `OpenAI`, `OpenRouter`, `Ollama`, or `Local OpenAI / vLLM / Flint` via `npm run setup`, which probes `{baseUrl}/models` live to verify your API key and discover available model IDs.
 
 ---
 
@@ -103,7 +103,7 @@ Every file in `src/` has a single, clear responsibility:
 
 | Stage | Core Module Path | What It Does |
 |---|---|---|
-| **Stage 1 · Config & Key Vault** | [`src/config/rules.ts`](src/config/rules.ts) &middot; [`src/config/key-vault.ts`](src/config/key-vault.ts) | Resolves the 4 live policy overrides (`FLOW_CAD_RATE`, `FLOW_OCCUPIED_INCLUDES_NOTICE`, `FLOW_LEASE_BUCKET_BY`, `FLOW_PRIOR_BETA0`), ablation presets (`v0`, `v1`, `v2`), and the AES-256-GCM evaluator vault (`.flowiq-vault.json`). |
+| **Stage 1 · Config & Key Vault** | [`src/config/rules.ts`](src/config/rules.ts) &middot; [`src/config/key-vault.ts`](src/config/key-vault.ts) | Resolves the 4 live policy overrides (`FLOW_CAD_RATE`, `FLOW_OCCUPIED_INCLUDES_NOTICE`, `FLOW_LEASE_BUCKET_BY`, `FLOW_PRIOR_BETA0`), ablation presets (`v0`, `v1`, `v2`), and live `/v1/models` provider discovery. |
 | **Stage 2 · Clean & Quarantine** | [`src/data/loader.ts`](src/data/loader.ts) &middot; [`src/data/schema.ts`](src/data/schema.ts) | Parses the 6 CSV exports (`3,858` rows), holds `P09`, strips `leads.notes` (`D01011`), normalizes CAD and void bills, deduplicates `9` phone leads, and runs 6-table integrity checks (`src/domain/sheaf.ts`). |
 | **Stage 3 · Portfolio & Budget Math** | [`src/domain/resolver.ts`](src/domain/resolver.ts) &middot; [`src/domain/metrics.ts`](src/domain/metrics.ts) &middot; [`src/domain/learner.ts`](src/domain/learner.ts) &middot; [`src/domain/guards.ts`](src/domain/guards.ts) | Resolves building nicknames + ambiguity gate (`FLOW-101`), computes occupancy/renewals/funnel/reallocation (`FLOW-102`), enforces Fair Housing & `{ unknown: true }` guards (`FLOW-103`), and runs Bayesian decision learning (`FLOW-105`). |
 | **Stage 4 · Copilot, MCP & Swarm** | [`src/agent/copilot.ts`](src/agent/copilot.ts) &middot; [`src/agent/model-harness.ts`](src/agent/model-harness.ts) &middot; [`src/workflows/temporal-llm-swarm.ts`](src/workflows/temporal-llm-swarm.ts) &middot; [`src/mcp/server.ts`](src/mcp/server.ts) | Exposes the 6 read-only tools across the Web UI, `"FLOW"` CLI, JSON-RPC 2.0 `stdio` MCP server (`FLOW-104`), local/cloud LLM harness, and 8-worker Temporal swarm. |
