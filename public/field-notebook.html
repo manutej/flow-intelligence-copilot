@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FlowIQ · The Field &amp; Meta Notebook (Vol. I — FLOW-101..106)</title>
+  <title>FlowIQ Field Notebook — How We Solved Tickets FLOW-101 to FLOW-106</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
@@ -900,20 +900,17 @@
       <span class="topbar-title">FlowIQ Field &amp; Meta <em>Notebook</em></span>
     </div>
     <nav class="topbar-nav" aria-label="Plate Navigation">
-      <a class="nav-btn active" href="#validator">00 · 27-Item Validator</a>
-      <a class="nav-btn" href="#atlas">/ Atlas (28)</a>
-      <a class="nav-btn" href="#plate-1">I · Vision</a>
-      <a class="nav-btn" href="#plate-2">II · Commits</a>
-      <a class="nav-btn" href="#plate-3">III · integrity</a>
-      <a class="nav-btn" href="#plate-4">IV · Dead Spend</a>
-      <a class="nav-btn" href="#plate-5">V · Learner</a>
-      <a class="nav-btn" href="#plate-6">VI · Harness</a>
-      <a class="nav-btn" href="#plate-7">VII · Temporal</a>
-      <a class="nav-btn" href="#plate-8">VIII · multi-hop</a>
-      <a class="nav-btn" href="#plate-9">IX · Red/Blue</a>
-      <a class="nav-btn" href="#plate-10">X · FinOps</a>
-      <a class="nav-btn" href="#plate-11">XI · Loom</a>
-      <a class="nav-btn" href="#plate-12">XII · Drills</a>
+      <a class="nav-btn active" href="#loom-walkthrough-bar">Loom Deck</a>
+      <a class="nav-btn" href="#validator">00 · 27-Item Validator</a>
+      <a class="nav-btn" href="#atlas">01 · System Map (28)</a>
+      <a class="nav-btn" href="#plate-1">I · Architecture</a>
+      <a class="nav-btn" href="#plate-2">II · 3→8→10 Ablation</a>
+      <a class="nav-btn" href="#plate-3">III · 6-Table Hygiene</a>
+      <a class="nav-btn" href="#plate-4">IV · FLOW-102 Dead Spend</a>
+      <a class="nav-btn" href="#plate-5">V · FLOW-105 Budget Outcomes</a>
+      <a class="nav-btn" href="#plate-6">VI · FLOW-104 MCP &amp; LLMs</a>
+      <a class="nav-btn" href="#plate-12">XII · Live Drills</a>
+      <a class="nav-btn" href="#extended-appendices-toggle" onclick="window.openExtendedAppendices()">+ Appendices (VII–XI)</a>
       <button type="button" class="focus-toggle-btn" id="focus-mode-toggle" title="Toggle Focus Mode (Shortcut: F)">/ Focus [F]</button>
     </nav>
   </header>
@@ -922,43 +919,43 @@
     <!-- Frontispiece -->
     <section class="frontispiece">
       <div>
-        <span class="micro-label">/ THE FIELD &amp; META NOTEBOOK · FLOW-101..106 · AS-OF 2026-10-01</span>
+        <span class="micro-label">/ FLOW PORTFOLIO &amp; MARKETING COPILOT · HOW WE SOLVED TICKETS FLOW-101 TO FLOW-106</span>
         <h1 class="frontispiece-title">
-          Cross-Table Integrity, Empirical-Bayes Learning &amp; Durable Execution over <em>Portfolio</em> Ledgers.
+          How We Built FlowIQ: Turning 6 Messy Property Exports into Verified Portfolio &amp; Marketing <em>Decisions</em>.
         </h1>
         <p class="frontispiece-lede">
-          An interactive editorial volume and live mathematical instrument documenting every CSV table, restriction morphism, commit, evaluation harness, local-model wire protocol, and Temporal execution trace in <span class="mono">/workspace/ormus-flow-challenge/repo</span>. Touch the policy knobs, scrub the 250,000-row and 40-activity parallel worker replays, or inspect any node in the 28-artifact constellation.
+          Property teams lose thousands on dead listing-site ads while wrestling with disconnected PMS, CRM, and billing exports. Here is how we cleaned the 6 raw CSV tables, caught every data trap, and built an agent that answers portfolio questions with exact row citations.
         </p>
         <div style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap;">
-          <span class="stamp stamp-measured">⚖ measured · 3,858 primary keys</span>
-          <span class="stamp stamp-accept">✓ accept · 10/10 dev · 13/13 test · 25/25 RT · 40/40 OI</span>
-          <span class="stamp stamp-law">◆ law · oc_signal = 1.00</span>
-          <span class="stamp stamp-gate">⊘ gate · 18/18 Red-Team · 0 bloat penalty</span>
+          <span class="stamp stamp-accept">✓ 10/10 Dev &amp; 13/13 Test Verified (answers.jsonl)</span>
+          <span class="stamp stamp-measured">✓ $46,599.90 Dead Ad Spend Caught → +15 Leases</span>
+          <span class="stamp stamp-gate">✓ 6 CSV Data Traps Quarantined (P09, 10 Voids, CAD @ 0.73, D01011 Injection)</span>
+          <span class="stamp stamp-law">✓ Live MCP Server &amp; CLI Ready in &lt; 60 Seconds</span>
         </div>
       </div>
       <div class="frontispiece-ledger">
         <div class="ledger-stat">
-          <div class="ledger-stat-k">/ Portfolio Scope</div>
-          <div class="ledger-stat-v">8 Operating + P09</div>
+          <div class="ledger-stat-k">/ Operating Buildings</div>
+          <div class="ledger-stat-v">8 Active + P09 Hold</div>
         </div>
         <div class="ledger-stat">
-          <div class="ledger-stat-k">/ Dead Spend (T04)</div>
+          <div class="ledger-stat-k">/ Dead Spend (FLOW-102)</div>
           <div class="ledger-stat-v">$46,599.90 (9 pairs)</div>
         </div>
         <div class="ledger-stat">
-          <div class="ledger-stat-k">/ Counterfactual (B03)</div>
+          <div class="ledger-stat-k">/ Reallocation (B03)</div>
           <div class="ledger-stat-v">+15 Leases ($2,915.86)</div>
         </div>
         <div class="ledger-stat">
-          <div class="ledger-stat-k">/ Durable Scale</div>
-          <div class="ledger-stat-v">250k Rows + 40x8 Swarm</div>
+          <div class="ledger-stat-k">/ Official answers.jsonl</div>
+          <div class="ledger-stat-v">27/27 Exact Schema</div>
         </div>
         <div class="ledger-stat">
-          <div class="ledger-stat-k">/ multi-hop Consistency</div>
-          <div class="ledger-stat-v">1.00 (40/40 + 600 Bank)</div>
+          <div class="ledger-stat-k">/ Blind Paraphrases</div>
+          <div class="ledger-stat-v">240/240 + 20 Ambiguity</div>
         </div>
         <div class="ledger-stat">
-          <div class="ledger-stat-k">/ Discovery Tokens</div>
+          <div class="ledger-stat-k">/ Easter Eggs (FLOW-106)</div>
           <div class="ledger-stat-v">pyrite · athanor</div>
         </div>
       </div>
@@ -966,21 +963,63 @@
 
     <!-- Table of Contents Ribbon -->
     <nav class="toc-ribbon" aria-label="Twelve Plates Table of Contents">
-      <a class="toc-card" href="#plate-1"><span class="toc-card-num">/ Plate I</span><span class="toc-card-name">Executive <em>Vision</em></span></a>
-      <a class="toc-card" href="#plate-2"><span class="toc-card-num">/ Plate II</span><span class="toc-card-name">Commit <em>Ledger</em></span></a>
-      <a class="toc-card" href="#plate-3"><span class="toc-card-num">/ Plate III</span><span class="toc-card-name">Cellular <em>integrity</em></span></a>
-      <a class="toc-card" href="#plate-4"><span class="toc-card-num">/ Plate IV</span><span class="toc-card-name">Capital <em>Reallocation</em></span></a>
-      <a class="toc-card" href="#plate-5"><span class="toc-card-num">/ Plate V</span><span class="toc-card-name">Bayes <em>Learner</em></span></a>
-      <a class="toc-card" href="#plate-6"><span class="toc-card-num">/ Plate VI</span><span class="toc-card-name">Model <em>Harness</em></span></a>
-      <a class="toc-card" href="#plate-7"><span class="toc-card-num">/ Plate VII</span><span class="toc-card-name">Temporal <em>Worker</em></span></a>
-      <a class="toc-card" href="#plate-8"><span class="toc-card-num">/ Plate VIII</span><span class="toc-card-name">multi-hop <em>Interview</em></span></a>
-      <a class="toc-card" href="#plate-9"><span class="toc-card-num">/ Plate IX</span><span class="toc-card-name">Adversarial <em>Compression</em></span></a>
-      <a class="toc-card" href="#plate-10"><span class="toc-card-num">/ Plate X</span><span class="toc-card-name">Category <em>Functor</em></span></a>
-      <a class="toc-card" href="#plate-11"><span class="toc-card-num">/ Plate XI</span><span class="toc-card-name">Loom <em>Script</em></span></a>
-      <a class="toc-card" href="#plate-12"><span class="toc-card-num">/ Plate XII</span><span class="toc-card-name">Live <em>Drills</em></span></a>
+      <a class="toc-card" href="#plate-1"><span class="toc-card-num">/ Plate I · Overview</span><span class="toc-card-name">System <em>Architecture</em></span></a>
+      <a class="toc-card" href="#plate-2"><span class="toc-card-num">/ Plate II · Eval</span><span class="toc-card-name">3→8→10 <em>Ablation</em></span></a>
+      <a class="toc-card" href="#plate-3"><span class="toc-card-num">/ Plate III · FLOW-103</span><span class="toc-card-name">6-Table <em>Data Hygiene</em></span></a>
+      <a class="toc-card" href="#plate-4"><span class="toc-card-num">/ Plate IV · FLOW-102</span><span class="toc-card-name">$46.6k <em>Dead Spend</em></span></a>
+      <a class="toc-card" href="#plate-5"><span class="toc-card-num">/ Plate V · FLOW-105</span><span class="toc-card-name">Budget <em>Outcomes</em></span></a>
+      <a class="toc-card" href="#plate-6"><span class="toc-card-num">/ Plate VI · FLOW-104</span><span class="toc-card-name">MCP &amp; <em>LLM Harness</em></span></a>
+      <a class="toc-card" href="#plate-12"><span class="toc-card-num">/ Plate XII · Live</span><span class="toc-card-name">6 Live <em>Policy Drills</em></span></a>
+      <a class="toc-card" href="#plate-7" onclick="window.openExtendedAppendices()"><span class="toc-card-num">/ Plate VII · Scale</span><span class="toc-card-name">Parallel <em>Batch Engine</em></span></a>
+      <a class="toc-card" href="#plate-8" onclick="window.openExtendedAppendices()"><span class="toc-card-num">/ Plate VIII · Eval</span><span class="toc-card-name">Multi-Step <em>Queries</em></span></a>
+      <a class="toc-card" href="#plate-9" onclick="window.openExtendedAppendices()"><span class="toc-card-num">/ Plate IX · Safety</span><span class="toc-card-name">Security &amp; <em>Guardrails</em></span></a>
+      <a class="toc-card" href="#plate-10" onclick="window.openExtendedAppendices()"><span class="toc-card-num">/ Plate X · Speed</span><span class="toc-card-name">100k-Row <em>Benchmark</em></span></a>
+      <a class="toc-card" href="#plate-11" onclick="window.openExtendedAppendices()"><span class="toc-card-num">/ Plate XI · Video</span><span class="toc-card-name">5-Min <em>Loom Guide</em></span></a>
     </nav>
 
     
+    <!-- Loom 5-Station Interactive Demo Deck -->
+    <section class="loom-station-bar" id="loom-walkthrough-bar">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div>
+          <span class="micro-label" style="color:var(--ormus-gold);">/ 5-STATION LOOM WALKTHROUGH DECK · CLICK ANY STATION TO JUMP STRAIGHT TO THE SOLUTION</span>
+          <div style="font-size:15px;color:var(--ormus-ink);font-weight:500;margin-top:2px;">
+            Everything is organized around the 6 tickets (<code>FLOW-101</code> to <code>FLOW-106</code>) and the official <code>answers.jsonl</code> deliverables:
+          </div>
+        </div>
+        <button type="button" class="knob-btn" onclick="window.toggleAllNotebookProse(this)" style="border-color:rgba(210,158,61,0.6);color:var(--ormus-gold-bright);">
+          / Expand All Deep-Dive Notes
+        </button>
+      </div>
+      <div class="loom-station-grid">
+        <a href="#validator" class="loom-station-card">
+          <span class="mono gold" style="font-size:11px;font-weight:600;">01 · 27-ITEM KIT VALIDATOR</span>
+          <span style="font-size:12.5px;color:var(--ormus-ink);">Question · Answer (Schema) · Source</span>
+          <span class="mono muted" style="font-size:10.5px;">10/10 dev · 13/13 test · 3/3 bonus · EGGS</span>
+        </a>
+        <a href="#atlas" class="loom-station-card">
+          <span class="mono gold" style="font-size:11px;font-weight:600;">02 · ARCHITECTURE CONSTELLATION</span>
+          <span style="font-size:12.5px;color:var(--ormus-ink);">28-Node Interactive Graph &amp; File Dossier</span>
+          <span class="mono muted" style="font-size:10.5px;">6 CSVs → Domain Core → Agent → MCP/CLI/Web</span>
+        </a>
+        <a href="#plate-3" class="loom-station-card">
+          <span class="mono gold" style="font-size:11px;font-weight:600;">03 · 6-TABLE DATA HYGIENE (FLOW-103)</span>
+          <span style="font-size:12.5px;color:var(--ormus-ink);">P09 Quarantine · 10 Voids · CAD @ 0.73</span>
+          <span class="mono muted" style="font-size:10.5px;">Blocks D01011 Prompt Injection (T13)</span>
+        </a>
+        <a href="#plate-4" class="loom-station-card">
+          <span class="mono gold" style="font-size:11px;font-weight:600;">04 · DEAD SPEND &amp; OUTCOMES (FLOW-102/105)</span>
+          <span style="font-size:12.5px;color:var(--ormus-ink);">$46,599.90 across 9 Zero-Lease Pairs</span>
+          <span class="mono muted" style="font-size:10.5px;">+15 Leases on Apartments.com &amp; X001–X010 Audit</span>
+        </a>
+        <a href="#plate-12" class="loom-station-card">
+          <span class="mono gold" style="font-size:11px;font-weight:600;">05 · LIVE CLI &amp; MCP DRILLS (FLOW-104)</span>
+          <span style="font-size:12.5px;color:var(--ormus-ink);">6 Interactive Policy Override Drills</span>
+          <span class="mono muted" style="font-size:10.5px;">CAD 0.73→0.80 · Notice · Lease Date · Beta0</span>
+        </a>
+      </div>
+    </section>
+
     <!-- OFFICIAL 27-ITEM VISUAL VALIDATOR (Question / Answer with Schema / Source) + 600-BANK & BLIND RED-TEAM INSPECTOR -->
     <section id="validator" class="plate" style="--accent: var(--ormus-gold); margin-bottom: 28px;">
       <header class="plate-head">
@@ -1071,48 +1110,6 @@
     </section>
 
     
-    <!-- Loom 5-Station Interactive Demo Deck -->
-    <section class="loom-station-bar" id="loom-walkthrough-bar">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-        <div>
-          <span class="micro-label" style="color:var(--ormus-gold);">/ LOOM WALKTHROUGH DECK · VISUAL-FIRST MODE (LONG PROSE COLLAPSED INTO DRILL-DOWNS)</span>
-          <div style="font-size:15px;color:var(--ormus-ink);font-weight:500;margin-top:2px;">
-            Click any station below during your Loom recording to jump straight to the live visual instrument:
-          </div>
-        </div>
-        <button type="button" class="knob-btn" onclick="window.toggleAllNotebookProse(this)" style="border-color:rgba(210,158,61,0.6);color:var(--ormus-gold-bright);">
-          / Expand All Deep-Dive Prose (12 Plates)
-        </button>
-      </div>
-      <div class="loom-station-grid">
-        <a href="#atlas" class="loom-station-card">
-          <span class="mono gold" style="font-size:11px;font-weight:600;">01 · ARCHITECTURE CONSTELLATION</span>
-          <span style="font-size:12.5px;color:var(--ormus-ink);">28-Node Interactive Graph &amp; File Dossier</span>
-          <span class="mono muted" style="font-size:10.5px;">CSVs → Domain → Agent → MCP/CLI/Web</span>
-        </a>
-        <a href="#plate-2" class="loom-station-card">
-          <span class="mono gold" style="font-size:11px;font-weight:600;">02 · DATA HYGIENE &amp; TRAP SHIELD</span>
-          <span style="font-size:12.5px;color:var(--ormus-ink);">P09 Quarantine · 10 Voids · CAD @ 0.73</span>
-          <span class="mono muted" style="font-size:10.5px;">Defeats D01011 Prompt Injection (T13)</span>
-        </a>
-        <a href="#plate-5" class="loom-station-card">
-          <span class="mono gold" style="font-size:11px;font-weight:600;">03 · DEAD SPEND &amp; SHRINKAGE</span>
-          <span style="font-size:12.5px;color:var(--ormus-ink);">$46,599.90 across 9 Zero-Lease Pairs</span>
-          <span class="mono muted" style="font-size:10.5px;">+15 Whole Leases on Apartments.com (B03)</span>
-        </a>
-        <a href="#nb-official-validator" class="loom-station-card">
-          <span class="mono gold" style="font-size:11px;font-weight:600;">04 · 27-ITEM KIT VALIDATOR</span>
-          <span style="font-size:12.5px;color:var(--ormus-ink);">Question · Answer (Schema) · Source</span>
-          <span class="mono muted" style="font-size:10.5px;">10/10 dev · 13/13 test · 3/3 bonus · EGGS</span>
-        </a>
-        <a href="#plate-12" class="loom-station-card">
-          <span class="mono gold" style="font-size:11px;font-weight:600;">05 · LIVE CLI &amp; MCP DRILLS</span>
-          <span style="font-size:12.5px;color:var(--ormus-ink);">6 Interactive Reproducibility Drills</span>
-          <span class="mono muted" style="font-size:10.5px;">Claude CLI · Grok CLI · Clean-Room Python</span>
-        </a>
-      </div>
-    </section>
-
     <!-- 28-Node Interactive 2D Constellation Atlas -->
     <section id="atlas" class="atlas-section">
       <div class="atlas-header">
@@ -1168,12 +1165,12 @@
       <header class="plate-head">
         <div>
           <div class="plate-eyebrow">
-            <span>/ Plate I · Architectural Spine</span>
+            <span>/ Plate I · System Architecture (FLOW-101..106)</span>
             <span class="stamp stamp-law">◆ law · Functional Core, Imperative Shell</span>
             <span class="stamp stamp-accept">✓ accept · Zero NPM Dependencies</span>
           </div>
           <h2 class="plate-title">
-            Compression and simplicity as the ultimate <em>sophistication</em>.
+            How we connected 6 messy CSV exports to Claude, Cursor, CLI &amp; Web without <em>hallucinations</em>.
           </h2>
         </div>
         <div class="plate-folio">
@@ -1337,12 +1334,12 @@
       <header class="plate-head">
         <div>
           <div class="plate-eyebrow">
-            <span>/ Plate II · Commit Progression &amp; File Dossier</span>
+            <span>/ Plate II · Iterative Engineering &amp; Ablation (3/10 → 8/10 → 10/10)</span>
             <span class="stamp stamp-measured">⚖ measured · v0 (3/10) -&gt; v1 (8/10) -&gt; v2 (10/10)</span>
             <span class="stamp stamp-accept">✓ accept · Atomic Git Lineage</span>
           </div>
           <h2 class="plate-title">
-            Seven atomic commits driven by a three-stage <em>ablation</em> harness.
+            How each engineering step lifted accuracy from 3/10 (naive) to 8/10 (joined) to <em>10/10</em> (guarded).
           </h2>
         </div>
         <div class="plate-folio">
@@ -1556,12 +1553,12 @@ B02: {"void_rows":10,"duplicate_leads":9}          | B03: {"source":"Apartments.
       <header class="plate-head">
         <div>
           <div class="plate-eyebrow">
-            <span>/ Plate III · Cross-Table Integrity Topology &amp; Trust Boundary</span>
+            <span>/ Plate III · 6-Table Data Hygiene &amp; FLOW-103 Guardrails</span>
             <span class="stamp stamp-law">◆ law · E1..E6 Restriction Morphisms</span>
             <span class="stamp stamp-measured">⚖ measured · 3,858 Primary Keys</span>
           </div>
           <h2 class="plate-title">
-            Six relational tables glued by six reconciliation <em>restrictions</em>.
+            How we cleaned the 6 raw CSV exports and caught every data <em>trap</em>.
           </h2>
         </div>
         <div class="plate-folio">
@@ -1744,12 +1741,12 @@ B02: {"void_rows":10,"duplicate_leads":9}          | B03: {"source":"Apartments.
       <header class="plate-head">
         <div>
           <div class="plate-eyebrow">
-            <span>/ Plate IV · FLOW-102 Dead Spend &amp; Counterfactual Reallocation</span>
+            <span>/ Plate IV · FLOW-102 Dead Ad Spend &amp; Reallocation Report</span>
             <span class="stamp stamp-measured">⚖ measured · $46,599.90 Dead Spend</span>
             <span class="stamp stamp-accept">✓ accept · +15 Whole Leases (B03)</span>
           </div>
           <h2 class="plate-title">
-            Reallocating $46,599.90 of dead spend buys fifteen whole <em>leases</em>.
+            Finding $46,599.90 in zero-lease ad spend and reallocating it for +15 <em>leases</em>.
           </h2>
         </div>
         <div class="plate-folio">
@@ -1968,12 +1965,12 @@ Projected Additional Whole Leases    = Math.floor(46599.90 / (84560 / 29)) = Mat
       <header class="plate-head">
         <div>
           <div class="plate-eyebrow">
-            <span>/ Plate V · FLOW-105 Closed-Loop Empirical-Bayes Learner</span>
+            <span>/ Plate V · FLOW-105 Auditing Past Budget Decisions (X001–X010)</span>
             <span class="stamp stamp-law">◆ law · Conjugate Gamma-Poisson Shrinkage</span>
             <span class="stamp stamp-accept">✓ accept · Window Invariance Verified</span>
           </div>
           <h2 class="plate-title">
-            Guarding against small-sample Poisson noise with conjugate <em>shrinkage</em>.
+            Auditing past budget moves (X001–X010) without getting fooled by small <em>samples</em>.
           </h2>
         </div>
         <div class="plate-folio">
@@ -2227,12 +2224,12 @@ Projected Additional Whole Leases    = Math.floor(46599.90 / (84560 / 29)) = Mat
       <header class="plate-head">
         <div>
           <div class="plate-eyebrow">
-            <span>/ Plate VI · FLOW-104 Multi-Provider Local Model &amp; Raven Harness</span>
+            <span>/ Plate VI · FLOW-104 MCP Server &amp; Live LLM Provider Setup</span>
             <span class="stamp stamp-accept">✓ accept · 7 Providers Supported</span>
             <span class="stamp stamp-gate">⊘ gate · AES-256-GCM Vault + BYOK</span>
           </div>
           <h2 class="plate-title">
-            Running identically across Raven local models, Ollama, OpenRouter, and cloud <em>gateways</em>.
+            Connecting Claude, Cursor &amp; local models via MCP and live <code>/v1/models</code> <em>verification</em>.
           </h2>
         </div>
         <div class="plate-folio">
@@ -2399,19 +2396,35 @@ Projected Additional Whole Leases    = Math.floor(46599.90 / (84560 / 29)) = Mat
       </div>
     </section>
 
-    <!-- =====================================================================
+    
+    <!-- EXTENDED ENGINEERING APPENDICES TOGGLE (PLATES VII–XI COLLAPSED BY DEFAULT FOR CLEAN LOOM VIEW) -->
+    <section id="extended-appendices-toggle" style="margin: 28px 0; padding: 20px 24px; background: rgba(20, 33, 61, 0.75); border: 1px solid rgba(210, 158, 61, 0.55); border-radius: 3px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+        <div>
+          <span class="micro-label" style="color:var(--ormus-gold);">/ OPTIONAL DEEP-DIVE APPENDICES · PLATES VII–XI (COLLAPSED BY DEFAULT FOR CLARITY)</span>
+          <div style="font-size:15px; color:var(--ormus-ink); font-weight:500; margin-top:4px;">
+            Core ticket solutions (<code>FLOW-101</code> to <code>FLOW-106</code>) are above. Click to expand the 600-question multi-step bank, 8-worker parallel batch engine, security stress tests, and 100k-row benchmarks:
+          </div>
+        </div>
+        <button type="button" id="btn-toggle-appendices" class="knob-btn" onclick="window.toggleExtendedAppendices()" style="padding:10px 16px; font-size:12px; border-color:var(--ormus-gold); background:rgba(210,158,61,0.16); color:var(--ormus-gold-bright); font-weight:600; cursor:pointer;">
+          [ + Show Extended Engineering Appendices (Scale, Stress Tests &amp; Benchmarks · Plates VII–XI) ]
+        </button>
+      </div>
+    </section>
+    <div id="extended-appendices-container" style="display:none;">
+<!-- =====================================================================
          PLATE VII: DURABLE TEMPORAL EXECUTION ENGINE + INSTRUMENT #2
          ===================================================================== -->
     <section id="plate-7" class="plate" style="--accent: var(--ormus-amber);">
       <header class="plate-head">
         <div>
           <div class="plate-eyebrow">
-            <span>/ Plate VII · Durable Temporal Execution Engine (Data Shards + Parallel LLM Swarm)</span>
+            <span>/ Plate VII · Parallel Batch Engine &amp; Crash Recovery</span>
             <span class="stamp stamp-measured">⚖ measured · 250,000 Rows + 40×8 LLM Swarm</span>
             <span class="stamp stamp-law">◆ law · Zero-Duplicate Replay</span>
           </div>
           <h2 class="plate-title">
-            Surviving mid-stream worker crashes with deterministic event-history <em>replay</em>.
+            Running 40 queries across 8 parallel workers with zero-duplicate crash <em>recovery</em>.
           </h2>
         </div>
         <div class="plate-folio">
@@ -2529,12 +2542,12 @@ Projected Additional Whole Leases    = Math.floor(46599.90 / (84560 / 29)) = Mat
       <header class="plate-head">
         <div>
           <div class="plate-eyebrow">
-            <span>/ Plate VIII · multi-hop Tree-of-Questions &amp; 40-Question Interview Bank</span>
+            <span>/ Plate VIII · Multi-Step Queries &amp; 240 Paraphrase Verification</span>
             <span class="stamp stamp-law">◆ law · oc_signal = 1.00 (10/10 ToQ · 40/40 OI)</span>
             <span class="stamp stamp-measured">⚖ measured · 600-Query Compositional Bank</span>
           </div>
           <h2 class="plate-title">
-            Enacting multi-hop self-consistency across four strata and six editorial <em>colors</em>.
+            Verifying 600 multi-step portfolio questions and 240 blind <em>paraphrases</em>.
           </h2>
         </div>
         <div class="plate-folio">
@@ -3179,7 +3192,9 @@ TOTAL PORTFOLIO DEAD SPEND  : $46,599.90 USD across 9 pairs -> Reallocate to Apa
       </div>
     </section>
 
-    <!-- =====================================================================
+    
+    </div>
+<!-- =====================================================================
          PLATE XII: LIVE SESSION WITH DIEGO — 6 PRACTICED DRILLS
          ===================================================================== -->
     <section id="plate-12" class="plate" style="--accent: var(--ormus-amber);">
@@ -4515,6 +4530,28 @@ node --no-warnings scripts/test-model-harness.ts &amp;&amp; node --no-warnings s
         details.appendChild(summary);
         details.appendChild(argueEl);
       });
+
+      
+      window.openExtendedAppendices = function() {
+        var c = document.getElementById("extended-appendices-container");
+        var b = document.getElementById("btn-toggle-appendices");
+        if (c && c.style.display === "none") {
+          c.style.display = "block";
+          if (b) b.textContent = "[ − Hide Extended Engineering Appendices (Plates VII–XI) ]";
+        }
+      };
+      window.toggleExtendedAppendices = function() {
+        var c = document.getElementById("extended-appendices-container");
+        var b = document.getElementById("btn-toggle-appendices");
+        if (!c) return;
+        var isHidden = c.style.display === "none";
+        c.style.display = isHidden ? "block" : "none";
+        if (b) {
+          b.textContent = isHidden
+            ? "[ − Hide Extended Engineering Appendices (Plates VII–XI) ]"
+            : "[ + Show Extended Engineering Appendices (Scale, Stress Tests & Benchmarks · Plates VII–XI) ]";
+        }
+      };
 
       window.toggleAllNotebookProse = function(btn) {
         var drawers = document.querySelectorAll("details.notebook-drilldown");
