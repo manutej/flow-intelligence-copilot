@@ -1,4 +1,5 @@
 import type { PortfolioStore } from '../data/schema.ts';
+import { didYouMean } from '../util/suggest.ts';
 
 interface PropertySchema {
   readonly type?: string;
@@ -61,7 +62,7 @@ export function validateToolArguments(
     const spec = props[key];
     if (!spec) {
       problems.push(
-        `unknown argument "${key}" (allowed: ${Object.keys(props).join(', ') || 'none'})`,
+        `unknown argument "${key}"${didYouMean(key, Object.keys(props))} (allowed: ${Object.keys(props).join(', ') || 'none'})`,
       );
       continue;
     }
