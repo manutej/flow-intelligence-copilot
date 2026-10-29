@@ -184,7 +184,7 @@ export function executeCompositionalPlan(
     };
     const dq = raw.dataQualityAudit;
     return finalize(
-      `Across data/ils/spend.csv there are ${dq.voidSpendRowCount} void spend rows (${dq.voidSpendIds.join(', ')}; ${fmtUsd(dq.voidSpendUsdTotal)} USD face value), and across data/crm/leads.csv there are ${dq.duplicateLeadCount} duplicate leads that point to the same lease as an earlier lead (${dq.duplicateLeadIds.join(', ')}, duplicating earliest leads ${dq.earliestCreditedLeadIds.join(', ')}).`,
+      `Across data/ils/spend.csv there are ${dq.voidSpendRowCount} void spend rows (${dq.voidSpendIds.join(', ')}; ${fmtUsd(dq.voidSpendRawTotal)} face value, ${fmtUsd(dq.voidSpendUsdTotal)} in USD after converting CAD rows), and across data/crm/leads.csv there are ${dq.duplicateLeadCount} duplicate leads that point to the same lease as an earlier lead (${dq.duplicateLeadIds.join(', ')}, duplicating earliest leads ${dq.earliestCreditedLeadIds.join(', ')}).`,
       {
         void_rows: dq.voidSpendRowCount,
         duplicate_leads: dq.duplicateLeadCount,

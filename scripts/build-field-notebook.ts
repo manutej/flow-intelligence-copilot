@@ -264,7 +264,7 @@ const ATLAS_NODES: readonly AtlasNode[] = [
     invariantsEnforced: [
       'FLOW-105: Conjugate Gamma-Poisson shrinkage Posterior = (S_pre + S_post + beta0) / (K_pre + K_post + alpha0)',
       'Level & rank invariance across postInclusive (month >= d.month) and postStrict (month > d.month)',
-      'Protects 2-month X009 (P01 FB Ads, $950 post-spend, Pr(K=0)=74.7%, posterior $3,295.00) while penalizing 5-month X001 (P01 Zillow, $8,170 post-spend, Pr(K=0)=8.1%, posterior $12,940.00)',
+      'Protects 2-month X009 (P01 FB Ads, $950 post-spend, Pr(K=0) at prior mean 74.7%, posterior $3,295.00) while penalizing 5-month X001 (P01 Zillow, $8,170 post-spend, Pr(K=0) at prior mean 8.1%, posterior $12,940.00)',
     ],
     primaryKeysTouched: ['decisions:X001..X010', 'spend:S0002', 'spend:S0123', 'leases:L00112', 'leases:L00116'],
     whyItExists: 'Turns historical budget decisions into a closed-loop Empirical-Bayes posterior that re-ranks channels without falling for small-sample Poisson noise.',
@@ -2425,7 +2425,7 @@ B02: {"void_rows":10,"duplicate_leads":9}          | B03: {"source":"Apartments.
               <tr>
                 <td class="mono gold">E5_SPEND_TO_LEASES_SUPPORT</td>
                 <td class="mono">spend -&gt; leases</td>
-                <td>Gauge excludes <span class="amber">10 void rows ($11,500.80)</span>, converts <span class="amber">13 CAD rows (@0.73)</span>, and isolates <span class="amber">9 zero-lease dead pairs ($46,599.90)</span>.</td>
+                <td>Gauge excludes <span class="amber">10 void rows ($11,500.80 USD-equiv.)</span>, converts <span class="amber">13 CAD rows (@0.73)</span>, and isolates <span class="amber">9 zero-lease dead pairs ($46,599.90)</span>.</td>
               </tr>
               <tr>
                 <td class="mono gold">E6_DECISIONS_TO_SPEND_STEP</td>
@@ -2468,7 +2468,7 @@ B02: {"void_rows":10,"duplicate_leads":9}          | B03: {"source":"Apartments.
               <tr>
                 <td class="mono gold">04 · Void Invoices</td>
                 <td class="mono">spend:S0003, S0105..</td>
-                <td>10 <span class="mono">void</span> rows (<span class="mono">$11,500.80</span>) set to <span class="mono">effectiveUsd = 0</span> (<span class="mono">D04, B02</span>).</td>
+                <td>10 <span class="mono">void</span> rows (<span class="mono">$11,500.80 USD-equiv.</span>) set to <span class="mono">effectiveUsd = 0</span> (<span class="mono">D04, B02</span>).</td>
               </tr>
               <tr>
                 <td class="mono gold">05 · Dup Lease Claims</td>
@@ -2869,7 +2869,7 @@ Projected Additional Whole Leases    = Math.floor(46599.90 / (84560 / 29)) = Mat
         <aside class="proof-meta">
           <b>/ The Proof · Complete X001..X010 Audit</b>
           data/ops/decisions.csv · src/domain/learner.ts
-          <p>All 10 historical recommendations evaluated with Poisson tail probabilities Pr(K=0) and counterfactual regret.</p>
+          <p>All 10 historical recommendations evaluated with Pr(K=0) at the prior mean rate and counterfactual regret.</p>
         </aside>
         <div class="proof-body">
           <table class="ormus-table">
@@ -2881,7 +2881,7 @@ Projected Additional Whole Leases    = Math.floor(46599.90 / (84560 / 29)) = Mat
                 <th>Accepted</th>
                 <th>Pre (S / K)</th>
                 <th>Post (S / K)</th>
-                <th>Pr(K=0)</th>
+                <th>Pr(K=0) at prior mean</th>
                 <th>Pre -&gt; Post Posterior</th>
                 <th>Verdict &amp; Next Action</th>
               </tr>
@@ -3522,7 +3522,7 @@ Projected Additional Whole Leases    = Math.floor(46599.90 / (84560 / 29)) = Mat
                 <td class="mono crimson">1/3</td>
                 <td class="mono amber">2/3</td>
                 <td class="mono emerald">3/3</td>
-                <td><span class="mono">X009</span> small-sample guard (<span class="mono">Pr(K=0)=74.7%</span>, <span class="mono">$3,295</span>), <span class="mono">X010</span> rejected increase (<span class="mono">$9,900</span>), <span class="mono">X007</span> validated surge (<span class="mono">$3,233.33</span>).</td>
+                <td><span class="mono">X009</span> small-sample guard (<span class="mono">Pr(K=0) at prior mean 74.7%</span>, <span class="mono">$3,295</span>), <span class="mono">X010</span> rejected increase (<span class="mono">$9,900</span>), <span class="mono">X007</span> validated surge (<span class="mono">$3,233.33</span>).</td>
               </tr>
               <tr>
                 <td class="mono gold">S5 · Sheaf Perturbation</td>
@@ -3684,7 +3684,7 @@ Projected Additional Whole Leases    = Math.floor(46599.90 / (84560 / 29)) = Mat
           <div class="marginalia-block">
             <span class="marginalia-tag">/ FLOW-106 Ninth House</span>
             <span class="marginalia-q">P09 Cornell Annex (AppFolio, 1927 Hyde Park) is held in onboardingProperties with a complete 4-export Week-1 AppFolio cutover checklist.</span>
-            <cite>NOTES.md:150 · FLOW-106</cite>
+            <cite>NOTES.md · First 30 days · FLOW-106</cite>
           </div>
         </aside>
       </div>
@@ -3884,7 +3884,7 @@ Projected Additional Whole Leases    = Math.floor(46599.90 / (84560 / 29)) = Mat
               <tr>
                 <td class="mono gold">4:00–5:00</td>
                 <td class="mono">Plate V &amp; Plate VII Instruments (Gamma-Poisson Slider + Temporal 250k &amp; 40×8 Swarm)</td>
-                <td>Drag the <span class="mono">beta0</span> slider on Plate V to show <span class="mono">X007</span> (<span class="mono">P06 Zillow #4 -&gt; #2</span> at <span class="mono">$3,233.33</span>) and <span class="mono">X009</span> (<span class="mono">P01 FB Ads</span> small-sample guard at <span class="mono">Pr(K=0)=74.7%</span>). Scrub Plate VII to show Shard #6 (<span class="mono">row 137,500</span>) and Activity #18/40 zero-duplicate Temporal replay.</td>
+                <td>Drag the <span class="mono">beta0</span> slider on Plate V to show <span class="mono">X007</span> (<span class="mono">P06 Zillow #4 -&gt; #2</span> at <span class="mono">$3,233.33</span>) and <span class="mono">X009</span> (<span class="mono">P01 FB Ads</span> small-sample guard at <span class="mono">Pr(K=0) at prior mean 74.7%</span>). Scrub Plate VII to show Shard #6 (<span class="mono">row 137,500</span>) and Activity #18/40 zero-duplicate Temporal replay.</td>
               </tr>
             </tbody>
           </table>
@@ -3931,7 +3931,7 @@ Projected Additional Whole Leases    = Math.floor(46599.90 / (84560 / 29)) = Mat
               </tr>
               <tr>
                 <td class="mono gold">FLOW-106 Ninth House (P09)</td>
-                <td class="mono">NOTES.md §4 · loader.ts</td>
+                <td class="mono">NOTES.md · First 30 days · loader.ts</td>
                 <td class="mono emerald">✓ pyrite + athanor + Plan</td>
               </tr>
               <tr>
@@ -5200,7 +5200,7 @@ node --no-warnings scripts/test-model-harness.ts &amp;&amp; node --no-warnings s
           title: 'Drill 4 · Shift Empirical-Bayes Prior beta0 to $1,500 or $5,000 (FLOW-105)',
           pointer: 'src/config/rules.ts:57 (OUTCOME_LEARNER_CONFIG.priorSpendUsdBeta0) · src/domain/learner.ts:270',
           cmd: 'FLOW_PRIOR_BETA0=5000 npm run cli -- "Evaluate our past budget decisions in decisions.csv and recommend next month budget moves."',
-          before: 'At beta0=$3,250: X009 (P01 FB Ads) posterior = $3,295.00 (Pr(K=0)=74.7%); P06 Google Ads = $2,420.00; P06 Zillow (X007) = $3,233.33',
+          before: 'At beta0=$3,250: X009 (P01 FB Ads) posterior = $3,295.00 (Pr(K=0) at prior mean 74.7%); P06 Google Ads = $2,420.00; P06 Zillow (X007) = $3,233.33',
           after: 'At beta0=$5,000: X009 (P01 FB Ads) posterior = $4,170.00 (Pr(K=0)=82.7%); P06 Google Ads = $3,003.33; P06 Zillow (X007) = $3,816.67',
           explanation:
             'Posterior CPSL = (S_pre + S_post + beta0) / (K_pre + K_post + 1). Increasing beta0 strengthens shrinkage toward a higher portfolio baseline while preserving P06 channel rank order (#1 Google Ads, #2 Zillow).',

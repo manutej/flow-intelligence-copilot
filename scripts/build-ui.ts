@@ -465,7 +465,7 @@ async function buildVisualStudio() {
     </div>
     <div class="card">
       <h2>FLOW-105 · Conjugate Gamma-Poisson Learner &amp; Counterfactual Regret Matrix (X001–X010)</h2>
-      <p class="sub" style="margin-bottom:10px;">Prior: <code>α₀ = 1.0</code> lease per <code>β₀ = $3,250</code> spend. Notice how 2-month <code>X009</code> (<code>$950</code> post spend, Poisson <code>Pr(K=0) = 74.7%</code>) is protected by conjugate shrinkage (<code>$3,295.00</code>), whereas 5-month <code>X001</code> (<code>$8,170</code> post spend, <code>0</code> leases, <code>Pr(K=0) = 8.1%</code>) degrades to <code>$12,940.00</code> and flips from <code>increase</code> to <code>kill / decrease</code>.</p>
+      <p class="sub" style="margin-bottom:10px;">Prior: <code>α₀ = 1.0</code> lease per <code>β₀ = $3,250</code> spend. Notice how 2-month <code>X009</code> (<code>$950</code> post spend, <code>Pr(K=0) = 74.7%</code> at the prior mean rate) is protected by conjugate shrinkage (<code>$3,295.00</code>), whereas 5-month <code>X001</code> (<code>$8,170</code> post spend, <code>0</code> leases, <code>Pr(K=0) = 8.1%</code>) degrades to <code>$12,940.00</code> and flips from <code>increase</code> to <code>kill / decrease</code>.</p>
       <div id="learner-table"></div>
     </div>
   </div>
@@ -678,7 +678,7 @@ function renderLearnerAndDeadSpend() {
   \`).join('');
   document.getElementById('learner-table').innerHTML = \`
     <table>
-      <thead><tr><th>Decision</th><th>Target</th><th>Move &amp; Accepted</th><th>Post Spend</th><th>Post Leases</th><th>Pr(K=0)</th><th>Posterior CPSL</th><th>Verdict</th></tr></thead>
+      <thead><tr><th>Decision</th><th>Target</th><th>Move &amp; Accepted</th><th>Post Spend</th><th>Post Leases</th><th>Pr(K=0) at prior mean</th><th>Posterior CPSL</th><th>Verdict</th></tr></thead>
       <tbody>\${lRows}</tbody>
     </table>
   \`;

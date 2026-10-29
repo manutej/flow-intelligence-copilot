@@ -254,6 +254,9 @@ export function evaluateBudgetDecisionsAndLearn(
           : null;
 
       const expectedPostLeasesUnderPrior = roundTo(postSpendUsd / beta0, 2);
+      // Chance of 0 leases if the true rate were exactly the prior mean
+      // (1 lease per beta0 dollars). This is not the Gamma-Poisson predictive,
+      // which would be (beta0 / (beta0 + spend))^alpha0 and is higher.
       const poissonZeroLeaseProbability = roundTo(
         Math.exp(-postSpendUsd / beta0),
         4,
@@ -325,14 +328,14 @@ export function evaluateBudgetDecisionsAndLearn(
         explanation = `Correctly rejected increase: operator declined the +$${d.deltaUsd}/mo increase in ${d.month}, avoiding additional waste on ${d.source} at ${d.propertyId}, which burned $${(preSpendUsd + postSpendUsd).toFixed(0)} across all 6 months ($${preSpendUsd.toFixed(0)} pre + $${postSpendUsd.toFixed(0)} post) with 0 signed leases (posterior CPSL $${postOutcomeShrunkCpslUsd.toFixed(2)}); recommend cutting all remaining spend.`;
       } else if (smallSampleGuardTriggered && postSignedLeases === 0) {
         verdict = 'low_sample_shrunk';
-        explanation = `Small-sample guard active: post-decision window is only ${postMonthList.length} months ($${postSpendUsd.toFixed(0)} spend, 0 leases). Under the portfolio prior ($${beta0}/lease), Pr(K=0) = ${(poissonZeroLeaseProbability * 100).toFixed(1)}%, so conjugate shrinkage keeps ${d.source} at ${d.propertyId} at $${postOutcomeShrunkCpslUsd.toFixed(2)} instead of over-penalizing a 2-month sample.`;
+        explanation = `Small-sample guard active: post-decision window is only ${postMonthList.length} months ($${postSpendUsd.toFixed(0)} spend, 0 leases). At the portfolio prior mean rate ($${beta0}/lease), Pr(K=0) = ${(poissonZeroLeaseProbability * 100).toFixed(1)}%, so conjugate shrinkage keeps ${d.source} at ${d.propertyId} at $${postOutcomeShrunkCpslUsd.toFixed(2)} instead of over-penalizing a 2-month sample.`;
       } else if (
         d.accepted &&
         d.recommendation === 'increase' &&
         postSignedLeases === 0
       ) {
         verdict = 'failed_increase_dead_spend';
-        explanation = `Failed increase: accepting +$${d.deltaUsd}/mo in ${d.month} burned $${postSpendUsd.toFixed(0)} over ${postMonthList.length} post-decision months ($${(preSpendUsd + postSpendUsd).toFixed(0)} total, Pr(K=0) = ${(poissonZeroLeaseProbability * 100).toFixed(1)}%) with 0 signed leases ($${counterfactualRegretUsd.toFixed(0)} direct regret). Posterior CPSL degraded from $${preShrunkCpslUsd.toFixed(2)} to $${postOutcomeShrunkCpslUsd.toFixed(2)}, flipping next action to a full cut.`;
+        explanation = `Failed increase: accepting +$${d.deltaUsd}/mo in ${d.month} burned $${postSpendUsd.toFixed(0)} over ${postMonthList.length} post-decision months ($${(preSpendUsd + postSpendUsd).toFixed(0)} total, Pr(K=0) at the prior mean rate = ${(poissonZeroLeaseProbability * 100).toFixed(1)}%) with 0 signed leases ($${counterfactualRegretUsd.toFixed(0)} direct regret). Posterior CPSL degraded from $${preShrunkCpslUsd.toFixed(2)} to $${postOutcomeShrunkCpslUsd.toFixed(2)}, flipping next action to a full cut.`;
       } else if (
         d.accepted &&
         d.recommendation === 'increase' &&

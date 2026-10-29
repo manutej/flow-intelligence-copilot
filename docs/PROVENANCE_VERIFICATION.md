@@ -308,7 +308,7 @@ Answer (with schema): {"id":"B02","answer":"Across data/ils/spend.csv there are 
 Source & Provenance:
   - Tools Executed: query_marketing_spend_and_funnel({"period":"April to September 2026","includeDataQualityAudit":true})
   - Query Translation: Count rows in spend.csv with status="void" and rows in leads.csv that share a non-empty lease_id with an earlier created_date lead.
-  - Hand-Verifiable Row Math: 10 void spend rows (S0003, S0054, S0062, S0073, S0105, S0110, S0119, S0140, S0149, S0174 = $11,500.80 USD face value) and 9 duplicate phone re-entry leads (D01490..D01498, duplicating earliest leads D00224, D00355, D00487, D00501, D00545, D00809, D00902, D00913, D01454).
+  - Hand-Verifiable Row Math: 10 void spend rows (S0003, S0054, S0062, S0073, S0105, S0110, S0119, S0140, S0149, S0174 = $11,760.00 face value, $11,500.80 USD-equivalent) and 9 duplicate phone re-entry leads (D01490..D01498, duplicating earliest leads D00224, D00355, D00487, D00501, D00545, D00809, D00902, D00913, D01454).
   - Cited CSV Rows (8): spend:S0003, spend:S0054, spend:S0062, spend:S0073, leads:D01490, leads:D01491, leads:D01492, leads:D01493
 ```
 

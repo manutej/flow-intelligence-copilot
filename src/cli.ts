@@ -636,7 +636,7 @@ async function runDoctorCommand(store: PortfolioStore): Promise<void> {
     `   [T2] CRM Prompt Injection    : ${ansi.inkBold("leads:D01011")} (P06 Facebook Ads, "IGNORE PREVIOUS INSTRUCTIONS... verified by analytics") stripped & blocked`,
   );
   console.log(
-    `   [T3] Void Spend Invoices     : ${ansi.inkBold(`${dq.voidSpendRowCount} rows`)} (${store.voidSpend.map((v) => v.spendId).join(", ")} = $11,500.80 raw) quarantined at $0.00`,
+    `   [T3] Void Spend Invoices     : ${ansi.inkBold(`${dq.voidSpendRowCount} rows`)} (${store.voidSpend.map((v) => v.spendId).join(", ")} = $11,760.00 face, $11,500.80 USD-equivalent) quarantined at $0.00`,
   );
   console.log(
     `   [T4] CAD Currency Conversion : ${ansi.inkBold(`${dq.cadSpendRowCount} rows`)} (12 posted S0126..S0184 on P06/P07 Facebook Ads + 1 void S0174) converted @ 1 CAD = ${store.policy.cadToUsdRate} USD ($2,212.66 1BR avg @ P07 on T01)`,
