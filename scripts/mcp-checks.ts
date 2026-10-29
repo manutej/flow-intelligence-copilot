@@ -102,6 +102,23 @@ export async function runMcpChecks(
   assert.equal(decData.data.evaluatedDecisions[0].postOutcomeShrunkCpslUsd, 3295);
   pass('decisions X009', 'posterior $3,295.00');
 
+  const whatIf = askPayload(
+    await rpc(13, 'tools/call', {
+      name: 'ask_flowiq',
+      arguments: {
+        question: 'How much did we spend on paid sources that signed no leases from April to September 2026?',
+        assumptions: { cadToUsdRate: 0.8 },
+      },
+    }),
+  );
+  assert.equal(whatIf.data.result && (whatIf.data.result as { usd: number }).usd, 47274);
+  const badWhatIf = await rpc(14, 'tools/call', {
+    name: 'ask_flowiq',
+    arguments: { question: 'Dead spend?', assumptions: { excludeVoidSpend: false } },
+  });
+  assert.equal((badWhatIf.error as { code: number }).code, -32602);
+  pass('ask: what-if', 'CAD at 0.80 -> dead spend $47,274.00 (from $46,599.90); guards cannot be switched off');
+
   const bad = await rpc(10, 'tools/call', { name: 'ask_flowiq', arguments: {} });
   assert.equal((bad.error as { code: number }).code, -32602);
   assert.equal(bad.id, 10);

@@ -9,6 +9,7 @@ import {
   buildFlowIqToolDefinitions,
   executeAgentTool,
 } from '../agent/tools.ts';
+import { type PortfolioPolicyConfig, resolvePolicyConfig } from '../config/rules.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
 import { validateToolArguments } from './validate.ts';
 
@@ -44,6 +45,23 @@ const ASK_FLOWIQ_DESCRIPTION =
 
 type CopilotTurn = Awaited<ReturnType<typeof askFlowIqCopilot>>;
 
+/**
+ * The four business assumptions a user may change for one question. Data
+ * rules and guards (void invoices, dedup, P09 hold, Fair Housing, unknown)
+ * cannot be switched off from outside.
+ */
+const ASSUMPTIONS_SCHEMA = {
+  type: 'object',
+  description:
+    'Optional what-if for this question only. Use when the user says "what if" or changes an assumption; leave out otherwise.',
+  properties: {
+    cadToUsdRate: { type: 'number', minimum: 0.5, maximum: 1.5, description: 'USD per Canadian dollar for CAD invoices (default 0.73).' },
+    occupiedIncludesNotice: { type: 'boolean', description: 'Count units on notice as occupied (default true).' },
+    leaseBucketBy: { type: 'string', enum: ['lease_start_date', 'lead_created_date'], description: 'Which date puts a signed lease in a period (default lease_start_date).' },
+    priorSpendUsdBeta0: { type: 'number', minimum: 500, maximum: 20000, description: 'Portfolio prior cost per signed lease used to shrink small samples (default 3250).' },
+  },
+} as const;
+
 /** One word an assistant can branch on without parsing prose. */
 export function answerStatus(turn: CopilotTurn): 'answered' | 'unknown' | 'refused' | 'needs_clarification' {
   const result = turn.envelope.result as Record<string, unknown>;
@@ -54,10 +72,21 @@ export function answerStatus(turn: CopilotTurn): 'answered' | 'unknown' | 'refus
 }
 
 /** The plain-English reply an assistant can relay as is. */
-export function formatAskReply(turn: CopilotTurn): string {
+export function formatAskReply(
+  turn: CopilotTurn,
+  assumptions: Readonly<Record<string, unknown>> = {},
+): string {
   const status = answerStatus(turn);
   const cites = turn.envelope.citations;
   const lines = [turn.envelope.answer];
+  const changed = Object.entries(assumptions);
+  if (changed.length > 0) {
+    const defaults = resolvePolicyConfig() as unknown as Record<string, unknown>;
+    lines.push(
+      '',
+      `What-if for this answer only: ${changed.map(([k, v]) => `${k} = ${JSON.stringify(v)} (normally ${JSON.stringify(defaults[k])})`).join(', ')}.`,
+    );
+  }
   if (status === 'answered' && cites.length > 0) {
     const shown = cites.slice(0, 8).join(', ');
     const more = cites.length > 8 ? `, and ${cites.length - 8} more` : '';
@@ -262,6 +291,7 @@ export async function handleMcpJsonRpcRequest(
                 description:
                   'The question in plain English, e.g. "Which source cost us the least per signed lease at Kedzie Works this summer?"',
               },
+              assumptions: ASSUMPTIONS_SCHEMA,
             },
             required: ['question'],
           },
@@ -298,19 +328,23 @@ export async function handleMcpJsonRpcRequest(
       if (toolName === 'ask_flowiq') {
         const problems = validateToolArguments(
           toolArgs,
-          { properties: { question: { type: 'string' } }, required: ['question'] },
+          { properties: { question: { type: 'string' }, assumptions: ASSUMPTIONS_SCHEMA }, required: ['question'] },
           store,
         );
         if (problems.length > 0) return invalidParams(problems);
         const question = String(toolArgs.question).trim();
         if (!question) return invalidParams(['"question" must not be blank']);
+        // A what-if applies to this one call only; nothing is saved.
+        const assumptions = (toolArgs.assumptions ?? {}) as Partial<PortfolioPolicyConfig>;
+        const askStore = Object.keys(assumptions).length > 0 ? loadPortfolioStore(undefined, assumptions) : store;
         // Deterministic planner only: no provider option is passed, so no
         // model is called and no key is needed.
-        const turn = await askFlowIqCopilot(question, { store });
+        const turn = await askFlowIqCopilot(question, { store: askStore });
         // "I don't know", a refusal, or a clarifying question is a normal
         // answer, so it comes back as tool text, never as an error.
         const structured = {
           status: answerStatus(turn),
+          assumptions,
           answer: turn.envelope.answer,
           result: turn.envelope.result,
           citations: turn.envelope.citations,
@@ -326,7 +360,7 @@ export async function handleMcpJsonRpcRequest(
           id,
           result: {
             content: [
-              { type: 'text', text: formatAskReply(turn) },
+              { type: 'text', text: formatAskReply(turn, assumptions) },
               { type: 'text', text: JSON.stringify(structured, null, 2) },
             ],
             structuredContent: structured,

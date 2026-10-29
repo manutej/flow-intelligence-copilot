@@ -4,6 +4,10 @@ interface PropertySchema {
   readonly type?: string;
   readonly enum?: readonly unknown[];
   readonly items?: { readonly type?: string };
+  readonly minimum?: number;
+  readonly maximum?: number;
+  /** Nested object arguments are checked with the same rules. */
+  readonly properties?: Readonly<Record<string, PropertySchema>>;
 }
 
 interface ObjectSchema {
@@ -68,6 +72,17 @@ export function validateToolArguments(
     }
     if (spec.enum && !spec.enum.includes(value)) {
       problems.push(`"${key}" must be one of ${spec.enum.join(', ')}, got ${JSON.stringify(value)}`);
+    }
+    if (typeof value === 'number' && spec.minimum !== undefined && value < spec.minimum) {
+      problems.push(`"${key}" must be at least ${spec.minimum}, got ${value}`);
+    }
+    if (typeof value === 'number' && spec.maximum !== undefined && value > spec.maximum) {
+      problems.push(`"${key}" must be at most ${spec.maximum}, got ${value}`);
+    }
+    if (spec.type === 'object' && spec.properties) {
+      for (const p of validateToolArguments(value, { properties: spec.properties }, store)) {
+        problems.push(`${key}: ${p}`);
+      }
     }
     if (spec.type === 'array' && spec.items?.type) {
       const bad = (value as unknown[]).filter((v) => !typeMatches(v, spec.items?.type));

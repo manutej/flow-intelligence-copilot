@@ -156,6 +156,11 @@ export function roundTo(value: number, decimals: number): number {
 }
 
 const storeCache = new Map<string, PortfolioStore>();
+/**
+ * Each policy override builds its own store. A public endpoint can ask for
+ * many assumption sets, so keep only the most recent few.
+ */
+const MAX_CACHED_STORES = 16;
 
 export function resetPortfolioStoreCache(): void {
   storeCache.clear();
@@ -595,6 +600,11 @@ export function loadPortfolioStore(
   };
 
   storeCache.set(cacheKey, store);
+  while (storeCache.size > MAX_CACHED_STORES) {
+    const oldest = storeCache.keys().next().value;
+    if (oldest === undefined) break;
+    storeCache.delete(oldest);
+  }
   return store;
 }
 
