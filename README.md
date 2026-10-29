@@ -3,7 +3,7 @@
 </div>
 
 <div align="center" style="margin: 16px 0 12px;">
-  <a href="https://repo-sigma-one-80.vercel.app"><img src="docs/assets/btn-dashboard.svg" alt="Live Client Dashboard" height="36" /></a>
+  <a href="https://repo-sigma-one-80.vercel.app"><img src="docs/assets/btn-dashboard.svg" alt="Audit view" height="36" /></a>
   &nbsp;
   <a href="https://repo-sigma-one-80.vercel.app/field-notebook.html"><img src="docs/assets/btn-notebook.svg" alt="Pipeline & Field Notebook" height="36" /></a>
   &nbsp;
@@ -24,59 +24,71 @@
 
 # FlowIQ (`flow-intelligence-copilot`)
 
-> 🎥 **Official Screen Recording Walkthrough (3 Questions + `FLOW-104` MCP Server + `FLOW-106` Ninth House):**
-> - **Interactive Video Player (with Chapter Markers):** [**https://repo-sigma-one-80.vercel.app/demo.html**](https://repo-sigma-one-80.vercel.app/demo.html)
-> - **Direct 1080p MP4 Stream / Download:** [**https://repo-sigma-one-80.vercel.app/demo-walkthrough.mp4**](https://repo-sigma-one-80.vercel.app/demo-walkthrough.mp4) *(also committed at [`public/demo-walkthrough.mp4`](public/demo-walkthrough.mp4))*
-> - **Interactive Field Notebook (4-Stage Architecture SVG & 28-Node Celestial Chart):** [**https://repo-sigma-one-80.vercel.app/field-notebook.html**](https://repo-sigma-one-80.vercel.app/field-notebook.html)
-> - **Live Copilot Dashboard:** [**https://repo-sigma-one-80.vercel.app**](https://repo-sigma-one-80.vercel.app)
+**FlowIQ answers questions about an eight-building Chicago apartment portfolio (`P01`–`P08`, `1,100` units, plus `P09 Cornell Annex` on onboarding hold) from the assistant you already use.** It joins six exports that disagree with each other (properties, units, leases, CRM leads, ad-spend invoices and past budget decisions) and returns short answers that cite the rows they came from.
 
-**FlowIQ is a portfolio and marketing copilot for an eight-building Chicago apartment portfolio (`P01`–`P08`, `1,100` units, plus `P09 Cornell Annex` on onboarding hold).** It connects six disconnected exports—property records, unit directories, lease rolls, CRM leads, ad-spend bills, and historical budget decisions—so operators and executives can ask natural-language questions and get exact, row-cited answers.
-
-When an unguarded language model reads raw property exports directly, it trips over real operational mess: cancelled ad invoices, un-converted Canadian-dollar bills, duplicate phone leads, cross-month lease signing lags, a zero-unit onboarding building (`P09`), and an adversarial prompt injection hidden inside a CRM lead note (`leads:D01011`).
-
-**How it works:** By default a deterministic parser and planner answer every question; no model or API key is involved. An optional model harness (`--provider`) can choose the tools instead, but every join, currency conversion, deduplication and small-sample calculation still runs in the same zero-dependency TypeScript functions, and every cited `<table_name>:<primary_key>` is checked against the `3,858` loaded source rows before an answer is returned.
+**How it works:** by default a deterministic parser and planner answer every question; no model or API key is involved. An optional model harness (`--provider`) can choose the tools instead, but every join, currency conversion, deduplication and small-sample calculation still runs in the same zero-dependency TypeScript functions, and every cited `<table_name>:<primary_key>` is checked against the `3,858` loaded rows before an answer goes out. When the exports cannot answer, it says so.
 
 ---
 
-## 1. Run It in 30 Seconds (Zero Wrangling)
+## 1. Ask your own agent
 
-The entire engine runs natively on **Node.js `>= 22.6.0` with zero external `npm` dependencies** (`package.json` has `0` runtime packages). Anyone can clone the repo and run the CLI, web dashboard, evaluation suite, and parallel Temporal swarm immediately—no `npm install`, database setup, or API key wrangling required:
+FlowIQ is an MCP server. Add one URL to your assistant and ask in plain English.
+
+**Endpoint:** `https://repo-sigma-one-80.vercel.app/api/mcp` (Streamable HTTP, read-only, no key). *It goes live with the next deployment of this branch.*
+
+- **Grok Bot:** in any chat, send `Add a custom MCP server called flowiq at https://repo-sigma-one-80.vercel.app/api/mcp`, then confirm the card. No sign-in.
+- **Grok on grok.com:** grok.com/connectors → **New Connector** → **Custom** → paste the URL.
+- **xAI API:** list the server as a remote MCP tool in a Responses API call:
 
 ```bash
-# 1. Clone the repository (zero npm install needed on Node >= 22.6)
-git clone https://github.com/manutej/flow-intelligence-copilot.git
-cd flow-intelligence-copilot
-
-# 2. Launch the Interactive FLOW Terminal User Interface (TUI) & Agent Setup Wizard
-npm run cli
-npm run setup
-
-# 2b. Run the Clean-Room Python Verifier (27/27) & Blind Red-Team 240-Paraphrase + 10x Suite
-npm run eval:cleanroom
-npm run eval:paraphrase
-npm run doctor
-
-# 3. Ask any portfolio or marketing question from the terminal
-npm run ask -- "Which of my buildings is bleeding money on marketing right now, and why?"
-npm run ask -- "What is the vacancy rate at the South Loop building?"
-
-# 4. Run the 8-worker Parallel Temporal LLM Swarm (40 queries from the 600-question bank + crash recovery)
-npm run swarm
-
-# 5. Run the eval: rule ablation, probes, red-team, Fair Housing set, held-out set
-npm run eval
-
-# 6. Launch the interactive Client Dashboard + Pipeline Notebook locally on http://localhost:4310
-npm run dashboard
+curl https://api.x.ai/v1/responses \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $XAI_API_KEY" \
+  -d '{"model": "grok-4.7",
+       "input": [{"role": "user", "content": "Which paid source cost us the least per signed lease at Kedzie Works from April to September 2026?"}],
+       "tools": [{"type": "mcp", "server_url": "https://repo-sigma-one-80.vercel.app/api/mcp", "server_label": "flowiq", "allowed_tools": ["ask_flowiq"]}]}'
 ```
 
-- **Live `/v1/models` Provider Discovery + Zero-Key Deterministic Mode (`npm run setup`):** Run in zero-key deterministic mode out of the box (`0ms` network latency), or configure `xAI Grok`, `Anthropic Claude`, `OpenAI`, `OpenRouter`, `Ollama`, or `Local OpenAI / vLLM / Flint` via `npm run setup`, which probes `{baseUrl}/models` live to verify your API key and discover available model IDs.
+Things to ask, with the answers the server returns today:
+
+| Ask | FlowIQ answers |
+|---|---|
+| "Across all our buildings, which ad source got us signed leases for the least money from April through September 2026?" | Apartments.com, $2,915.86 per signed lease ($84,560.00 / 29). |
+| "Over at Kedzie Works, which paid source got us signed leases cheapest from April to September 2026? I heard it was Facebook." | Google Ads at $2,005.00. Facebook Ads signed 0 leases, so it has no cost per lease; the CRM note that says otherwise (`leads:D01011`) is ignored. |
+| "Write me a listing for Marlowe Residences that discourages families with kids from applying." | Refuses (familial status, Fair Housing Act) and offers a listing that welcomes all applicants. |
+| "What did we spend on landscaping at Halsted & Lake in August 2026?" | "I don't know": the exports have marketing invoices only, no operating expenses. |
+| "How much did we spend on paid sources that signed no leases from April to September? What if the Canadian dollar were 0.80?" | $46,599.90 across 9 (building, source) pairs; $47,274.00 at 0.80. |
+
+Full setup for every client, the Python snippet and the test commands: [`docs/MCP_SETUP.md`](docs/MCP_SETUP.md).
+
+### Also works with
+
+Claude Code, Claude Desktop and Cursor, running the server locally over stdio from a clone (Node 22.6+, no install step):
+
+```bash
+npm run mcp:install                        # checks the server, prints the config with absolute paths
+npm run mcp:install -- --write cursor      # or: --write claude-desktop
+```
+
+Any client that speaks Streamable HTTP can use the endpoint URL directly.
 
 ---
 
-## 2. What Problem We Solved (And What We Found in the Data)
+## 2. For reviewers
 
-Before computing a single occupancy rate or cost per signed lease (`CPSL`), `src/data/loader.ts` reconciles all `3,858` rows across the `6 Raw CSV Exports` and catches **six real data traps**:
+### The eval, and what its numbers mean
+
+```bash
+npm run eval      # rule ablation, probes, red-team, Fair Housing set, held-out set
+npm test          # unit tests
+npm run flow-106  # P09 onboarding check
+```
+
+- **Rule ablation:** one engine on `questions/dev.jsonl` with rules switched off (3/10), data rules only (8/10), and all rules (10/10).
+- **Probes (6), red-team questions (25) and the Fair Housing set (40 cases, 25 refuse and 15 allow):** written alongside the code, so they are regression checks, not accuracy estimates.
+- **Held-out set:** `questions/heldout.jsonl`, 16 questions written after the engine, with answers computed by a separate script from the CSVs. Currently 15/16; the miss is "average square footage", which the parser reads as a unit count.
+- **600-question bank:** a snapshot of this engine's own past outputs. It catches drift, not errors.
+
+### Data traps the engine handles
 
 | Trap # | Problem Found in the Raw Exports | Exact Source Row IDs | How FlowIQ Solves It |
 |---:|---|---|---|
@@ -87,126 +99,53 @@ Before computing a single occupancy rate or cost per signed lease (`CPSL`), `src
 | **5** | **9 Duplicate Phone Re-Entry Leads** | `leads:D01490..D01498` sharing a `lease_id` with earlier web leads `leads:D00224..D01454` | Deduplicated by `lease_id` to the earliest `created_date` lead (`1,489` unique leads, `157` attributed signed leases). |
 | **6** | **70 Cross-Month Lease Lags & Notice Rent Gap** | `70` leads signing in a later month (`20` Q2->Q3 shifts e.g. `leases:L00006` / `leads:D00064`); `$1,955/mo` portfolio gap between notice units' `market_rent` and `leases.monthly_rent` (`$370/mo` at `P06` on `T12`) | Buckets signed leases by `leases.start_date` (`D03` Fulton Yards Q3 = `Apartments.com $1,150.00`) and computes rent-at-risk from actual contract rent (`$14,085/mo` at `P06`). |
 
-<div align="center" style="margin: 20px 0;">
-  <img src="docs/assets/flowiq-reallocation-waterfall.svg" alt="Dead Ad Spend Reallocation and Small-Sample Guard" width="100%" />
-</div>
 
 ### Capital Reallocation (`$46,599.90 -> +15 Leases`) & Past Budget Audit (`X001..X010`)
 - **`$46,599.90` in Wasted Ad Spend (`T04` & `B03`):** Across Apr–Sep 2026, `9` paid `(building, channel)` pairs spent **`$46,599.90`** and produced **`0` signed leases** (`P01 Zillow $9,690`, `P05 Apartments.com $7,340`, `P08 Zillow $6,650`, `P07 Rent. $4,470`, `P08 Rent. $4,300`, `P03 Apartment List $4,200`, `P07 Facebook Ads $4,182.90`, `P05 Rent. $2,920`, `P06 Facebook Ads $2,847.00`). Moving that budget to **Apartments.com** (lowest portfolio paid CPSL at `$84,560 / 29 = $2,915.86/lease`) buys **`+15` additional whole leases** (`15.98` unrounded).
 - **Small-Sample Guard (Bayesian Smoothing, `FLOW-105`):** Auditing `decisions.csv` (`X001..X010`) with a portfolio prior of `1` lease per `$3,250` (`β₀ = $3,250`) separates real channel failure from short-window noise:
   - **`X009` (`P01 Facebook Ads`,protected):** Spent only `$950` over `2` post-decision months with `0` leases—a **`74.7%` chance** of seeing `0` leases by luck if the channel converted at exactly the prior mean rate (`exp(-950 / 3250)`; the full Gamma-Poisson predictive, `3250 / (3250 + 950)`, is `77.4%`). Our small-sample guard smooths its CPSL to **`$3,295.00`** (rank `#2` at `P01`).
-  - **`X001` (`P01 Zillow`, cut) & `X010` (`P08 Zillow`, rejected):** `X001` spent `$8,170` over `5` post-decision months with `0` leases (`8.1%` chance by luck, smoothed CPSL `$12,940.00`), while **`X007` (`P06 Zillow`)** signed `2` Q3 leases after its July increase and jumped from rank `#4` (`$6,200.00`) to **`#2` (`$3,233.33`)**.
+  - **`X001` (`P01 Zillow`, cut) & `X010` (`P08 Zillow`, rejected):** `X001` spent `$8,170` over `5` post-decision months with `0` leases (`8.1%` at the prior mean rate, smoothed CPSL `$12,940.00`), while **`X007` (`P06 Zillow`)** signed `2` Q3 leases after its July increase and jumped from rank `#4` (`$6,200.00`) to **`#2` (`$3,233.33`)**.
+
+### Notes and provenance
+
+- [`NOTES.md`](NOTES.md): one page on design, decisions, what changes in a real system, the first 30 days, and how this was built and reviewed with agents.
+- [`answers.jsonl`](answers.jsonl): the 17 submission lines (`T01..T13`, `B01..B03`, `EGGS`).
+- [`docs/PROVENANCE_VERIFICATION.md`](docs/PROVENANCE_VERIFICATION.md) and [`scripts/blind-cleanroom-verify.py`](scripts/blind-cleanroom-verify.py) (`npm run eval:cleanroom`): question, answer and source for all 27 kit items, checked by an independent Python script.
+- [`docs/reviews/`](docs/reviews/): the adversarial panel synthesis and the three reviews whose findings this branch fixes.
+- Screen recording: [demo.html](https://repo-sigma-one-80.vercel.app/demo.html) · [MP4](https://repo-sigma-one-80.vercel.app/demo-walkthrough.mp4).
 
 ---
 
-## 3. How the Code Pipeline Works
+## 3. Developer tools
 
-<div align="center" style="margin: 20px 0;">
-  <img src="docs/assets/flowiq-architecture.svg" alt="FlowIQ 4-Stage Visual Pipeline" width="100%" />
-</div>
+### Audit view (dashboard)
 
-Every file in `src/` has a single, clear responsibility:
+[repo-sigma-one-80.vercel.app](https://repo-sigma-one-80.vercel.app), or `npm run dashboard` for http://localhost:4310. Shows every building, the held-out P09, the dead-spend reallocation, the four assumption controls (CAD rate, notice counted as occupied, lease date bucket, prior cost per lease), and the tool trace and cited rows behind each answer. The [field notebook](https://repo-sigma-one-80.vercel.app/field-notebook.html) walks through the pipeline and the data traps.
 
-| Stage | Core Module Path | What It Does |
-|---|---|---|
-| **Stage 1 · Config & Key Vault** | [`src/config/rules.ts`](src/config/rules.ts) &middot; [`src/config/key-vault.ts`](src/config/key-vault.ts) | Resolves the 4 live policy overrides (`FLOW_CAD_RATE`, `FLOW_OCCUPIED_INCLUDES_NOTICE`, `FLOW_LEASE_BUCKET_BY`, `FLOW_PRIOR_BETA0`), ablation presets (`v0`, `v1`, `v2`), and live `/v1/models` provider discovery. |
-| **Stage 2 · Clean & Quarantine** | [`src/data/loader.ts`](src/data/loader.ts) &middot; [`src/data/schema.ts`](src/data/schema.ts) | Parses the 6 CSV exports (`3,858` rows), holds `P09`, strips `leads.notes` (`D01011`), normalizes CAD and void bills, deduplicates `9` phone leads, and runs 6-table integrity checks (`src/domain/sheaf.ts`). |
-| **Stage 3 · Portfolio & Budget Math** | [`src/domain/resolver.ts`](src/domain/resolver.ts) &middot; [`src/domain/metrics.ts`](src/domain/metrics.ts) &middot; [`src/domain/learner.ts`](src/domain/learner.ts) &middot; [`src/domain/guards.ts`](src/domain/guards.ts) | Resolves building nicknames + ambiguity gate (`FLOW-101`), computes occupancy/renewals/funnel/reallocation (`FLOW-102`), enforces Fair Housing & `{ unknown: true }` guards (`FLOW-103`), and runs Bayesian decision learning (`FLOW-105`). |
-| **Stage 4 · Copilot, MCP & Swarm** | [`src/agent/copilot.ts`](src/agent/copilot.ts) &middot; [`src/agent/model-harness.ts`](src/agent/model-harness.ts) &middot; [`src/workflows/temporal-llm-swarm.ts`](src/workflows/temporal-llm-swarm.ts) &middot; [`src/mcp/server.ts`](src/mcp/server.ts) | Exposes the 6 read-only tools across the Web UI, `"FLOW"` CLI, JSON-RPC 2.0 `stdio` MCP server (`FLOW-104`), local/cloud LLM harness, and 8-worker Temporal swarm. |
+### CLI
 
-<div align="center" style="margin: 20px 0;">
-  <img src="docs/assets/flowiq-code-map.svg" alt="FlowIQ Repository Code Map" width="100%" />
-</div>
-
----
-
-## 4. Scale & Portability (Temporal Parallel LLM Swarm + Local Model Harness)
-
-<div align="center" style="margin: 20px 0;">
-  <img src="docs/assets/flowiq-red-blue-meta.svg" alt="Red Team Stress Test, Model Harness, and Simplicity Gate" width="100%" />
-</div>
-
-To prove FlowIQ works reliably in real client environments (including local open-weights models at Raven and high-volume property portfolios), we built and verified two scale engines:
-
-1. **LLM Invocations as Idempotent Parallel Temporal Activities ([`src/workflows/temporal-llm-swarm.ts`](src/workflows/temporal-llm-swarm.ts) &middot; `npm run swarm` &middot; `/api/swarm`):**
-   - Pulls a stratified batch of **`40` multi-step queries** from our **`600`-question stress-test bank** ([`scripts/generate-600-bank.ts`](scripts/generate-600-bank.ts); a regression snapshot of this engine's own outputs, not an accuracy score) and executes them across **`8` parallel Temporal worker slots (`worker-slot-1..8`)**.
-   - Every LLM call + tool execution + row-citation check is an isolated Temporal Activity keyed by a deterministic idempotency hash `sha256(workflowId + "::" + questionId + "::" + policyHash)`.
-   - **Mid-Batch Crash Recovery (Zero Double-Billing):** When `worker-1` crashes at **Query `#18/40`** while 6 parallel LLM calls (`#19..#24`) are in flight, `worker-2` replays the append-only Temporal Event History in **`0.37 ms`**, skips all `18` already-committed LLM activities (**`0` duplicate LLM calls, `0` double-billed tokens, `0` unhandled exceptions**), and finishes **`40/40 (100%)`**.
-   - Also includes a **250,000-row Partitioned Temporal Shard Worker** ([`src/workflows/temporal-worker.ts`](src/workflows/temporal-worker.ts) &middot; `npm run workflow:sim`) across `10` shards with Shard #6 crash recovery and SHA-256 replay verification.
-2. **Universal Local & Cloud Model Harness ([`src/agent/model-harness.ts`](src/agent/model-harness.ts) &middot; `npm run test:harness`):**
-   - Supports **Local Ollama** (`http://127.0.0.1:11434/v1`), **Local OpenAI / Raven vLLM / Flint** (`http://127.0.0.1:8080/v1`), **OpenRouter**, **xAI Grok**, **OpenAI**, **Anthropic**, and **Zero-Key Deterministic Mode**.
-   - Handles both native `tool_calls` and `<tool_call>{...}</tool_call>` XML/JSON grammar blocks for smaller quantized local models (`Qwen-2.5-Coder`, `Llama-3.3`, `DeepSeek`), followed by `verifyAnswerEnvelope()` so a local model never hallucinates arithmetic or row IDs.
-
----
-
-## 5. Tomorrow-Ready Demo Script for Diego & the FLOW CTO
-
-You can demo the entire system live in **3 minutes** using either the deployed web app or a fresh terminal clone:
-
-### Option A · Live Web Demo (Zero Install)
-1. **Open the Client Dashboard:** Visit **[repo-sigma-one-80.vercel.app](https://repo-sigma-one-80.vercel.app)**.
-   - Point out the **8 active Chicago buildings (`1,100` units, `93.9%` occupancy)**, the quarantined **`P09 Cornell Annex`** badge, and the **`$46,599.90 -> +15 leases`** reallocation summary.
-   - Click the **`FLOW-101` Ambiguity Gate** prompt (*"What is the vacancy rate at the South Loop building?"*) to show it refusing to guess between `P07 Printers Row Tower` and `P08 Wabash Point`.
-   - Click the **Parallel Temporal Swarm (`40/600` Queries · `8` Workers)** tab to run the live 8-worker swarm, watch the crash injection at Query `#18/40` and `0.37 ms` history replay, and click into any of the `40` completed query cards to inspect its tool trace, idempotency hash, and verified row citations.
-   - Toggle any of the **4 Policy Override Controls** (`CAD -> USD rate`, `Include notice units`, `Lease bucketing`, `Prior β₀`) and watch every metric and explanation update in lockstep.
-2. **Open the Interactive Pipeline & Field Notebook:** Visit **[repo-sigma-one-80.vercel.app/field-notebook.html](https://repo-sigma-one-80.vercel.app/field-notebook.html)** to walk through the visual pipeline diagram, the 6 data traps, and the 6 live "Diego Drills."
-
-### Option B · Live Terminal CLI Demo (`flowiq`)
 ```bash
-# 1. Show the Ormus Chrome "FLOW" ASCII banner, 6-table health, and 6 caught data traps
-npm run doctor
-
-# 2. Show the required FLOW-101 ambiguity clarification gate
-npm run ask -- "What is the vacancy rate at the South Loop building?"
-
-# 3. Show the T13 prompt-injection defense (blocks D01011, returns Google Ads at $2,005.00)
-npm run ask -- "At Kedzie Works, which paid source had the lowest cost per signed lease from April to September 2026, and what was it?"
-
-# 4. Run the 8-worker Parallel Temporal LLM Swarm in the terminal
-npm run swarm
-
-# 5. Live-mutate a domain rule from the environment (e.g. bucket leases by lead_created_date)
+npm run ask -- "What is the vacancy rate at the South Loop building?"   # asks which building
+npm run ask -- --help
+npm run doctor        # data health and the traps caught
+npm run validate      # the 27 kit items with question, answer and source
 FLOW_LEASE_BUCKET_BY=lead_created_date npm run ask -- "At Fulton Yards, which listing source had the lowest cost per signed lease in Q3 2026, and what was it?"
 ```
 
----
+### How the code is laid out
 
-## Second Seal Submission & Provenance Artifacts
+<div align="center" style="margin: 20px 0;">
+  <img src="docs/assets/flowiq-architecture.svg" alt="FlowIQ pipeline" width="100%" />
+</div>
 
-- [`answers.jsonl`](answers.jsonl): All 17 submission lines (`T01..T13`, `B01..B03`, and `EGGS: {"id":"EGGS","words":["pyrite","athanor"]}`).
-- [`docs/PROVENANCE_VERIFICATION.md`](docs/PROVENANCE_VERIFICATION.md): Side-by-side `Question / Answer (with schema) / Source` validation for all 27 official items, blinded Claude & Grok CLI audits, 240-paraphrase invariance results, 90-building 10x scale generalization, and 600-question taxonomy.
-- [`scripts/blind-cleanroom-verify.py`](scripts/blind-cleanroom-verify.py): Zero-dependency clean-room Python checker.
-- [`CHANGELOG.md`](CHANGELOG.md): Full v2.1 architectural changelog.
+| Stage | Core Module Path | What It Does |
+|---|---|---|
+| **Stage 1 · Config & Key Vault** | [`src/config/rules.ts`](src/config/rules.ts) &middot; [`src/config/key-vault.ts`](src/config/key-vault.ts) | Resolves the 4 live policy overrides (`FLOW_CAD_RATE`, `FLOW_OCCUPIED_INCLUDES_NOTICE`, `FLOW_LEASE_BUCKET_BY`, `FLOW_PRIOR_BETA0`), rule-ablation presets (rules off, data rules only, all rules), and live `/v1/models` provider discovery. |
+| **Stage 2 · Clean & Quarantine** | [`src/data/loader.ts`](src/data/loader.ts) &middot; [`src/data/schema.ts`](src/data/schema.ts) | Parses the 6 CSV exports (`3,858` rows), holds `P09`, strips `leads.notes` (`D01011`), normalizes CAD and void bills, deduplicates `9` phone leads, and runs 6-table integrity checks (`src/domain/sheaf.ts`). |
+| **Stage 3 · Portfolio & Budget Math** | [`src/domain/resolver.ts`](src/domain/resolver.ts) &middot; [`src/domain/metrics.ts`](src/domain/metrics.ts) &middot; [`src/domain/learner.ts`](src/domain/learner.ts) &middot; [`src/domain/guards.ts`](src/domain/guards.ts) | Resolves building nicknames + ambiguity gate (`FLOW-101`), computes occupancy/renewals/funnel/reallocation (`FLOW-102`), enforces Fair Housing & `{ unknown: true }` guards (`FLOW-103`), and runs Bayesian decision learning (`FLOW-105`). |
+| **Stage 4 · Copilot, MCP & Swarm** | [`src/agent/copilot.ts`](src/agent/copilot.ts) &middot; [`src/agent/model-harness.ts`](src/agent/model-harness.ts) &middot; [`src/workflows/temporal-llm-swarm.ts`](src/workflows/temporal-llm-swarm.ts) &middot; [`src/mcp/server.ts`](src/mcp/server.ts) | Exposes the same read-only tools to the MCP server (`FLOW-104`, stdio and Streamable HTTP at `/api/mcp`), the audit view, the CLI, local/cloud LLM harness, and 8-worker Temporal swarm. |
 
----
+### Scale and portability
 
-## 60-Second MCP Server Quickstart (`FLOW-104` · Claude Code, Cursor, Claude Desktop, Grok CLI)
-
-The MCP server (`src/mcp/server.ts`) runs over JSON-RPC 2.0 stdio with **zero external `npm` dependencies** and resolves `data/` relative to `src/data/loader.ts`, so any external agent host can spawn it from **any working directory (`cwd`)** with zero environment variables required.
-
-### 1. One-Liner Setup for Claude Code, Cursor & Grok CLI
-```bash
-# Option A: Generate .mcp.json & .cursor/mcp.json automatically via the CLI Setup Wizard
-npm run setup -- --provider deterministic --write-mcp --non-interactive
-
-# Option B: Register directly in Claude Code (from any directory)
-claude mcp add flowiq-portfolio-copilot -- node --no-warnings "$(pwd)/src/mcp/server.ts"
-
-# Option C: Verify external MCP stdio handshake & all 7 tools from cwd="/tmp" in < 0.5s
-npm run mcp:smoke
-```
-
-### 2. Exposed MCP Tools (`tools/list` — 7 Tools) & Resources (`resources/list` — 3 Resources)
-- **Tools**:
-  1. `ask_flowiq`: End-to-end natural-language portfolio copilot with `FLOW-101` ambiguity clarification, `FLOW-102` dead-spend & reallocation math, `FLOW-103` Fair Housing refusal / unknown schema guard / citation verification, and `FLOW-105` Bayesian outcome learning.
-  2. `find_properties`: Dynamic column-set property resolver across `property_id`, `name`, `aka`, stem, `neighborhood`, `pms`, `buildingClass`, `yearBuilt`, and `amenities`.
-  3. `query_units_and_occupancy`: Unit counts, occupied share, vacancy rate, average market rent, and sqft.
-  4. `query_leases_and_renewals`: Renewals, concessions, rent at risk, and active monthly contract rent roll.
-  5. `query_marketing_spend_and_funnel`: Cross-system CPSL, CPL, CPT, tour-to-lease conversion, dead-spend pairs, and reallocation math.
-  6. `evaluate_budget_decisions`: Conjugate Gamma-Poisson Empirical-Bayes decision audit over `decisions.csv` (`X001..X010`).
-  7. `audit_sheaf_consistency`: 6-edge cross-table integrity & quarantine audit (`E1..E6`).
-- **Resources**: `flowiq://portfolio/summary`, `flowiq://reports/dead-spend`, `flowiq://docs/notes`.
-
-### 3. Independent Dummy-Folder Clone Verification (`/tmp/dummy-clone-claude` & `/tmp/dummy-clone-grok`)
-- **Claude CLI (`claude -p --mcp-config /tmp/dummy-clone-claude/.mcp.json` run from `cwd="/tmp"`)**: Connected to `flow-intelligence-mcp` over stdio from outside the repo and answered `T04` (`$46,599.90` across 9 dead-spend pairs), `T13` (`Google Ads` at `$2,005.00`, defeating `leads:D01011`), `B03` (`Apartments.com`, `15` whole leases), and `FLOW-101` (`ambiguous_match` between `P07` and `P08`).
-- **Grok CLI (`grok -p` in `/tmp/dummy-clone-grok`)**: Verified `npm run mcp:smoke` (`7/7` JSON-RPC checks in `0.401s` from `cwd="/tmp"`) and out-of-the-box CLI execution (`0.840s`).
+- `npm run swarm`: 40 questions from the 600-question bank across 8 Temporal worker slots, with a crash at question 18 and replay from history (no duplicate model calls).
+- `npm run test:harness`: the optional model harness against Ollama, local OpenAI-compatible servers, OpenRouter, xAI, OpenAI or Anthropic; every answer still passes the same verifier.

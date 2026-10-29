@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>FlowIQ — Ormus Chrome Portfolio & Growth Decision Copilot (FLOW-101..106)</title>
+<title>FlowIQ — ask your own agent about the portfolio</title>
 <style>
   :root {
     --bg: #0e1830;
@@ -526,13 +526,62 @@
       </div>
     </div>
     <div class="nav-links">
+      <a href="#ask" class="nav-btn gold">Ask your own agent</a>
       <span id="conn-badge" class="stamp accept">✓ LIVE API &amp; DETERMINISTIC CORE READY</span>
       <a href="/field-notebook.html" class="nav-btn">Field &amp; Meta Notebook (12 Plates)</a>
       <a href="/AGENTS.md" class="nav-btn">AGENTS.md</a>
       <a href="/llms.txt" class="nav-btn">/llms.txt</a>
-      <button class="nav-btn gold" onclick="toggleHarnessDrawer()">Agent &amp; Model Harness + Vault Drawer</button>
+      <button class="nav-btn" onclick="toggleHarnessDrawer()">Agent &amp; Model Harness + Vault Drawer</button>
     </div>
   </div>
+
+  <!-- ASK YOUR OWN AGENT -->
+  <style>
+    .ask-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 14px; margin: 18px 0 6px; }
+    @media (max-width: 960px) { .ask-grid { grid-template-columns: 1fr; } }
+    .ask-grid .panel { margin-bottom: 0; }
+    .ask-grid h2 { font-family: var(--serif); font-weight: 300; font-size: 26px; margin: 2px 0 8px; }
+    .ask-grid h3 { font-family: var(--serif); font-weight: 400; font-size: 18px; margin: 2px 0 8px; }
+    .ask-grid p, .ask-grid li { font-size: 13px; line-height: 1.5; color: var(--ink); }
+    .ask-grid ul { margin: 6px 0 0; padding-left: 18px; }
+    .ask-url { display: block; font-family: var(--mono); font-size: 12.5px; padding: 8px 10px; margin: 8px 0; border: 1px solid var(--gold); border-radius: 3px; background: var(--bg); color: var(--gold); word-break: break-all; }
+    .ask-step { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+    .ask-q { font-style: italic; }
+  </style>
+  <section id="ask" class="ask-grid" aria-label="Ask your own agent">
+    <div class="panel">
+      <div class="panel-eyebrow">/ Ask your own agent</div>
+      <h2>Ask about the portfolio from the assistant you already use.</h2>
+      <p>FlowIQ is an MCP server. Add this URL once; answers come back in plain English with the source rows they used. Read-only, no key.</p>
+      <code class="ask-url">https://repo-sigma-one-80.vercel.app/api/mcp</code>
+      <ul>
+        <li><strong>Grok Bot:</strong> in any chat, send <span class="ask-step">Add a custom MCP server called flowiq at https://repo-sigma-one-80.vercel.app/api/mcp</span> and confirm the card.</li>
+        <li><strong>Grok on grok.com:</strong> grok.com/connectors → New Connector → Custom → paste the URL.</li>
+        <li><strong>xAI API:</strong> add <span class="ask-step">{"type": "mcp", "server_url": "…/api/mcp", "server_label": "flowiq"}</span> to <span class="ask-step">tools</span> in a Responses API call.</li>
+      </ul>
+      <p style="margin-top:10px;">Try: <span class="ask-q">"Over at Kedzie Works, which paid source got us signed leases cheapest from April to September 2026?"</span> → Google Ads, $2,005.00 per lease. Facebook Ads signed none, whatever the CRM note says.</p>
+      <p class="ask-step" style="margin-top:8px;">Also works with Claude Code, Claude Desktop and Cursor: <code>npm run mcp:install</code>. Setup for every client: <a href="https://github.com/manutej/flow-intelligence-copilot/blob/main/docs/MCP_SETUP.md">docs/MCP_SETUP.md</a>.</p>
+    </div>
+    <div class="panel">
+      <div class="panel-eyebrow">/ For reviewers</div>
+      <h3>What the numbers mean</h3>
+      <ul>
+        <li><code>npm run eval</code>: rule ablation 3 → 8 → 10 of 10 on the dev set; probes, red-team and a 40-case Fair Housing set (regression checks).</li>
+        <li>Held-out set: 16 questions answered by a separate script; 15 of 16 pass.</li>
+        <li>The 600-question bank is a drift snapshot, not an accuracy score.</li>
+        <li><a href="/field-notebook.html">Field notebook</a>: the data traps, plate by plate. <a href="/AGENTS.md">AGENTS.md</a> · <a href="/llms.txt">llms.txt</a>.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <div class="panel-eyebrow">/ Developer tools</div>
+      <h3>Audit view and CLI</h3>
+      <ul>
+        <li><a href="#audit-view">Audit view</a> (below): every building, the dead-spend reallocation, the four assumption controls, and the tool trace and cited rows behind each answer.</li>
+        <li>CLI: <code>npm run ask -- "…"</code>, <code>npm run doctor</code>, <code>npm run validate</code>.</li>
+        <li>Local MCP: <code>npm run mcp:http</code>, <code>npm run mcp:smoke</code>.</li>
+      </ul>
+    </div>
+  </section>
 
   <!-- AGENT & MODEL HARNESS + VAULT DRAWER -->
   <div id="harness-drawer" class="drawer">
@@ -580,9 +629,9 @@
   </div>
 
   <!-- HERO BAND -->
-  <div class="hero-band">
+  <div class="hero-band" id="audit-view">
     <div>
-      <div class="crest-eyebrow">/ SIX-TABLE RELATIONAL RECONCILIATION ENGINE · BAYESIAN BUDGET LEARNER · TEMPORAL SWARM</div>
+      <div class="crest-eyebrow">/ AUDIT VIEW · SIX-TABLE RECONCILIATION · BAYESIAN BUDGET LEARNER · TEMPORAL SWARM</div>
       <h1 class="hero-title">Eight buildings. 1,100 units. One answerable portfolio.</h1>
       <p class="hero-sub">Cross-system joins over PMS (<code>properties</code>, <code>units</code>, <code>leases</code>), CRM (<code>leads</code>), ILS ad billing (<code>spend</code>), and historical decisions (<code>decisions</code>). Every figure verified against <code>3,858</code> row primary keys.</p>
     </div>
