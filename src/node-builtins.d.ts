@@ -19,6 +19,9 @@ declare const process: {
   cwd(): string;
   exit(code?: number): never;
   exitCode?: number;
+  readonly execPath: string;
+  readonly platform: string;
+  readonly versions: Readonly<Record<string, string>>;
   readonly stdin: {
     readonly isTTY?: boolean;
   };
@@ -46,6 +49,7 @@ declare module "node:fs" {
     options?: { recursive?: boolean; mode?: number },
   ): void;
   export function chmodSync(path: string, mode: number): void;
+  export function copyFileSync(src: string, dest: string): void;
   export function realpathSync(path: string): string;
   const fsDefault: {
     readFileSync: typeof readFileSync;
@@ -54,6 +58,7 @@ declare module "node:fs" {
     statSync: typeof statSync;
     mkdirSync: typeof mkdirSync;
     chmodSync: typeof chmodSync;
+    copyFileSync: typeof copyFileSync;
     realpathSync: typeof realpathSync;
   };
   export default fsDefault;
@@ -61,8 +66,10 @@ declare module "node:fs" {
 
 declare module "node:os" {
   export function homedir(): string;
+  export function tmpdir(): string;
   const osDefault: {
     homedir: typeof homedir;
+    tmpdir: typeof tmpdir;
   };
   export default osDefault;
 }

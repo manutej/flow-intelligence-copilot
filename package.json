@@ -52,6 +52,7 @@
     "mcp:smoke": "node --no-warnings scripts/test-mcp-external.ts",
     "mcp:http": "node --no-warnings scripts/mcp-http-server.ts",
     "mcp:http:smoke": "node --no-warnings scripts/test-mcp-http.ts",
+    "mcp:install": "node --no-warnings scripts/mcp-install.ts",
     "flow-106": "node --no-warnings scripts/flow-106.ts",
     "mcp:demo": "node --no-warnings scripts/test-mcp-external.ts",
     "test:mcp": "node --no-warnings scripts/test-mcp-external.ts"
