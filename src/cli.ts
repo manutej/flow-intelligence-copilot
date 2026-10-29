@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { wrapText } from './domain/format.ts';
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -57,41 +58,7 @@ function getBoxInnerWidth(): number {
 }
 
 function wrapPlainText(text: string, maxWidth: number): string[] {
-  const width = Math.max(24, maxWidth);
-  const rawTokens = String(text ?? "").split(/\s+/).filter(Boolean);
-  if (rawTokens.length === 0) return [""];
-  // Split any single token longer than width (such as compact JSON) on commas/braces or hard chunks
-  const words: string[] = [];
-  for (const tok of rawTokens) {
-    if (tok.length <= width) {
-      words.push(tok);
-    } else {
-      const subParts = tok.split(/(?<=[,;:\]\}])/g).filter(Boolean);
-      for (const sp of subParts) {
-        if (sp.length <= width) {
-          words.push(sp);
-        } else {
-          for (let i = 0; i < sp.length; i += width) {
-            words.push(sp.slice(i, i + width));
-          }
-        }
-      }
-    }
-  }
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    if (current.length === 0) {
-      current = word;
-    } else if (current.length + 1 + word.length <= width) {
-      current += ` ${word}`;
-    } else {
-      lines.push(current);
-      current = word;
-    }
-  }
-  if (current.length > 0) lines.push(current);
-  return lines;
+  return wrapText(text, Math.max(24, maxWidth));
 }
 
 function truncateVisible(str: string, maxVisible: number): string {

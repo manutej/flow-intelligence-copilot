@@ -2,40 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { DISCOVERED_EASTER_EGGS } from '../src/config/rules.ts';
+import { wrapText } from '../src/domain/format.ts';
 import {
   loadPortfolioStore,
   loadQuestionsFile,
 } from '../src/data/loader.ts';
-
-function wrapText(text: string, width = 58): string[] {
-  const tokens = String(text ?? '')
-    .replace(/([,}\]])(?=[^\s])/g, '$1 ')
-    .split(/\s+/)
-    .filter(Boolean);
-  const lines: string[] = [];
-  let cur = '';
-  for (const tok of tokens) {
-    if (tok.length > width) {
-      if (cur) {
-        lines.push(cur);
-        cur = '';
-      }
-      for (let i = 0; i < tok.length; i += width) {
-        lines.push(tok.slice(i, i + width));
-      }
-      continue;
-    }
-    const next = cur ? `${cur} ${tok}` : tok;
-    if (next.length <= width) {
-      cur = next;
-    } else {
-      if (cur) lines.push(cur);
-      cur = tok;
-    }
-  }
-  if (cur) lines.push(cur);
-  return lines.length > 0 ? lines : [''];
-}
 
 function printKV(label: string, value: string): void {
   const wrapped = wrapText(value, 56);

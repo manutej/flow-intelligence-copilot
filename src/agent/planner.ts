@@ -1,3 +1,4 @@
+import { fmtUsd, plural } from '../domain/format.ts';
 import { roundTo } from '../data/loader.ts';
 import type {
   AnswerEnvelope,
@@ -44,7 +45,7 @@ function buildExcludedOnboardingSuffix(store: PortfolioStore): string {
   const names = store.onboardingProperties
     .map(
       (p) =>
-        `${p.propertyId} ${p.name} (${p.actualUnitCount} units in units.csv)`,
+        `${p.propertyId} ${p.name} (${plural(p.actualUnitCount, 'unit')} in units.csv)`,
     )
     .join(', ');
   return ` (${names} excluded as non-operating)`;
@@ -183,7 +184,7 @@ export function executeCompositionalPlan(
     };
     const dq = raw.dataQualityAudit;
     return finalize(
-      `Across data/ils/spend.csv there are ${dq.voidSpendRowCount} void spend rows (${dq.voidSpendIds.join(', ')}; $${dq.voidSpendUsdTotal.toFixed(2)} USD face value), and across data/crm/leads.csv there are ${dq.duplicateLeadCount} duplicate leads that point to the same lease as an earlier lead (${dq.duplicateLeadIds.join(', ')}, duplicating earliest leads ${dq.earliestCreditedLeadIds.join(', ')}).`,
+      `Across data/ils/spend.csv there are ${dq.voidSpendRowCount} void spend rows (${dq.voidSpendIds.join(', ')}; ${fmtUsd(dq.voidSpendUsdTotal)} USD face value), and across data/crm/leads.csv there are ${dq.duplicateLeadCount} duplicate leads that point to the same lease as an earlier lead (${dq.duplicateLeadIds.join(', ')}, duplicating earliest leads ${dq.earliestCreditedLeadIds.join(', ')}).`,
       {
         void_rows: dq.voidSpendRowCount,
         duplicate_leads: dq.duplicateLeadCount,
@@ -230,7 +231,7 @@ export function executeCompositionalPlan(
       const ev = report.evaluatedDecisions[0];
       const acceptedStr = ev.accepted ? 'yes' : 'no';
       return finalize(
-        `Decision ${ev.decisionId} (${ev.decisionMonth}, ${ev.propertyName} [${ev.propertyId}], ${ev.source}): accepted=${acceptedStr}, decided_by=${ev.decidedBy}, recommendation=${ev.recommendation} ($${ev.deltaUsd}/mo). Post-decision window (${ev.postMonths} months): $${ev.postSpendUsd.toFixed(2)} posted spend, ${ev.postSignedLeases} signed leases (strict post-month window: $${ev.postStrictSpendUsd.toFixed(2)} spend, ${ev.postStrictSignedLeases} signed leases).`,
+        `Decision ${ev.decisionId} (${ev.decisionMonth}, ${ev.propertyName} [${ev.propertyId}], ${ev.source}): accepted=${acceptedStr}, decided_by=${ev.decidedBy}, recommendation=${ev.recommendation} ($${ev.deltaUsd}/mo). Post-decision window (${ev.postMonths} months): ${fmtUsd(ev.postSpendUsd)} posted spend, ${plural(ev.postSignedLeases, 'signed lease')} (strict post-month window: ${fmtUsd(ev.postStrictSpendUsd)} spend, ${plural(ev.postStrictSignedLeases, 'signed lease')}).`,
         {
           decision_id: ev.decisionId,
           property_id: ev.propertyId,
@@ -257,7 +258,7 @@ export function executeCompositionalPlan(
         2,
       );
       return finalize(
-        `Across data/ops/decisions.csv, ${ids.length} decisions had accepted=no (${ids.join(', ')}), with a combined absolute recommended monthly delta of $${sumAbsDelta.toFixed(2)}.`,
+        `Across data/ops/decisions.csv, ${plural(ids.length, 'decision')} had accepted=no (${ids.join(', ')}), with a combined absolute recommended monthly delta of ${fmtUsd(sumAbsDelta)}.`,
         {
           decision_ids: ids,
           count: ids.length,
@@ -276,7 +277,7 @@ export function executeCompositionalPlan(
       );
       const top = sorted[0];
       return finalize(
-        `Among the matching decisions (${sorted.map((d) => `${d.decisionId} [${d.propertyId} ${d.source}]: $${d.postSpendUsd.toFixed(2)}`).join(' vs. ')}), ${top.propertyName} (${top.propertyId}) ${top.source} (${top.decisionId}) spent the most in the months on or after the decision month at $${top.postSpendUsd.toFixed(2)}.`,
+        `Among the matching decisions (${sorted.map((d) => `${d.decisionId} [${d.propertyId} ${d.source}]: ${fmtUsd(d.postSpendUsd)}`).join(' vs. ')}), ${top.propertyName} (${top.propertyId}) ${top.source} (${top.decisionId}) spent the most in the months on or after the decision month at ${fmtUsd(top.postSpendUsd)}.`,
         {
           decision_id: top.decisionId,
           property_id: top.propertyId,
@@ -299,7 +300,7 @@ export function executeCompositionalPlan(
       const topChannel = sortedByPosterior[0];
       if (topChannel) {
         return finalize(
-          `At ${topChannel.propertyName} (${topChannel.propertyId}), under the conjugate Gamma-Poisson Empirical-Bayes learner (alpha0=${report.priorAlpha0}, beta0=$${report.priorBeta0Usd}), ${topChannel.source} ranks #${topChannel.learnedRankInProperty} with the lowest post-outcome posterior CPSL at $${topChannel.outcomeLearnedCpslUsd.toFixed(2)} (raw CPSL $${(topChannel.rawCpslUsd ?? 0).toFixed(2)} across ${topChannel.totalSignedLeases} leases and $${topChannel.totalSpendUsd.toFixed(2)} spend; windowInvariance=${report.windowInvarianceVerified}).`,
+          `At ${topChannel.propertyName} (${topChannel.propertyId}), under the conjugate Gamma-Poisson Empirical-Bayes learner (alpha0=${report.priorAlpha0}, beta0=$${report.priorBeta0Usd}), ${topChannel.source} ranks #${topChannel.learnedRankInProperty} with the lowest post-outcome posterior CPSL at ${fmtUsd(topChannel.outcomeLearnedCpslUsd)} (raw CPSL ${fmtUsd((topChannel.rawCpslUsd ?? 0))} across ${plural(topChannel.totalSignedLeases, 'lease')} and ${fmtUsd(topChannel.totalSpendUsd)} spend; windowInvariance=${report.windowInvarianceVerified}).`,
           {
             source: topChannel.source,
             usd: topChannel.outcomeLearnedCpslUsd,
@@ -312,7 +313,7 @@ export function executeCompositionalPlan(
     const shiftsDesc = report.rankingShifts
       .map(
         (s) =>
-          `${s.propertyId} ${s.source} (rank #${s.staticRankInProperty} -> #${s.learnedRankInProperty}, posterior CPSL $${s.outcomeLearnedCpslUsd.toFixed(2)})`,
+          `${s.propertyId} ${s.source} (rank #${s.staticRankInProperty} -> #${s.learnedRankInProperty}, posterior CPSL ${fmtUsd(s.outcomeLearnedCpslUsd)})`,
       )
       .join('; ');
 
@@ -363,7 +364,7 @@ export function executeCompositionalPlan(
       ) {
         const nonOp = candidateRes.matched[0];
         return finalize(
-          `${nonOp.name} (${nonOp.propertyId}) in ${nonOp.neighborhood} (PMS: ${nonOp.pms}) is an onboarding property with ${nonOp.actualUnitCount} units in data/pms/units.csv and is not operating yet (${nonOp.onboardingReadiness.blockingReasons.join('; ')}). Per portfolio rules, it is excluded from operating totals, averages, and rankings.`,
+          `${nonOp.name} (${nonOp.propertyId}) in ${nonOp.neighborhood} (PMS: ${nonOp.pms}) is an onboarding property with ${plural(nonOp.actualUnitCount, 'unit')} in data/pms/units.csv and is not operating yet (${nonOp.onboardingReadiness.blockingReasons.join('; ')}). Per portfolio rules, it is excluded from operating totals, averages, and rankings.`,
           {
             property_id: nonOp.propertyId,
             is_operating: false,
@@ -412,7 +413,7 @@ export function executeCompositionalPlan(
       const h1Mkt = h1Trace.rawOutput as MarketingQuerySummary;
       const q3Mkt = q3Trace.rawOutput as MarketingQuerySummary;
       return finalize(
-        `For the filtered buildings and sources, H1 2026 posted spend was $${h1Mkt.totalSpendUsd.toFixed(2)} USD vs. Q3 2026 posted spend of $${q3Mkt.totalSpendUsd.toFixed(2)} USD (CAD converted at ${store.policy.cadToUsdRate} USD, void invoices excluded).`,
+        `For the filtered buildings and sources, H1 2026 posted spend was ${fmtUsd(h1Mkt.totalSpendUsd)} USD vs. Q3 2026 posted spend of ${fmtUsd(q3Mkt.totalSpendUsd)} USD (CAD converted at ${store.policy.cadToUsdRate} USD, void invoices excluded).`,
         {
           h1_usd: h1Mkt.totalSpendUsd,
           q3_usd: q3Mkt.totalSpendUsd,
@@ -448,13 +449,13 @@ export function executeCompositionalPlan(
       const realloc = mkt.deadSpendReallocation;
       if (!realloc.bestPortfolioPaidSource) {
         return finalize(
-          `No paid source signed a lease in ${mkt.windowLabel}, so there is no cost per signed lease to reallocate the $${realloc.totalDeadSpendUsd.toFixed(2)} of dead spend against.`,
+          `No paid source signed a lease in ${mkt.windowLabel}, so there is no cost per signed lease to reallocate the ${fmtUsd(realloc.totalDeadSpendUsd)} of dead spend against.`,
           { source: null, leases: null },
           realloc.citations.slice(0, 8),
         );
       }
       return finalize(
-        `In ${mkt.windowLabel}, the ${realloc.deadPairs.length} zero-lease paid (building, source) pairs spent $${realloc.totalDeadSpendUsd.toFixed(2)} in total. Moving that $${realloc.totalDeadSpendUsd.toFixed(2)} to ${realloc.bestPortfolioPaidSource} — the paid source with the lowest portfolio cost per signed lease ($${realloc.bestSourcePortfolioCpslUsd.toFixed(2)}/lease, or $${realloc.bestSourceSpendUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${realloc.bestSourceSignedLeases} leases) — would buy ${realloc.projectedAdditionalWholeLeases} additional whole signed leases (rounded down from ${realloc.unroundedAdditionalLeases.toFixed(2)}).`,
+        `In ${mkt.windowLabel}, the ${realloc.deadPairs.length} zero-lease paid (building, source) pairs spent ${fmtUsd(realloc.totalDeadSpendUsd)} in total. Moving that ${fmtUsd(realloc.totalDeadSpendUsd)} to ${realloc.bestPortfolioPaidSource} — the paid source with the lowest portfolio cost per signed lease (${fmtUsd(realloc.bestSourcePortfolioCpslUsd)}/lease, or $${realloc.bestSourceSpendUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${plural(realloc.bestSourceSignedLeases, 'lease')}) — would buy ${realloc.projectedAdditionalWholeLeases} additional whole signed leases (rounded down from ${realloc.unroundedAdditionalLeases.toFixed(2)}).`,
         {
           source: realloc.bestPortfolioPaidSource,
           leases: realloc.projectedAdditionalWholeLeases,
@@ -467,7 +468,7 @@ export function executeCompositionalPlan(
       const realloc = mkt.deadSpendReallocation;
       const pairsFormatted = realloc.deadPairs.map(([p, s]) => [p, s]);
       const pairText = realloc.deadPairDetails
-        .map((d) => `${d.propertyId} ${d.source} ($${d.spendUsd.toFixed(2)})`)
+        .map((d) => `${d.propertyId} ${d.source} (${fmtUsd(d.spendUsd)})`)
         .join(', ');
       const cadPairs = realloc.deadPairDetails
         .filter((d) => d.cadInvoiceCount > 0)
@@ -477,7 +478,7 @@ export function executeCompositionalPlan(
           ? ` (with ${cadPairs.join(' and ')} converted from CAD at ${realloc.cadRateUsed} USD and void invoices excluded)`
           : ' (with void invoices excluded)';
       return finalize(
-        `${realloc.deadPairs.length} paid (property, source) pairs produced 0 signed leases in ${mkt.windowLabel}: ${pairText}, for a combined dead spend of $${realloc.totalDeadSpendUsd.toFixed(2)} USD${cadClause}.`,
+        `${realloc.deadPairs.length} paid (property, source) pairs produced 0 signed leases in ${mkt.windowLabel}: ${pairText}, for a combined dead spend of ${fmtUsd(realloc.totalDeadSpendUsd)} USD${cadClause}.`,
         {
           pairs: pairsFormatted,
           usd: realloc.totalDeadSpendUsd,
@@ -489,7 +490,7 @@ export function executeCompositionalPlan(
     if (intent.measure === 'dead_spend_building') {
       const propSummary = mkt.byProperty[0];
       return finalize(
-        `At ${propSummary.propertyName} (${propSummary.propertyId}), the paid sources with 0 signed leases in ${mkt.windowLabel} were ${propSummary.deadSpendSources.join(' and ')}, costing $${propSummary.deadSpendUsd.toFixed(2)} USD in total (excluding void invoices).`,
+        `At ${propSummary.propertyName} (${propSummary.propertyId}), the paid sources with 0 signed leases in ${mkt.windowLabel} were ${propSummary.deadSpendSources.join(' and ')}, costing ${fmtUsd(propSummary.deadSpendUsd)} USD in total (excluding void invoices).`,
         {
           sources: propSummary.deadSpendSources,
           usd: propSummary.deadSpendUsd,
@@ -509,7 +510,7 @@ export function executeCompositionalPlan(
         );
       }
       return finalize(
-        `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${row.source} generated ${row.leadsCreatedCount} deduplicated leads, of which ${row.touredCount} toured and ${row.leasedFromCreatedLeadsCount} signed a lease, giving a tour-to-lease conversion rate of ${row.tourToLeaseConversionPercent.toFixed(1)}%.`,
+        `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${row.source} generated ${plural(row.leadsCreatedCount, 'deduplicated lead')}, of which ${row.touredCount} toured and ${row.leasedFromCreatedLeadsCount} signed a lease, giving a tour-to-lease conversion rate of ${row.tourToLeaseConversionPercent.toFixed(1)}%.`,
         {
           percent: row.tourToLeaseConversionPercent,
         },
@@ -537,7 +538,7 @@ export function executeCompositionalPlan(
         (p) => p.appliedWithoutTourCount > 0,
       );
       return finalize(
-        `In ${mkt.windowLabel}, ${mkt.totalAppliedWithoutTour} deduplicated leads had applied=true and toured=false across ${nonZero.map((p) => `${p.propertyName} (${p.propertyId}): ${p.appliedWithoutTourCount}`).join(', ') || '0 buildings'} (funnel contradiction flagged without dropping rows).`,
+        `In ${mkt.windowLabel}, ${plural(mkt.totalAppliedWithoutTour, 'deduplicated lead')} had applied=true and toured=false across ${nonZero.map((p) => `${p.propertyName} (${p.propertyId}): ${p.appliedWithoutTourCount}`).join(', ') || '0 buildings'} (funnel contradiction flagged without dropping rows).`,
         {
           count: mkt.totalAppliedWithoutTour,
         },
@@ -566,7 +567,7 @@ export function executeCompositionalPlan(
         );
       }
       return finalize(
-        `In ${mkt.windowLabel}, ${srcRow.source} spent $${srcRow.spendUsd.toFixed(2)} across ${srcRow.leadsCreatedCount} deduplicated leads and ${srcRow.touredCount} tours, for a cost per lead of ${srcRow.costPerLeadUsd === null ? 'n/a (no leads or free source)' : `$${srcRow.costPerLeadUsd.toFixed(2)}`} and a cost per tour of ${srcRow.costPerTourUsd === null ? 'n/a (no tours or free source)' : `$${srcRow.costPerTourUsd.toFixed(2)}`}.`,
+        `In ${mkt.windowLabel}, ${srcRow.source} spent ${fmtUsd(srcRow.spendUsd)} across ${plural(srcRow.leadsCreatedCount, 'deduplicated lead')} and ${plural(srcRow.touredCount, 'tour')}, for a cost per lead of ${srcRow.costPerLeadUsd === null ? 'n/a (no leads or free source)' : `${fmtUsd(srcRow.costPerLeadUsd)}`} and a cost per tour of ${srcRow.costPerTourUsd === null ? 'n/a (no tours or free source)' : `${fmtUsd(srcRow.costPerTourUsd)}`}.`,
         {
           cpl_usd: srcRow.costPerLeadUsd,
           cpt_usd: srcRow.costPerTourUsd,
@@ -594,14 +595,14 @@ export function executeCompositionalPlan(
       if (row.costPerLeadUsd === null) {
         return finalize(
           isFreeSource(row.source)
-            ? `${row.source} is a free source with no spend, so cost per lead is not applicable (${row.leadsCreatedCount} deduplicated leads in ${mkt.windowLabel}).`
-            : `${row.source} had $${row.spendUsd.toFixed(2)} spend but no leads in ${mkt.windowLabel}, so cost per lead is not defined.`,
+            ? `${row.source} is a free source with no spend, so cost per lead is not applicable (${plural(row.leadsCreatedCount, 'deduplicated lead')} in ${mkt.windowLabel}).`
+            : `${row.source} had ${fmtUsd(row.spendUsd)} spend but no leads in ${mkt.windowLabel}, so cost per lead is not defined.`,
           { source: row.source, usd: null },
           row.citations.slice(0, 8),
         );
       }
       return finalize(
-        `In ${mkt.windowLabel}, ${row.source} had a cost per lead of $${row.costPerLeadUsd.toFixed(2)} ($${row.spendUsd.toFixed(2)} spend / ${row.leadsCreatedCount} deduplicated leads).`,
+        `In ${mkt.windowLabel}, ${row.source} had a cost per lead of ${fmtUsd(row.costPerLeadUsd)} (${fmtUsd(row.spendUsd)} spend / ${plural(row.leadsCreatedCount, 'deduplicated lead')}).`,
         {
           source: row.source,
           usd: row.costPerLeadUsd,
@@ -623,7 +624,7 @@ export function executeCompositionalPlan(
         );
       }
       return finalize(
-        `In ${mkt.windowLabel}, cost per tour by source: ${eligible.map((r) => `${r.source} $${r.costPerTourUsd!.toFixed(2)} ($${r.spendUsd.toFixed(2)} / ${r.touredCount} tours)`).join(', ')}.`,
+        `In ${mkt.windowLabel}, cost per tour by source: ${eligible.map((r) => `${r.source} ${fmtUsd(r.costPerTourUsd!)} (${fmtUsd(r.spendUsd)} / ${plural(r.touredCount, 'tour')})`).join(', ')}.`,
         {
           source: top.source,
           usd: top.costPerTourUsd,
@@ -634,7 +635,7 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'lead_count') {
       return finalize(
-        `In ${mkt.windowLabel}${intent.dateExplicit ? '' : ' (the full data window, since no period was named)'}, there were ${mkt.totalLeadsCreated} leads after merging phone re-entry duplicates.`,
+        `In ${mkt.windowLabel}${intent.dateExplicit ? '' : ' (the full data window, since no period was named)'}, there were ${plural(mkt.totalLeadsCreated, 'lead')} after merging phone re-entry duplicates.`,
         { count: mkt.totalLeadsCreated },
         mkt.citations.slice(0, 8),
       );
@@ -642,7 +643,7 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'spend_total') {
       return finalize(
-        `In ${mkt.windowLabel}, total posted marketing spend across the matching operating buildings was $${mkt.totalSpendUsd.toFixed(2)} USD (with void invoices at $0 and CAD converted at ${store.policy.cadToUsdRate} USD).`,
+        `In ${mkt.windowLabel}, total posted marketing spend across the matching operating buildings was ${fmtUsd(mkt.totalSpendUsd)} USD (with void invoices at $0 and CAD converted at ${store.policy.cadToUsdRate} USD).`,
         {
           usd: mkt.totalSpendUsd,
         },
@@ -667,8 +668,8 @@ export function executeCompositionalPlan(
       const prose = allZero
         ? `Among the operating buildings matching the criteria (${sortedProps.map((p) => `${p.propertyName} [${p.propertyId}]: 0 signed leases`).join(' vs. ')}), 0 leases from leads were signed in ${mkt.windowLabel} (a 0-0 tie across the candidate buildings; note that the CRM/PMS lead-to-lease export covers through ${store.policy.asOfDate})${buildExcludedOnboardingSuffix(store)}.`
         : isTie
-          ? `Among the operating buildings matching the criteria (${sortedProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.signedLeasesInPeriod} signed leases`).join(' vs. ')}), ${winner.propertyName} (${winner.propertyId}) and ${runnerUp.propertyName} (${runnerUp.propertyId}) tied with ${winner.signedLeasesInPeriod} signed leases in ${mkt.windowLabel}${buildExcludedOnboardingSuffix(store)}.`
-          : `Among the operating buildings matching the criteria (${sortedProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.signedLeasesInPeriod} signed leases`).join(' vs. ')}), ${winner.propertyName} (${winner.propertyId}) signed the most leases in ${mkt.windowLabel} with ${winner.signedLeasesInPeriod} signed leases${buildExcludedOnboardingSuffix(store)}.`;
+          ? `Among the operating buildings matching the criteria (${sortedProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${plural(p.signedLeasesInPeriod, 'signed lease')}`).join(' vs. ')}), ${winner.propertyName} (${winner.propertyId}) and ${runnerUp.propertyName} (${runnerUp.propertyId}) tied with ${plural(winner.signedLeasesInPeriod, 'signed lease')} in ${mkt.windowLabel}${buildExcludedOnboardingSuffix(store)}.`
+          : `Among the operating buildings matching the criteria (${sortedProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${plural(p.signedLeasesInPeriod, 'signed lease')}`).join(' vs. ')}), ${winner.propertyName} (${winner.propertyId}) signed the most leases in ${mkt.windowLabel} with ${plural(winner.signedLeasesInPeriod, 'signed lease')}${buildExcludedOnboardingSuffix(store)}.`;
       return finalize(
         prose,
         {
@@ -703,7 +704,7 @@ export function executeCompositionalPlan(
         !/\bcost\b/i.test(question);
       if (asksLeaseCount || (qRecord.result_schema && ("count" in qRecord.result_schema || "leases" in qRecord.result_schema) && !("source" in qRecord.result_schema))) {
         return finalize(
-          `In ${mkt.windowLabel}, matching sources produced ${mkt.totalSignedLeases} signed leases across ${mkt.totalSpendUsd.toFixed(2)} USD posted spend (any untrusted CRM free-text notes are quarantined).`,
+          `In ${mkt.windowLabel}, matching sources produced ${plural(mkt.totalSignedLeases, 'signed lease')} across ${mkt.totalSpendUsd.toFixed(2)} USD posted spend (any untrusted CRM free-text notes are quarantined).`,
           { count: mkt.totalSignedLeases, leases: mkt.totalSignedLeases },
           mkt.citations.slice(0, 8),
         );
@@ -716,20 +717,20 @@ export function executeCompositionalPlan(
         const row = mkt.byPropertySource.find((r) => r.source === src);
         if (isFreeSource(src)) {
           return finalize(
-            `${src} is a free source with no spend, so cost per signed lease is not applicable at ${buildingLabel(matchedPropIds)} (${row?.signedLeasesInPeriod ?? 0} signed leases in ${mkt.windowLabel}).`,
+            `${src} is a free source with no spend, so cost per signed lease is not applicable at ${buildingLabel(matchedPropIds)} (${plural(row?.signedLeasesInPeriod ?? 0, 'signed lease')} in ${mkt.windowLabel}).`,
             { source: src, usd: null, applicable: false },
             row ? row.citations.slice(0, 8) : propRes?.citations ?? [],
           );
         }
         if (!row || row.costPerSignedLeaseUsd === null) {
           return finalize(
-            `${src} at ${buildingLabel(matchedPropIds)} had $${(row?.spendUsd ?? 0).toFixed(2)} spend and no signed leases in ${mkt.windowLabel}, so its cost per signed lease is not defined (no signed leases). Any CRM note claiming a figure for it is quarantined.`,
+            `${src} at ${buildingLabel(matchedPropIds)} had ${fmtUsd((row?.spendUsd ?? 0))} spend and no signed leases in ${mkt.windowLabel}, so its cost per signed lease is not defined (no signed leases). Any CRM note claiming a figure for it is quarantined.`,
             { source: src, usd: null, leases: 0 },
             row ? row.citations.slice(0, 8) : propRes?.citations ?? [],
           );
         }
         return finalize(
-          `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${src} cost $${row.costPerSignedLeaseUsd.toFixed(2)} per signed lease ($${row.spendUsd.toFixed(2)} spend across ${row.signedLeasesInPeriod} signed leases).`,
+          `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${src} cost ${fmtUsd(row.costPerSignedLeaseUsd)} per signed lease (${fmtUsd(row.spendUsd)} spend across ${plural(row.signedLeasesInPeriod, 'signed lease')}).`,
           { source: src, usd: row.costPerSignedLeaseUsd },
           row.citations.slice(0, 8),
         );
@@ -751,7 +752,7 @@ export function executeCompositionalPlan(
           : '';
 
       return finalize(
-        `At ${best.propertyName} (${best.propertyId}) in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at $${best.costPerSignedLeaseUsd!.toFixed(2)} ($${best.spendUsd.toFixed(2)} spend across ${best.signedLeasesInPeriod} signed leases).${zeroNote}`,
+        `At ${best.propertyName} (${best.propertyId}) in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${fmtUsd(best.spendUsd)} spend across ${plural(best.signedLeasesInPeriod, 'signed lease')}).${zeroNote}`,
         {
           source: best.source,
           usd: best.costPerSignedLeaseUsd!,
@@ -783,7 +784,7 @@ export function executeCompositionalPlan(
       );
     }
     return finalize(
-      `Across the operating portfolio in ${mkt.windowLabel}, ${winner.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease at $${winner.costPerSignedLeaseUsd!.toFixed(2)} ($${winner.spendUsd.toFixed(2)} spend / ${winner.signedLeasesInPeriod} signed leases after deduplicating phone re-entry leads and excluding void invoices).`,
+      `Across the operating portfolio in ${mkt.windowLabel}, ${winner.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease at ${fmtUsd(winner.costPerSignedLeaseUsd!)} (${fmtUsd(winner.spendUsd)} spend / ${plural(winner.signedLeasesInPeriod, 'signed lease')} after deduplicating phone re-entry leads and excluding void invoices).`,
       {
         source: winner.source,
         usd: winner.costPerSignedLeaseUsd!,
@@ -842,7 +843,7 @@ export function executeCompositionalPlan(
     if (intent.measure === 'ending_and_renewed') {
       const propRow = leaseSummary.byProperty[0];
       return finalize(
-        `At ${propRow?.propertyName ?? 'the matching buildings'} (${propRow?.propertyId ?? ''}), ${leaseSummary.totalMatchingLeases} leases end in ${intent.dateWindow.label}, and ${leaseSummary.renewedCount} of them have renewed (with ${leaseSummary.pendingCount} pending and ${leaseSummary.noticeGivenCount} with notice given).`,
+        `At ${propRow?.propertyName ?? 'the matching buildings'} (${propRow?.propertyId ?? ''}), ${plural(leaseSummary.totalMatchingLeases, 'lease')} end in ${intent.dateWindow.label}, and ${leaseSummary.renewedCount} of them have renewed (with ${leaseSummary.pendingCount} pending and ${leaseSummary.noticeGivenCount} with notice given).`,
         {
           ending: leaseSummary.totalMatchingLeases,
           renewed: leaseSummary.renewedCount,
@@ -853,7 +854,7 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'renewal_rate') {
       return finalize(
-        `For the ${leaseSummary.totalMatchingLeases} matching leases ending in ${intent.dateWindow.label}, ${leaseSummary.renewedCount} have renewed, giving a renewal rate of ${leaseSummary.renewalRatePercent.toFixed(1)}%.`,
+        `For the ${plural(leaseSummary.totalMatchingLeases, 'matching lease')} ending in ${intent.dateWindow.label}, ${leaseSummary.renewedCount} have renewed, giving a renewal rate of ${leaseSummary.renewalRatePercent.toFixed(1)}%.`,
         {
           percent: leaseSummary.renewalRatePercent,
           renewed: leaseSummary.renewedCount,
@@ -865,7 +866,7 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'new_vs_renewal_and_concession') {
       return finalize(
-        `In ${intent.dateWindow.label}, there were ${leaseSummary.newLeaseCount} new lease starts and ${leaseSummary.renewalLeaseCount} renewal lease starts (${leaseSummary.totalMatchingLeases} total), with an average concession of $${leaseSummary.averageConcessionUsd.toFixed(2)} (zeros included).`,
+        `In ${intent.dateWindow.label}, there were ${leaseSummary.newLeaseCount} new lease starts and ${leaseSummary.renewalLeaseCount} renewal lease starts (${leaseSummary.totalMatchingLeases} total), with an average concession of ${fmtUsd(leaseSummary.averageConcessionUsd)} (zeros included).`,
         {
           new_leases: leaseSummary.newLeaseCount,
           renewal_leases: leaseSummary.renewalLeaseCount,
@@ -897,7 +898,7 @@ export function executeCompositionalPlan(
           );
         }
         return finalize(
-          `${winner.propertyName} (${winner.propertyId}) gave the ${wantMax ? 'highest' : 'lowest'} average concession on ${intent.leaseType ?? 'matching'} leases in ${intent.dateWindow.label} at $${winner.averageConcessionUsd.toFixed(2)} across ${winner.matchingLeaseCount} leases (${store.policy.includeZeroConcessions ? 'zeros included' : 'non-zero only'}).`,
+          `${winner.propertyName} (${winner.propertyId}) gave the ${wantMax ? 'highest' : 'lowest'} average concession on ${intent.leaseType ?? 'matching'} leases in ${intent.dateWindow.label} at ${fmtUsd(winner.averageConcessionUsd)} across ${plural(winner.matchingLeaseCount, 'lease')} (${store.policy.includeZeroConcessions ? 'zeros included' : 'non-zero only'}).`,
           'usd' in schema && !('property_id' in schema)
             ? { usd: winner.averageConcessionUsd }
             : 'property_id' in schema && 'usd' in schema
@@ -919,7 +920,7 @@ export function executeCompositionalPlan(
         );
       }
       return finalize(
-        `At ${propRow?.propertyName ?? 'the matching buildings'} (${propRow?.propertyId ?? ''}), the average concession on the ${leaseSummary.totalMatchingLeases} ${intent.leaseType ?? 'matching'} leases in ${intent.dateWindow.label} was $${leaseSummary.averageConcessionUsd.toFixed(2)} (${store.policy.includeZeroConcessions ? 'zeros included' : 'non-zero only'}).`,
+        `At ${propRow?.propertyName ?? 'the matching buildings'} (${propRow?.propertyId ?? ''}), the average concession on the ${leaseSummary.totalMatchingLeases} ${intent.leaseType ?? 'matching'} leases in ${intent.dateWindow.label} was ${fmtUsd(leaseSummary.averageConcessionUsd)} (${store.policy.includeZeroConcessions ? 'zeros included' : 'non-zero only'}).`,
         {
           usd: leaseSummary.averageConcessionUsd,
         },
@@ -940,7 +941,7 @@ export function executeCompositionalPlan(
           const combinedUsd = topList.reduce((acc, p) => acc + p.totalMonthlyRentUsd, 0);
           const topCites = [...new Set(topList.flatMap((p) => p.citations.slice(0, 3)))];
           return finalize(
-            `The top ${topList.length} operating buildings by ${intent.leaseEndWindow ? `monthly rent on leases ending in ${intent.dateWindow.label}` : 'active monthly contract lease rent roll (from data/pms/leases.csv)'} are: ${topList.map((p, idx) => `#${idx + 1} ${p.propertyName} (${p.propertyId}) at ${p.totalMonthlyRentUsd.toLocaleString('en-US')}/mo across ${p.matchingLeaseCount} leases`).join('; ')}.`,
+            `The top ${topList.length} operating buildings by ${intent.leaseEndWindow ? `monthly rent on leases ending in ${intent.dateWindow.label}` : 'active monthly contract lease rent roll (from data/pms/leases.csv)'} are: ${topList.map((p, idx) => `#${idx + 1} ${p.propertyName} (${p.propertyId}) at ${fmtUsd(p.totalMonthlyRentUsd, { trimCents: true })}/mo across ${plural(p.matchingLeaseCount, 'lease')}`).join('; ')}.`,
             {
               property_ids: topList.map((p) => p.propertyId),
               ranking: topList.map((p) => ({
@@ -956,7 +957,7 @@ export function executeCompositionalPlan(
         }
         const winner = sorted[0];
         return finalize(
-          `${winner.propertyName} (${winner.propertyId}) has the ${wantMax ? 'highest' : 'lowest'} monthly rent on ${intent.leaseEndWindow ? `leases ending in ${intent.dateWindow.label}` : 'active leases'} at ${winner.totalMonthlyRentUsd.toLocaleString('en-US')} across ${winner.matchingLeaseCount} leases.`,
+          `${winner.propertyName} (${winner.propertyId}) has the ${wantMax ? 'highest' : 'lowest'} monthly rent on ${intent.leaseEndWindow ? `leases ending in ${intent.dateWindow.label}` : 'active leases'} at ${fmtUsd(winner.totalMonthlyRentUsd, { trimCents: true })} across ${plural(winner.matchingLeaseCount, 'lease')}.`,
           {
             property_id: winner.propertyId,
             usd: winner.totalMonthlyRentUsd,
@@ -969,8 +970,8 @@ export function executeCompositionalPlan(
         leaseSummary.byProperty.length === 1 ? leaseSummary.byProperty[0] : null;
       return finalize(
         propRow
-          ? `At ${propRow.propertyName} (${propRow.propertyId}), $${leaseSummary.totalMonthlyRentUsd.toLocaleString('en-US')} in monthly contract rent (from data/pms/leases.csv monthly_rent) is at risk across ${leaseSummary.totalMatchingLeases} matching leases.`
-          : `Across the operating portfolio in ${intent.dateWindow.label}, $${leaseSummary.totalMonthlyRentUsd.toLocaleString('en-US')} in monthly contract rent is at risk across ${leaseSummary.totalMatchingLeases} matching leases.`,
+          ? `At ${propRow.propertyName} (${propRow.propertyId}), ${fmtUsd(leaseSummary.totalMonthlyRentUsd, { trimCents: true })} in monthly contract rent (from data/pms/leases.csv monthly_rent) is at risk across ${plural(leaseSummary.totalMatchingLeases, 'matching lease')}.`
+          : `Across the operating portfolio in ${intent.dateWindow.label}, ${fmtUsd(leaseSummary.totalMonthlyRentUsd, { trimCents: true })} in monthly contract rent is at risk across ${plural(leaseSummary.totalMatchingLeases, 'matching lease')}.`,
         {
           usd: leaseSummary.totalMonthlyRentUsd,
         },
@@ -985,7 +986,7 @@ export function executeCompositionalPlan(
       (p) => p.matchingLeaseCount > 0,
     );
     return finalize(
-      `Across the matching operating buildings (${nonZeroProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.matchingLeaseCount}`).join(', ') || 'none'}), there are ${leaseSummary.totalMatchingLeases} leases matching the criteria.`,
+      `Across the matching operating buildings (${nonZeroProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.matchingLeaseCount}`).join(', ') || 'none'}), there are ${plural(leaseSummary.totalMatchingLeases, 'lease')} matching the criteria.`,
       'property_ids' in schema
         ? {
             count: leaseSummary.totalMatchingLeases,
@@ -1083,7 +1084,7 @@ export function executeCompositionalPlan(
         ? `${propRow.occupiedUnits} occupied + ${propRow.noticeUnits} on notice, with ${propRow.vacantUnits} vacant`
         : `${propRow.occupiedUnits} occupied only (notice=${propRow.noticeUnits} excluded by active policy), with ${propRow.vacantUnits} vacant`;
       return finalize(
-        `At ${propRow.propertyName} (${propRow.propertyId}), ${propRow.occupiedSharePercent.toFixed(1)}% of units are occupied (${numerator} of ${propRow.totalUnits} units, comprising ${formulaNote}).`,
+        `At ${propRow.propertyName} (${propRow.propertyId}), ${propRow.occupiedSharePercent.toFixed(1)}% of units are occupied (${numerator} of ${plural(propRow.totalUnits, 'unit')}, comprising ${formulaNote}).`,
         {
           property_id: propRow.propertyId,
           percent: propRow.occupiedSharePercent,
@@ -1107,7 +1108,7 @@ export function executeCompositionalPlan(
       : unitSummary.portfolioTotalUnits;
 
     return finalize(
-      `Across the matching units and operating buildings, the occupied share is ${share.toFixed(1)}% (${num} of ${den} units).`,
+      `Across the matching units and operating buildings, the occupied share is ${share.toFixed(1)}% (${num} of ${plural(den, 'unit')}).`,
       {
         percent: share,
       },
@@ -1117,7 +1118,7 @@ export function executeCompositionalPlan(
 
   if (intent.measure === 'avg_market_rent_and_sqft') {
     return finalize(
-      `Across the ${unitSummary.totalFilteredUnits} matching units, the average market rent is $${unitSummary.filteredAvgMarketRentUsd.toFixed(2)} and the average size is ${unitSummary.filteredAvgSqft.toFixed(1)} sqft ($${unitSummary.filteredRentPerSqftUsd.toFixed(2)}/sqft).`,
+      `Across the ${plural(unitSummary.totalFilteredUnits, 'matching unit')}, the average market rent is ${fmtUsd(unitSummary.filteredAvgMarketRentUsd)} and the average size is ${unitSummary.filteredAvgSqft.toFixed(1)} sqft (${fmtUsd(unitSummary.filteredRentPerSqftUsd)}/sqft).`,
       {
         count: unitSummary.totalFilteredUnits,
         usd: unitSummary.filteredAvgMarketRentUsd,
@@ -1131,7 +1132,7 @@ export function executeCompositionalPlan(
     if (unitSummary.byProperty.length === 1) {
       const propRow = unitSummary.byProperty[0];
       return finalize(
-        `${propRow.propertyName} (${propRow.propertyId}) is the matching building, and the average market rent of its ${propRow.filteredUnitCount} matching units is $${propRow.filteredAvgMarketRentUsd.toFixed(2)}.`,
+        `${propRow.propertyName} (${propRow.propertyId}) is the matching building, and the average market rent of its ${plural(propRow.filteredUnitCount, 'matching unit')} is ${fmtUsd(propRow.filteredAvgMarketRentUsd)}.`,
         'count' in schema
           ? {
               property_id: propRow.propertyId,
@@ -1146,7 +1147,7 @@ export function executeCompositionalPlan(
       );
     }
     return finalize(
-      `Across the ${unitSummary.totalFilteredUnits} matching units, the average market rent is $${unitSummary.filteredAvgMarketRentUsd.toFixed(2)}.`,
+      `Across the ${plural(unitSummary.totalFilteredUnits, 'matching unit')}, the average market rent is ${fmtUsd(unitSummary.filteredAvgMarketRentUsd)}.`,
       {
         count: unitSummary.totalFilteredUnits,
         usd: unitSummary.filteredAvgMarketRentUsd,
@@ -1157,7 +1158,7 @@ export function executeCompositionalPlan(
 
   if (intent.measure === 'avg_sqft') {
     return finalize(
-      `Across the ${unitSummary.totalFilteredUnits} matching units, the average square footage is ${unitSummary.filteredAvgSqft.toFixed(1)} sqft.`,
+      `Across the ${plural(unitSummary.totalFilteredUnits, 'matching unit')}, the average square footage is ${unitSummary.filteredAvgSqft.toFixed(1)} sqft.`,
       {
         count: unitSummary.totalFilteredUnits,
         sqft: unitSummary.filteredAvgSqft,
@@ -1168,7 +1169,7 @@ export function executeCompositionalPlan(
 
   if (intent.measure === 'rent_per_sqft') {
     return finalize(
-      `Across the ${unitSummary.totalFilteredUnits} matching units, the average market rent per square foot is $${unitSummary.filteredRentPerSqftUsd.toFixed(2)}/sqft.`,
+      `Across the ${plural(unitSummary.totalFilteredUnits, 'matching unit')}, the average market rent per square foot is ${fmtUsd(unitSummary.filteredRentPerSqftUsd)}/sqft.`,
       {
         usd: unitSummary.filteredRentPerSqftUsd,
       },
@@ -1302,7 +1303,7 @@ export function executeCompositionalPlan(
   }
 
   return finalize(
-    `Across the matching operating buildings (${nonZeroProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.filteredUnitCount}`).join(', ') || '0 matching units'}), there are ${unitSummary.totalFilteredUnits} matching units.`,
+    `Across the matching operating buildings (${nonZeroProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.filteredUnitCount}`).join(', ') || '0 matching units'}), there are ${plural(unitSummary.totalFilteredUnits, 'matching unit')}.`,
     {
       count: unitSummary.totalFilteredUnits,
     },

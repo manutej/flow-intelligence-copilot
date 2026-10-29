@@ -65,15 +65,15 @@ export function checkFairHousingGuard(
       : '';
 
   const classLabels = matchedRules.map((r) => r.protectedClass).join(' and ');
-  const legalBases = [
-    ...new Set(matchedRules.map((r) => r.legalBasis)),
-  ].join(' and ');
+  const legalBasisList = [...new Set(matchedRules.map((r) => r.legalBasis))];
+  const legalBases = legalBasisList.join(' and ');
+  const prohibitVerb = legalBasisList.length === 1 ? 'prohibits' : 'prohibit';
 
   return {
     refused: true,
     protectedClass: classLabels,
     legalBasis: legalBases,
-    reason: `Refused: this asks for ${classification.actions.join(' and ')} based on ${classLabels}${propContext}. That would violate the ${legalBases}, which prohibit discriminatory advertising, steering, and exclusion in housing. I can help with the same task without that criterion, for example a listing that welcomes all applicants.`,
+    reason: `Refused: this asks for ${classification.actions.join(' and ')} based on ${classLabels}${propContext}. That would violate the ${legalBases}, which ${prohibitVerb} discriminatory advertising, steering, and exclusion in housing. I can help with the same task without that criterion, for example a listing that welcomes all applicants.`,
     citations,
   };
 }

@@ -1,3 +1,4 @@
+import { printWrapped } from '../src/domain/format.ts';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -14,21 +15,8 @@ export async function runExternalMcpSmokeTest(
   targetServerPath = serverScript,
   workingDir = '/tmp',
 ): Promise<void> {
-  const wrapLine = (pfx: string, body: string): void => {
-    const w = Math.max(28, 72 - pfx.length);
-    const words = body.replace(/([,}\]])(?=[^\s])/g, "$1 ").split(/\s+/).filter(Boolean);
-    const lines: string[] = [];
-    let cur = "";
-    for (const tok of words) {
-      const nxt = cur ? `${cur} ${tok}` : tok;
-      if (nxt.length <= w) cur = nxt;
-      else { if (cur) lines.push(cur); cur = tok; }
-    }
-    if (cur) lines.push(cur);
-    console.log(`${pfx}${lines[0] ?? ""}`);
-    const pad = " ".repeat(pfx.length);
-    for (let i = 1; i < lines.length; i++) console.log(`${pad}${lines[i]}`);
-  };
+  const wrapLine = (pfx: string, body: string): void => printWrapped(pfx, body);
+
   console.log("=".repeat(72));
   console.log(`FLOW-104 MCP STDIO SERVER SMOKE TEST (cwd="${workingDir}")`);
   console.log("=".repeat(72));

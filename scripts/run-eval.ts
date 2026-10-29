@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
+import { printWrapped } from '../src/domain/format.ts';
 import {
   POLICY_RULES_OFF,
   POLICY_DATA_RULES_ONLY,
@@ -393,31 +394,7 @@ async function runEvalHarness(): Promise<{
     path.join(repoRoot, 'questions', 'dev.jsonl'),
   );
 
-  const wrap54 = (txt: string, w = 54): string[] => {
-    const tokens = String(txt ?? '').replace(/([,}\]])(?=[^\s])/g, '$1 ').split(/\s+/).filter(Boolean);
-    const out: string[] = [];
-    let cur = '';
-    for (const t of tokens) {
-      if (t.length > w) {
-        if (cur) { out.push(cur); cur = ''; }
-        for (let i = 0; i < t.length; i += w) out.push(t.slice(i, i + w));
-        continue;
-      }
-      const nxt = cur ? `${cur} ${t}` : t;
-      if (nxt.length <= w) cur = nxt;
-      else { if (cur) out.push(cur); cur = t; }
-    }
-    if (cur) out.push(cur);
-    return out.length ? out : [''];
-  };
-  const printWrapped = (prefix: string, body: string): void => {
-    const pad = ' '.repeat(prefix.length);
-    const lines = wrap54(body, Math.max(28, 72 - prefix.length));
-    console.log(`${prefix}${lines[0]}`);
-    for (let i = 1; i < lines.length; i += 1) {
-      console.log(`${pad}${lines[i]}`);
-    }
-  };
+
 
   console.log('='.repeat(72));
   console.log('FLOWIQ EVAL HARNESS · rule ablation, probes, red-team, held-out');
