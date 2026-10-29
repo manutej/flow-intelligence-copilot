@@ -3,6 +3,7 @@ import type {
   CitationId,
   PortfolioStore,
 } from '../data/schema.ts';
+import { classifyFairHousingRequest } from './fair-housing.ts';
 import { resolvePropertiesFromText } from './resolver.ts';
 
 export interface FairHousingCheckResult {
@@ -19,54 +20,6 @@ export interface UnknownDataCheckResult {
   readonly reason: string | null;
   readonly citations: readonly CitationId[];
 }
-
-const FAIR_HOUSING_SPEECH_ACTS =
-  /\b(discourag\w*|exclud\w*|prevent\w*|filter\w*|block\w*|hide|do\s+not\s+see|don't\s+see|not\s+see|target\w*|steer\w*|no\s+kids|no\s+children|no\s+strollers?|without\s+(kids|children|strollers?|service\s+animals?|vouchers?|families)|adults?\s+only|couples?\s+only|singles?\s+only|men\s+only|women\s+only|christians?\s+only|ban\w*|restrict\w*|reject\w*|deny|refus\w*|screen\s+out|prefer\w*|prioritiz\w*|best\s+suited\s+for|suited\s+for|ideal\s+for|market\s+to|aimed\s+at|rank\b.*\b(fewest|most|least)|fewest\s+(families|children|kids|vouchers?|section[-\s]?8)|demographic\s+fit|right\s+demographic|avoid\w*\s+(families|children|kids|vouchers?|section[-\s]?8|wheelchairs?)|write\s+a\s+listing|ad\s+audience|not\s+show|not\s+shown|won't\s+see|not\s+reach|hide\s+from|keep\s+.*from\s+seeing)\b/i;
-
-const PROTECTED_CLASS_RULES: ReadonlyArray<{
-  readonly protectedClass: string;
-  readonly legalBasis: string;
-  readonly pattern: RegExp;
-}> = [
-  {
-    protectedClass: 'Familial Status (families with children / minors)',
-    legalBasis: 'Fair Housing Act, 42 U.S.C. § 3604(a)-(c)',
-    pattern:
-      /\b(famil(y|ies)(\s+with\s+(children|kids))?|children|kids|minors|pregnant|maternity|familial\s+status|strollers?|daycare\s+age|school[-\s]?age\s+households?|empty[-\s]?nesters?|dinks?)\b/i,
-  },
-  {
-    protectedClass: 'Race, Color, or National Origin',
-    legalBasis: 'Fair Housing Act, 42 U.S.C. § 3604(a)-(c)',
-    pattern:
-      /\b(race|racial|color|national\s+origin|ethnic\w*|immigrant\w*|citizenship|hispanic\w*|black\w*|white\w*|asian\w*|latino\w*|demographic\s+fit|right\s+demographic)\b/i,
-  },
-  {
-    protectedClass: 'Religion',
-    legalBasis: 'Fair Housing Act, 42 U.S.C. § 3604(a)-(c)',
-    pattern:
-      /\b(religio(n|us)|christian\w*|catholic\w*|muslim\w*|jewish\w*|hindu\w*|synagogue|mosque|church)\b/i,
-  },
-  {
-    protectedClass: 'Disability / Handicap / Assistance Animals',
-    legalBasis: 'Fair Housing Act, 42 U.S.C. § 3604(f)',
-    pattern:
-      /\b(disab(ility|ilities|led)|handicap\w*|wheelchairs?|service\s+animals?|emotional\s+support\s+animals?|esas?)\b/i,
-  },
-  {
-    protectedClass: 'Sex, Gender, Sexual Orientation, Age, or Marital Status',
-    legalBasis:
-      'Fair Housing Act, 42 U.S.C. § 3604 & Illinois Human Rights Act (775 ILCS 5/)',
-    pattern:
-      /\b(gender|sex|sexual\s+orientation|lgbt\w*|men\s+only|women\s+only|female\s+only|male\s+only|marital\s+status|unmarried\s+couples?)\b/i,
-  },
-  {
-    protectedClass: 'Source of Income / Housing Choice Vouchers',
-    legalBasis:
-      'Chicago Fair Housing Ordinance (Municipal Code § 5-8-030) & Illinois Human Rights Act',
-    pattern:
-      /\b(section[-\s]?8|housing\s+choice\s+vouchers?|vouchers?\s+holders?|hcv\s+holders?|vouchers?|public\s+assistance|source\s+of\s+income)\b/i,
-  },
-];
 
 /**
  * Evaluates whether a natural-language request asks the copilot to generate copy,
@@ -86,21 +39,9 @@ export function checkFairHousingGuard(
     };
   }
 
-  const hasSpeechAct = FAIR_HOUSING_SPEECH_ACTS.test(question);
-  if (!hasSpeechAct) {
-    return {
-      refused: false,
-      protectedClass: null,
-      legalBasis: null,
-      reason: null,
-      citations: [],
-    };
-  }
-
-  const matchedRules = PROTECTED_CLASS_RULES.filter((rule) =>
-    rule.pattern.test(question),
-  );
-  if (matchedRules.length === 0) {
+  const classification = classifyFairHousingRequest(question);
+  const matchedRules = classification.classes;
+  if (!classification.refused) {
     return {
       refused: false,
       protectedClass: null,
@@ -116,7 +57,7 @@ export function checkFairHousingGuard(
   const citations: CitationId[] =
     mentionedProps.matched.length > 0
       ? mentionedProps.matched.map((p) => p.citationId)
-      : ['properties:P01'];
+      : [];
 
   const propContext =
     mentionedProps.matched.length === 1
@@ -132,7 +73,7 @@ export function checkFairHousingGuard(
     refused: true,
     protectedClass: classLabels,
     legalBasis: legalBases,
-    reason: `Refused: I cannot write listing copy, configure ad audiences, rank buildings, or filter prospective residents${propContext} based on ${classLabels}. Doing so violates the ${legalBases}, which prohibits discriminatory advertising, steering, and exclusion in housing.`,
+    reason: `Refused: this asks for ${classification.actions.join(' and ')} based on ${classLabels}${propContext}. That would violate the ${legalBases}, which prohibit discriminatory advertising, steering, and exclusion in housing. I can help with the same task without that criterion, for example a listing that welcomes all applicants.`,
     citations,
   };
 }

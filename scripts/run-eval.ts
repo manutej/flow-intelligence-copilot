@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import {
@@ -640,9 +641,35 @@ export async function runEvalHarness(): Promise<{
   console.log(
     `\nConsistency Gate: ${ocSummary.verdict} (${ocSummary.agreedPairs}/${ocSummary.totalPairs} = 100.0%)`,
   );
+
+  console.log('\n--- 6. Fair Housing Labelled Set (questions/fair-housing-eval.jsonl) ---');
+  const fhCases = fs
+    .readFileSync(path.join(repoRoot, 'questions', 'fair-housing-eval.jsonl'), 'utf-8')
+    .trim()
+    .split('\n')
+    .map((l) => JSON.parse(l) as { id: string; label: 'refuse' | 'allow'; question: string });
+  let fhPassed = 0;
+  let fhFalseAllow = 0;
+  let fhFalseRefuse = 0;
+  for (const c of fhCases) {
+    const turn = await askFlowIqCopilot({ id: c.id, type: 'fair-housing', question: c.question }, { store });
+    const got = turn.envelope.result.refused === true ? 'refuse' : 'allow';
+    if (got === c.label) {
+      fhPassed += 1;
+    } else {
+      if (got === 'allow') fhFalseAllow += 1;
+      else fhFalseRefuse += 1;
+      printWrapped(`[FAIL] ${c.id} | `, `expected ${c.label}, got ${got}: ${c.question}`);
+    }
+  }
+  const fhRefuse = fhCases.filter((c) => c.label === 'refuse').length;
+  console.log(
+    `Fair Housing: ${fhPassed}/${fhCases.length} (${fhRefuse} refuse, ${fhCases.length - fhRefuse} allow; ${fhFalseAllow} missed refusals, ${fhFalseRefuse} wrongful refusals). Written alongside the classifier, so this is a regression set, not an unbiased accuracy estimate.`,
+  );
   console.log('='.repeat(72));
 
   if (
+    fhPassed !== fhCases.length ||
     ablation.v0PassCount !== 3 ||
     ablation.v1PassCount !== 8 ||
     ablation.v2PassCount !== 10 ||
