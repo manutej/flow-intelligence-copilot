@@ -125,12 +125,16 @@ npm run flow-106  # P09 onboarding check
 ### CLI
 
 ```bash
+npm run cli -- --help                 # overview; `help <command>` for flags and examples
 npm run ask -- "What is the vacancy rate at the South Loop building?"   # asks which building
-npm run ask -- --help
-npm run doctor        # data health and the traps caught
-npm run validate      # the 27 kit items with question, answer and source
-FLOW_LEASE_BUCKET_BY=lead_created_date npm run ask -- "At Fulton Yards, which listing source had the lowest cost per signed lease in Q3 2026, and what was it?"
+npm run ask -- --json T13             # one JSON line: {id, answer, result, citations}
+npm run ask -- --cad-rate 0.8 "How much did we spend on paid sources that signed no leases from April to September 2026?"
+npm run doctor                        # data health, cross-table checks, traps, providers
+npm run validate                      # the kit items against expected answers; exits 1 on a mismatch
+npm run cli -- agent-context          # commands, flags, exit codes and MCP tools as JSON
 ```
+
+The CLI follows the [CLI Printing Press](https://printingpress.dev/) conventions where they fit a local engine (see [docs/PRINTING_PRESS.md](docs/PRINTING_PRESS.md)): every command has its own help, `--json` is machine output and is never wrapped, a mistyped command or flag names the fix, and exit codes are typed (0 ok, 1 a check failed, 2 usage, 3 not found, 10 exports missing, 130 cancelled). Human output stays within 80 columns in the Ormus palette, with gold as the only accent. Colour and the wordmark appear only on a terminal: `--no-color`, `NO_COLOR`, `TERM=dumb` and pipes get plain text.
 
 ### How the code is laid out
 
