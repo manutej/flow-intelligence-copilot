@@ -30,6 +30,43 @@ export interface JsonRpcResponse {
   };
 }
 
+/** Protocol versions this server speaks, newest first. */
+export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const;
+
+/** Every tool only reads the exports; clients can call them without approval prompts. */
+const READ_ONLY_ANNOTATIONS = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
+
+const ASK_FLOWIQ_DESCRIPTION =
+  'Ask a question about the apartment portfolio in plain English, the way an operator would: occupancy, vacancies, rent, renewals, rent at risk, concessions, marketing spend, cost per signed lease, dead spend, or past budget decisions. ' +
+  'Returns a short answer with the source rows it used (for example leases:L00105). ' +
+  'If the exports cannot answer, it says so instead of guessing; if a building name is ambiguous, it asks which one; it refuses requests that would screen or target people by a protected class under the Fair Housing Act. ' +
+  'Pass the user\'s question through as written.';
+
+type CopilotTurn = Awaited<ReturnType<typeof askFlowIqCopilot>>;
+
+/** One word an assistant can branch on without parsing prose. */
+export function answerStatus(turn: CopilotTurn): 'answered' | 'unknown' | 'refused' | 'needs_clarification' {
+  const result = turn.envelope.result as Record<string, unknown>;
+  if (result.refused === true) return 'refused';
+  if (result.unknown === true) return 'unknown';
+  if (turn.clarificationNeeded || result.clarification_needed === true) return 'needs_clarification';
+  return 'answered';
+}
+
+/** The plain-English reply an assistant can relay as is. */
+export function formatAskReply(turn: CopilotTurn): string {
+  const status = answerStatus(turn);
+  const cites = turn.envelope.citations;
+  const lines = [turn.envelope.answer];
+  if (status === 'answered' && cites.length > 0) {
+    const shown = cites.slice(0, 8).join(', ');
+    const more = cites.length > 8 ? `, and ${cites.length - 8} more` : '';
+    lines.push('', `Source rows (${cites.length}): ${shown}${more}.`);
+    lines.push('Every cited row was checked against the exports.');
+  }
+  return lines.join('\n');
+}
+
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../..',
@@ -53,10 +90,12 @@ export async function handleMcpJsonRpcRequest(
 
   switch (req.method) {
     case 'initialize': {
+      const requested = req.params?.protocolVersion;
       const clientProtocol =
-        typeof req.params?.protocolVersion === 'string'
-          ? req.params.protocolVersion
-          : '2024-11-05';
+        typeof requested === 'string' &&
+        (SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested)
+          ? requested
+          : SUPPORTED_PROTOCOL_VERSIONS[0];
       return {
         jsonrpc: '2.0',
         id,
@@ -64,8 +103,11 @@ export async function handleMcpJsonRpcRequest(
           protocolVersion: clientProtocol,
           serverInfo: {
             name: 'flow-intelligence-mcp',
-            version: '2.1.0',
+            title: 'FlowIQ portfolio copilot',
+            version: '2.2.0',
           },
+          instructions:
+            'Read-only answers over an eight-building Chicago apartment portfolio (P01-P08, plus P09 on onboarding hold). Start with ask_flowiq for any question; use the other tools for structured data. Answers cite source rows; relay them.',
           capabilities: {
             tools: { listChanged: false },
             resources: { subscribe: false, listChanged: false },
@@ -209,15 +251,16 @@ export async function handleMcpJsonRpcRequest(
       const tools = [
         {
           name: 'ask_flowiq',
-          description:
-            'Ask the FlowIQ multifamily portfolio copilot any natural-language question across properties, units, leases, renewals, CRM leads, ILS marketing spend, and budget decisions. Enforces FLOW-101 ambiguity clarification, FLOW-102 dead-spend analysis, FLOW-103 Fair Housing/unknown/citation verification, and FLOW-105 outcome learning.',
+          title: 'Ask FlowIQ',
+          description: ASK_FLOWIQ_DESCRIPTION,
+          annotations: READ_ONLY_ANNOTATIONS,
           inputSchema: {
             type: 'object',
             properties: {
               question: {
                 type: 'string',
                 description:
-                  'Natural language operator question (e.g. "Which South Loop building has a doorman, and what is the average market rent of its one-bedroom units?")',
+                  'The question in plain English, e.g. "Which source cost us the least per signed lease at Kedzie Works this summer?"',
               },
             },
             required: ['question'],
@@ -227,6 +270,7 @@ export async function handleMcpJsonRpcRequest(
           name: t.name,
           description: t.description,
           inputSchema: t.inputSchema,
+          annotations: READ_ONLY_ANNOTATIONS,
         })),
       ];
 
@@ -260,31 +304,32 @@ export async function handleMcpJsonRpcRequest(
         if (problems.length > 0) return invalidParams(problems);
         const question = String(toolArgs.question).trim();
         if (!question) return invalidParams(['"question" must not be blank']);
+        // Deterministic planner only: no provider option is passed, so no
+        // model is called and no key is needed.
         const turn = await askFlowIqCopilot(question, { store });
+        // "I don't know", a refusal, or a clarifying question is a normal
+        // answer, so it comes back as tool text, never as an error.
+        const structured = {
+          status: answerStatus(turn),
+          answer: turn.envelope.answer,
+          result: turn.envelope.result,
+          citations: turn.envelope.citations,
+          clarificationNeeded: turn.clarificationNeeded,
+          toolCalls: turn.toolCalls.map((tc) => ({
+            toolName: tc.toolName,
+            args: tc.args,
+            summary: tc.outputSummary,
+          })),
+        };
         return {
           jsonrpc: '2.0',
           id,
           result: {
             content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    answer: turn.envelope.answer,
-                    result: turn.envelope.result,
-                    citations: turn.envelope.citations,
-                    clarificationNeeded: turn.clarificationNeeded,
-                    toolCalls: turn.toolCalls.map((tc) => ({
-                      toolName: tc.toolName,
-                      args: tc.args,
-                      summary: tc.outputSummary,
-                    })),
-                  },
-                  null,
-                  2,
-                ),
-              },
+              { type: 'text', text: formatAskReply(turn) },
+              { type: 'text', text: JSON.stringify(structured, null, 2) },
             ],
+            structuredContent: structured,
           },
         };
       }

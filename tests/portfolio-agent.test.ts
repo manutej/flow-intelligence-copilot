@@ -359,11 +359,16 @@ describe('FLOW-104 · JSON-RPC 2.0 MCP Server & Full Dev/Test Answer Verificatio
         },
       },
     });
-    const textPayload = (
-      callResp?.result as { content: Array<{ text: string }> }
-    ).content[0].text;
-    const parsed = JSON.parse(textPayload) as { result: { count: number } };
+    const callResult = callResp?.result as {
+      content: Array<{ text: string }>;
+      structuredContent: { status: string; result: { count: number } };
+    };
+    // First block is the plain answer for the assistant to relay; the
+    // second is the same data as JSON.
+    assert.ok(callResult.content[0].text.includes('4'));
+    const parsed = JSON.parse(callResult.content[1].text) as { result: { count: number } };
     assert.equal(parsed.result.count, 4);
+    assert.equal(callResult.structuredContent.status, 'answered');
   });
 
   it('verifies all 17 lines of answers.jsonl', () => {

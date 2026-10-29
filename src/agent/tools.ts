@@ -146,7 +146,7 @@ export function buildFlowIqToolDefinitions(
   return [
     {
       name: 'find_properties',
-      description: `FLOW-101: Resolve one or more buildings by property_id (${propIdRangeLabel}), name, nickname/alias (aka), neighborhood (${distinctNeighborhoods.slice(0, 10).join(', ')}), PMS (${distinctPms.join(', ')}), buildingClass (${distinctClasses.join(' | ')}), yearBuiltMin/yearBuiltMax, or amenities (${distinctAmenities.slice(0, 12).join(', ')}). In single_building mode, returns status="ambiguous_match" with a clarifying question when multiple operating buildings match.`,
+      description: `Find a building by name, nickname, neighbourhood, amenity or ID. Use this when the user names a building loosely ("the lakefront one", "Logan Lofts"). Matches on property_id (${propIdRangeLabel}), name, nickname/alias (aka), neighborhood (${distinctNeighborhoods.slice(0, 10).join(', ')}), PMS (${distinctPms.join(', ')}), buildingClass (${distinctClasses.join(' | ')}), yearBuiltMin/yearBuiltMax, or amenities (${distinctAmenities.slice(0, 12).join(', ')}). In single_building mode, returns status="ambiguous_match" with a clarifying question when more than one building fits; ask the user which one.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -200,7 +200,7 @@ export function buildFlowIqToolDefinitions(
     },
     {
       name: 'query_units_and_occupancy',
-      description: `Query apartment units, occupied share ((occupied + notice) / total), vacancy rate (vacant / total), unit counts, average market_rent, average sqft, and rent per sqft filtered by propertyIds (${opIdRangeLabel}), buildingClass (${distinctClasses.join('|')}), bedrooms (${distinctBedrooms.join(', ')}), bathrooms (${distinctBathrooms.join(', ')}), sqftMin/sqftMax, floorMin/floorMax, view (${distinctViews.join(', ')}), and status (${distinctStatuses.join(', ')}).`,
+      description: `Unit counts, occupancy, vacancy and asking rent for one or more buildings. Occupied share counts notice units as occupied. Covers occupied share ((occupied + notice) / total), vacancy rate (vacant / total), unit counts, average market_rent, average sqft, and rent per sqft filtered by propertyIds (${opIdRangeLabel}), buildingClass (${distinctClasses.join('|')}), bedrooms (${distinctBedrooms.join(', ')}), bathrooms (${distinctBathrooms.join(', ')}), sqftMin/sqftMax, floorMin/floorMax, view (${distinctViews.join(', ')}), and status (${distinctStatuses.join(', ')}).`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -253,7 +253,7 @@ export function buildFlowIqToolDefinitions(
     },
     {
       name: 'query_leases_and_renewals',
-      description: `Query leases by propertyIds (${opIdRangeLabel}), PMS (${distinctPms.join(', ')}), buildingClass (${distinctClasses.join('|')}), unit attributes (bedrooms, bathrooms, view, floorMin/Max), leaseType (new or renewal), start_date range, end_date range, or renewalStatus (renewed, pending, notice_given, not_due). Returns counts, renewalRatePercent, total monthly_rent at risk, and average concession_usd (zeros included).`,
+      description: `Leases, renewals, rent at risk and concessions. Use for "how many leases end next quarter", "what is our renewal rate", or "how much rent is at risk". Filters by propertyIds (${opIdRangeLabel}), PMS (${distinctPms.join(', ')}), buildingClass (${distinctClasses.join('|')}), unit attributes (bedrooms, bathrooms, view, floorMin/Max), leaseType (new or renewal), start_date range, end_date range, or renewalStatus (renewed, pending, notice_given, not_due). Returns counts, renewalRatePercent, total monthly_rent at risk, and average concession_usd (zeros included).`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -328,7 +328,7 @@ export function buildFlowIqToolDefinitions(
     },
     {
       name: 'query_marketing_spend_and_funnel',
-      description: `FLOW-102/103: Join ILS/ad spend (1 CAD = ${store?.policy.cadToUsdRate ?? 0.73} USD, void invoices = $0), deduplicated CRM leads (notes quarantined), and PMS signed leases (bucketed by ${store?.policy.leaseBucketBy ?? 'lease.start_date'}, credited to earliest lead). Computes Cost Per Signed Lease (CPSL), Cost Per Lead (CPL), Cost Per Tour (CPT), apply rate, tour-to-lease conversion, dead-spend pairs, portfolio reallocation math, and data-quality audits across sources (${distinctSources.join(', ')}).`,
+      description: `Marketing spend, leads, tours and signed leases by source, and what each signed lease cost. A source with spend and no signed leases has no cost per lease (null), never $0. Joins ILS/ad spend (1 CAD = ${store?.policy.cadToUsdRate ?? 0.73} USD, void invoices = $0), deduplicated CRM leads (notes quarantined), and PMS signed leases (bucketed by ${store?.policy.leaseBucketBy ?? 'lease.start_date'}, credited to earliest lead). Computes Cost Per Signed Lease (CPSL), Cost Per Lead (CPL), Cost Per Tour (CPT), apply rate, tour-to-lease conversion, dead-spend pairs, portfolio reallocation math, and data-quality audits across sources (${distinctSources.join(', ')}).`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -388,7 +388,7 @@ export function buildFlowIqToolDefinitions(
     },
     {
       name: 'evaluate_budget_decisions',
-      description: `FLOW-105: Run the conjugate Gamma-Poisson / Empirical-Bayes outcome learner over data/ops/decisions.csv (${decisionRangeLabel}). Supports filtering by propertyId, decisionIds, accepted ("yes"|"no"|"all"), recommendation ("increase"|"decrease"), source, and month. Evaluates pre/post outcomes, Poisson zero-lease tail probabilities Pr(K=0), small-sample shrinkage guards, counterfactual regret, ranking changes, and generates new logged recommendations.`,
+      description: `Check how past budget decisions in decisions.csv turned out and what to do next. Small samples are shrunk toward the portfolio average so two quiet months do not kill a channel. Runs a Gamma-Poisson outcome learner over data/ops/decisions.csv (${decisionRangeLabel}). Supports filtering by propertyId, decisionIds, accepted ("yes"|"no"|"all"), recommendation ("increase"|"decrease"), source, and month. Evaluates pre/post outcomes, Pr(K=0) at the prior mean rate, small-sample shrinkage guards, counterfactual regret, ranking changes, and generates new logged recommendations.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -430,7 +430,7 @@ export function buildFlowIqToolDefinitions(
     {
       name: 'audit_sheaf_consistency',
       description:
-        'Cross-Table Data Integrity & Quarantine Audit: Evaluates all 6 cross-table restriction edges (E1..E6) and quarantine rules across properties, units, leases, leads, spend, and decisions in O(N) time, returning exact primary-key citations for every residual.',
+        'Data quality check across the six exports: which rows were held out or did not reconcile, with row citations. Evaluates all 6 cross-table restriction edges (E1..E6) and quarantine rules across properties, units, leases, leads, spend, and decisions in O(N) time, returning exact primary-key citations for every residual.',
       inputSchema: {
         type: 'object',
         properties: {
