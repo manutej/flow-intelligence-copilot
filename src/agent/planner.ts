@@ -464,7 +464,15 @@ export function executeCompositionalPlan(
       );
     }
 
-    if (intent.measure === 'dead_spend_pairs') {
+    // "Which sources signed no leases" without a single named building is a
+    // portfolio question; answering for the first building in the list
+    // (P01) was a confident wrong answer.
+    const deadSpendForOneBuilding =
+      intent.measure === 'dead_spend_building' && matchedPropIds?.length === 1;
+    if (
+      intent.measure === 'dead_spend_pairs' ||
+      (intent.measure === 'dead_spend_building' && !deadSpendForOneBuilding)
+    ) {
       const realloc = mkt.deadSpendReallocation;
       const pairsFormatted = realloc.deadPairs.map(([p, s]) => [p, s]);
       const pairText = realloc.deadPairDetails
@@ -487,7 +495,7 @@ export function executeCompositionalPlan(
       );
     }
 
-    if (intent.measure === 'dead_spend_building') {
+    if (deadSpendForOneBuilding) {
       const propSummary = mkt.byProperty[0];
       return finalize(
         `At ${propSummary.propertyName} (${propSummary.propertyId}), the paid sources with 0 signed leases in ${mkt.windowLabel} were ${propSummary.deadSpendSources.join(' and ')}, costing ${fmtUsd(propSummary.deadSpendUsd)} USD in total (excluding void invoices).`,
