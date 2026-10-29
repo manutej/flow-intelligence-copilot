@@ -4,7 +4,7 @@
  *
  * Designed for:
  * 1. Runtime policy injection (`resolvePolicyConfig`) so changing `process.env.FLOW_*`
- *    or passing a policy override (`POLICY_V0_NAIVE`, `POLICY_V1_JOINED`, `POLICY_V2_GUARDED`)
+ *    or passing a policy override (`POLICY_RULES_OFF`, `POLICY_DATA_RULES_ONLY`, `POLICY_ALL_RULES`)
  *    recomputes all metrics and explanations inside a single Node process without stale caches.
  * 2. Live-session overrides for Diego's 30-minute walkthrough:
  *    - FLOW_CAD_RATE (default: 0.73)
@@ -91,7 +91,7 @@ export function resolvePolicyConfig(
     parsePositiveFloatEnv(env.FLOW_PRIOR_BETA0, 3250.0, 'FLOW_PRIOR_BETA0');
 
   return {
-    profileName: overrides.profileName ?? 'v2_guarded',
+    profileName: overrides.profileName ?? 'all_rules',
     asOfDate,
     cadToUsdRate,
     convertCadToUsd: overrides.convertCadToUsd ?? true,
@@ -117,13 +117,15 @@ export function policyFingerprint(policy: PortfolioPolicyConfig): string {
 }
 
 /**
- * Canonical 3-Stage Eval Ablation Policy Presets (FLOW-101..103):
- * - `POLICY_V0_NAIVE`: Naive table lookup (scores 3/10 on dev.jsonl: D01, D05, D10 pass; 7 fail)
- * - `POLICY_V1_JOINED`: Rule-aligned cross-system joins (scores 8/10 on dev.jsonl; D08, D09 fail)
- * - `POLICY_V2_GUARDED`: Full v2 kit rules + safety/schema/note guards (scores 10/10)
+ * Rule ablation presets. These are switches over one engine, not three
+ * historical versions of it:
+ * - `POLICY_RULES_OFF`: every data rule and guard off.
+ * - `POLICY_DATA_RULES_ONLY`: data rules on (void, CAD, dedup, notice,
+ *   P09 quarantine), guards off (unknown, Fair Housing, CRM notes).
+ * - `POLICY_ALL_RULES`: the shipped configuration.
  */
-export const POLICY_V0_NAIVE: PortfolioPolicyConfig = resolvePolicyConfig({
-  profileName: 'v0_naive',
+export const POLICY_RULES_OFF: PortfolioPolicyConfig = resolvePolicyConfig({
+  profileName: 'rules_off',
   occupiedIncludesNotice: false,
   leaseBucketBy: 'lead_created_date',
   excludeVoidSpend: false,
@@ -137,8 +139,8 @@ export const POLICY_V0_NAIVE: PortfolioPolicyConfig = resolvePolicyConfig({
   quarantineCrmNotes: false,
 });
 
-export const POLICY_V1_JOINED: PortfolioPolicyConfig = resolvePolicyConfig({
-  profileName: 'v1_joined',
+export const POLICY_DATA_RULES_ONLY: PortfolioPolicyConfig = resolvePolicyConfig({
+  profileName: 'data_rules_only',
   occupiedIncludesNotice: true,
   leaseBucketBy: 'lease_start_date',
   excludeVoidSpend: true,
@@ -152,8 +154,8 @@ export const POLICY_V1_JOINED: PortfolioPolicyConfig = resolvePolicyConfig({
   quarantineCrmNotes: false,
 });
 
-export const POLICY_V2_GUARDED: PortfolioPolicyConfig = resolvePolicyConfig({
-  profileName: 'v2_guarded',
+export const POLICY_ALL_RULES: PortfolioPolicyConfig = resolvePolicyConfig({
+  profileName: 'all_rules',
 });
 
 // Backwards-compatible exports for scripts/tests that import default snapshots

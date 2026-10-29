@@ -194,7 +194,7 @@ export function printBanner(store?: PortfolioStore, repoRoot?: string): void {
   );
   console.log(
     boxRow(
-      ` ${ansi.gold("╚═╝      ╚══════╝ ╚═════╝   ╚══╝╚══╝")}   ${ansi.emerald("✓ 27/27 Kit · ✓ 240/240 RT")}`,
+      ` ${ansi.gold("╚═╝      ╚══════╝ ╚═════╝   ╚══╝╚══╝")}   ${ansi.muted("kit: flowiq validate")}`,
       W,
     ),
   );
@@ -544,8 +544,19 @@ async function runValidateAllCommand(
   console.log(
     `\n${ansi.goldBold("◆ OFFICIAL 27-ITEM VALIDATION VIEW (Question / Answer with Schema / Source)")}`,
   );
+  let schemaValid = 0;
+  let expectedTotal = 0;
+  let expectedMatched = 0;
   for (const q of all) {
     const turn = await askFlowIqCopilot(q, { store });
+    if (turn.verification.valid) schemaValid += 1;
+    if (q.expected) {
+      expectedTotal += 1;
+      const got = turn.envelope.result as Record<string, unknown>;
+      if (Object.entries(q.expected).every(([k, v]) => JSON.stringify(got[k]) === JSON.stringify(v))) {
+        expectedMatched += 1;
+      }
+    }
     console.log(
       `\n${ansi.goldBold("Question:")} [${ansi.inkBold(q.id)} · ${q.type}] ${ansi.ink(q.question)}`,
     );
@@ -566,7 +577,7 @@ async function runValidateAllCommand(
     `${ansi.goldBold("Source:")} ${ansi.teal(JSON.stringify({ zipComment: "pyrite", p09Base64Aka: "join.ormus.solutions/ninth-house -> athanor" }))}`,
   );
   console.log(
-    `\n${ansi.emerald("✓ All 27/27 official items (D01..D10, T01..T13, B01..B03, EGGS) verified with 0 schema or citation errors.")}`,
+    `\n${schemaValid}/${all.length} kit items passed schema and citation checks; ${expectedMatched}/${expectedTotal} matched the kit's published expected values (test items have none).`,
   );
 }
 
@@ -687,16 +698,16 @@ async function runDoctorCommand(store: PortfolioStore): Promise<void> {
 
   const bank600Count = loadQuestion600Bank().length;
   console.log(
-    `\n${ansi.goldBold("5. EVALUATION SUITES & LIVE SURFACES")} ${ansi.emerald("[✓ VERIFIED]")}`,
+    `\n${ansi.goldBold("5. EVALUATION SUITES & LIVE SURFACES")} ${ansi.muted("(not run by doctor; run the commands to get current numbers)")}`,
   );
   console.log(
-    `   • Clean-Room Python Verifier : ${ansi.inkBold("27/27 PASS")} (npm run eval:cleanroom — zero dependencies on src/)`,
+    `   • Clean-Room Python Verifier : npm run eval:cleanroom (27 kit items, no dependency on src/)`,
   );
   console.log(
-    `   • Blind Red-Team Suites      : ${ansi.inkBold("240/240 paraphrases + 20/20 ambiguity + 21/21 10x portfolio")} (npm run eval:paraphrase)`,
+    `   • Paraphrase Suites          : npm run eval:paraphrase (240 paraphrases, 20 ambiguity, 21 portfolio)`,
   );
   console.log(
-    `   • 600-Question Stress Test   : ${ansi.inkBold(`${bank600Count}/600 verified`)} (1,800 checks via scripts/generate-600-bank.ts)`,
+    `   • 600-Question Snapshot      : ${bank600Count} stored questions; npm run bank:600 checks drift against this engine's own past outputs, not accuracy`,
   );
   console.log(
     `   • Live Web & Notebook URLs   : ${ansi.inkBold("https://repo-sigma-one-80.vercel.app")} · ${ansi.inkBold("https://repo-sigma-one-80.vercel.app/field-notebook.html")}`,

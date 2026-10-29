@@ -1019,7 +1019,7 @@ if (isMain) {
   generateAndVerify600Bank()
     .then((res) => {
       console.log(
-        `=== OPERADIC 600-QUESTION BANK GENERATED & VERIFIED (${res.passedCount}/${res.totalGenerated} PASSED, ${res.citationValidCount}/${res.totalGenerated} CITATION VALID) ===`,
+        `=== 600-QUESTION REGRESSION SNAPSHOT: ${res.passedCount}/${res.totalGenerated} match the stored outputs, ${res.citationValidCount}/${res.totalGenerated} citations exist. Expected values were produced by this engine, so this detects drift, not accuracy. ===`,
       );
       console.log("  Bank file  :", res.bankPath);
       console.log("  By Stratum :", JSON.stringify(res.byStratum));

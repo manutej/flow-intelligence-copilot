@@ -119,7 +119,7 @@ export function queryUnitsAndOccupancy(
     portfolioVacantUnits += vacantUnits;
     portfolioOccupiedStatusUnits += occupiedPlusNotice;
 
-    // Under v0_naive (quarantineZeroUnitProperties=false), 0-unit P09 divides 0/0 -> NaN/100% trap
+    // Under rules_off (quarantineZeroUnitProperties=false), 0-unit P09 divides 0/0 -> NaN/100% trap
     const occupiedSharePercent =
       totalUnits > 0
         ? roundTo((occupiedPlusNotice / totalUnits) * 100, 1)

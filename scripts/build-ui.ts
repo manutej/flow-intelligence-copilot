@@ -444,7 +444,7 @@ async function buildVisualStudio() {
   <div id="tab-ablation" class="section">
     <div class="card">
       <h2>Live 3-Stage Policy Ablation on <code>questions/dev.jsonl</code> (3/10 → 8/10 → 10/10)</h2>
-      <p class="sub" style="margin-bottom:14px;">Every cell below is computed live by executing <code>askFlowIqCopilot</code> under <code>POLICY_V0_NAIVE</code>, <code>POLICY_V1_JOINED</code>, and <code>POLICY_V2_GUARDED</code> with stripped question IDs (zero static tables).</p>
+      <p class="sub" style="margin-bottom:14px;">Every cell below is computed live by executing <code>askFlowIqCopilot</code> under <code>POLICY_RULES_OFF</code>, <code>POLICY_DATA_RULES_ONLY</code>, and <code>POLICY_ALL_RULES</code> with stripped question IDs (zero static tables).</p>
       <div id="ablation-table"></div>
     </div>
   </div>

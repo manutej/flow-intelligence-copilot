@@ -258,7 +258,7 @@ describe('FLOW-105 · Conjugate Gamma-Poisson Outcome Learner & Exact Window Inv
 });
 
 describe('Anti-Hardcoding & Dynamic Ablation + 25-Query Unseen Red-Team Suite', () => {
-  it('executes live v0 (3/10) -> v1 (8/10) -> v2 (10/10) policy ablation dynamically', async () => {
+  it('pins the rule ablation on dev.jsonl: rules off 3/10, data rules only 8/10, all rules 10/10', async () => {
     const devQuestions = loadQuestionsFile(
       path.join(repoRoot, 'questions', 'dev.jsonl'),
     );

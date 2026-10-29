@@ -845,11 +845,11 @@ const evalSideHtml = `
       Proves why naive LLM/SQL fails on raw property exports and how each sanitization layer lifts accuracy to 100%:
     </div>
     <div class="oterm-kv">
-      <div class="oterm-kv-k">v0_naive (3/10)</div>
+      <div class="oterm-kv-k">rules_off (3/10)</div>
       <div class="oterm-kv-v">Fails on 10 voids, 13 CAD rows, 9 dup leads, P09 0-unit stub</div>
-      <div class="oterm-kv-k">v1_joined (8/10)</div>
+      <div class="oterm-kv-k">data_rules_only (8/10)</div>
       <div class="oterm-kv-v">Fixes cross-system joins, CAD @ 0.73, notice=occupied, P09 hold</div>
-      <div class="oterm-kv-k">v2_guarded (10/10)</div>
+      <div class="oterm-kv-k">all_rules (10/10)</div>
       <div class="oterm-kv-v">Adds D08/T09 Unknown guard, D09/T10 Fair Housing, D01011 strip</div>
       <div class="oterm-kv-k">Full Suite</div>
       <div class="oterm-kv-v">10/10 Dev · 6/6 Safety Probes · 25/25 Unseen RT · 10/10 Consistency</div>
@@ -861,7 +861,7 @@ await animateCursorAndHold(
   {
     chapter: 5,
     kicker: '/ BEAT 05B · 3-STAGE ABLATION HARNESS: NPM RUN EVAL (30% → 80% → 100% + 6 SAFETY PROBES + 25 RED-TEAM)',
-    text: '<code>npm run eval</code> proves our 3-stage progression on <code>dev.jsonl</code>: <strong>v0_naive (3/10)</strong> → <strong>v1_joined (8/10)</strong> → <strong>v2_guarded (10/10)</strong>, plus <strong>6/6 safety probes</strong> and <strong>25/25 unseen red-team queries</strong>.',
+    text: '<code>npm run eval</code> runs the rule ablation on <code>dev.jsonl</code>: <strong>rules_off (3/10)</strong> → <strong>data_rules_only (8/10)</strong> → <strong>all_rules (10/10)</strong>, plus <strong>6/6 safety probes</strong> and <strong>25/25 unseen red-team queries</strong>.',
     badge: 'EVAL HARNESS<br/>3/10 → 8/10 → 10/10',
     termVisible: true,
     termTitle: '/ LIVE CLI · npm run eval (3-STAGE ABLATION + 6 PROBES + 25 RED-TEAM)',

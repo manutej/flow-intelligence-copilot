@@ -41,7 +41,7 @@ This submission completes all six tickets (`FLOW-101`..`FLOW-106`), all 10 dev q
 
 ## Core Engine Modules (`src/`), Question Banks (`questions/`) & API (`api/`)
 - [src/schema.ts](src/schema.ts): Declarative 6-table integrity schema (`FLOW_PORTFOLIO_SCHEMA` and `SAAS_FINOPS_SCHEMA`).
-- [src/config/rules.ts](src/config/rules.ts): Runtime policy resolver (`resolvePolicyConfig`) exposing the 4 explicit policy knobs (`cadToUsdRate`, `occupiedIncludesNotice`, `leaseBucketBy`, `priorSpendUsdBeta0`) and 3 ablation presets (`POLICY_V0_NAIVE`, `POLICY_V1_JOINED`, `POLICY_V2_GUARDED`).
+- [src/config/rules.ts](src/config/rules.ts): Runtime policy resolver (`resolvePolicyConfig`) exposing the 4 explicit policy knobs (`cadToUsdRate`, `occupiedIncludesNotice`, `leaseBucketBy`, `priorSpendUsdBeta0`) and 3 rule-ablation presets (`POLICY_RULES_OFF`, `POLICY_DATA_RULES_ONLY`, `POLICY_ALL_RULES`).
 - [src/config/key-vault.ts](src/config/key-vault.ts) & [.flowiq-vault.json](.flowiq-vault.json): AES-256-GCM sealed evaluator key vault (`scrypt-sha256`) + 4-tier credential resolution (BYOK runtime headers/env -> `.flowiq-vault.json` -> local Grok/Ollama CLI bridge -> deterministic core).
 - [src/data/schema.ts](src/data/schema.ts): Domain types (`SanitizedLeadRecord` strips untrusted `notes` at the type boundary).
 - [src/data/loader.ts](src/data/loader.ts): CSV ingestion, Base64 `aka` decoding (`properties:P09`), earliest-lead deduplication (`leads:D01490..D01498`), void/CAD normalization, and `3,858`-key index.

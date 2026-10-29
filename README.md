@@ -15,7 +15,7 @@
 <div align="center" style="margin-bottom: 20px;">
   <img src="https://img.shields.io/badge/BUILDINGS-8_ACTIVE_+_P09_HOLD-aa8142?style=flat-square&labelColor=14213d" alt="8 Active Buildings" />
   <img src="https://img.shields.io/badge/SOURCE_ROWS-3,858_VERIFIED-aa8142?style=flat-square&labelColor=14213d" alt="3,858 Verified Rows" />
-  <img src="https://img.shields.io/badge/STRESS_TEST-600%2F600_PASS-aa8142?style=flat-square&labelColor=14213d" alt="600/600 Pass" />
+  <img src="https://img.shields.io/badge/REGRESSION_SNAPSHOT-600_questions-aa8142?style=flat-square&labelColor=14213d" alt="600-question regression snapshot" />
   <img src="https://img.shields.io/badge/TEMPORAL_SWARM-8_WORKERS_·_0_DUPLICATES-aa8142?style=flat-square&labelColor=14213d" alt="8 Workers Temporal Swarm" />
   <img src="https://img.shields.io/badge/RUNTIME_DEPS-ZERO_(NODE_22+)-aa8142?style=flat-square&labelColor=14213d" alt="Zero Dependencies" />
 </div>
@@ -63,7 +63,7 @@ npm run ask -- "What is the vacancy rate at the South Loop building?"
 # 4. Run the 8-worker Parallel Temporal LLM Swarm (40 queries from the 600-question bank + crash recovery)
 npm run swarm
 
-# 5. Run the full verification suite (3->8->10 ablation + 13/13 test + 25/25 red-team + 600-question bank)
+# 5. Run the eval: rule ablation, probes, red-team, Fair Housing set, held-out set
 npm run eval
 
 # 6. Launch the interactive Client Dashboard + Pipeline Notebook locally on http://localhost:4310
@@ -129,7 +129,7 @@ Every file in `src/` has a single, clear responsibility:
 To prove FlowIQ works reliably in real client environments (including local open-weights models at Raven and high-volume property portfolios), we built and verified two scale engines:
 
 1. **LLM Invocations as Idempotent Parallel Temporal Activities ([`src/workflows/temporal-llm-swarm.ts`](src/workflows/temporal-llm-swarm.ts) &middot; `npm run swarm` &middot; `/api/swarm`):**
-   - Pulls a stratified batch of **`40` multi-step queries** from our **`600`-question stress-test bank** ([`scripts/generate-600-bank.ts`](scripts/generate-600-bank.ts), `600/600` verified) and executes them across **`8` parallel Temporal worker slots (`worker-slot-1..8`)**.
+   - Pulls a stratified batch of **`40` multi-step queries** from our **`600`-question stress-test bank** ([`scripts/generate-600-bank.ts`](scripts/generate-600-bank.ts); a regression snapshot of this engine's own outputs, not an accuracy score) and executes them across **`8` parallel Temporal worker slots (`worker-slot-1..8`)**.
    - Every LLM call + tool execution + row-citation check is an isolated Temporal Activity keyed by a deterministic idempotency hash `sha256(workflowId + "::" + questionId + "::" + policyHash)`.
    - **Mid-Batch Crash Recovery (Zero Double-Billing):** When `worker-1` crashes at **Query `#18/40`** while 6 parallel LLM calls (`#19..#24`) are in flight, `worker-2` replays the append-only Temporal Event History in **`0.37 ms`**, skips all `18` already-committed LLM activities (**`0` duplicate LLM calls, `0` double-billed tokens, `0` unhandled exceptions**), and finishes **`40/40 (100%)`**.
    - Also includes a **250,000-row Partitioned Temporal Shard Worker** ([`src/workflows/temporal-worker.ts`](src/workflows/temporal-worker.ts) &middot; `npm run workflow:sim`) across `10` shards with Shard #6 crash recovery and SHA-256 replay verification.

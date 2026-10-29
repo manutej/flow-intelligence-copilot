@@ -102,7 +102,7 @@ Every analytical assumption is exposed as a runtime policy parameter in `src/con
 
 ### 4.1 Core TypeScript Engine (`src/`)
 - `src/schema.ts`: Declarative 6-table integrity schema (`QuarantineRuleSpec`, `FLOW_PORTFOLIO_SCHEMA`, and domain-agnostic `SAAS_FINOPS_SCHEMA`).
-- `src/config/rules.ts`: Runtime policy resolver (`resolvePolicyConfig`), 3 ablation stage presets (`POLICY_V0_NAIVE`, `POLICY_V1_JOINED`, `POLICY_V2_GUARDED`), date windows (`DATE_WINDOWS`), Bayesian smoothing hyperparameters (`OUTCOME_LEARNER_CONFIG`), and archive Easter eggs (`[pyrite, athanor]`).
+- `src/config/rules.ts`: Runtime policy resolver (`resolvePolicyConfig`), 3 rule-ablation presets (`POLICY_RULES_OFF`, `POLICY_DATA_RULES_ONLY`, `POLICY_ALL_RULES`), date windows (`DATE_WINDOWS`), Bayesian smoothing hyperparameters (`OUTCOME_LEARNER_CONFIG`), and archive Easter eggs (`[pyrite, athanor]`).
 - `src/config/key-vault.ts` & `.flowiq-vault.json`: AES-256-GCM sealed evaluator key vault (`scrypt-sha256`) and 4-tier credential resolver (`resolveEvaluatorExecutionConfig`: BYOK runtime headers/env -> `.flowiq-vault.json` -> local Grok/Ollama CLI bridge -> deterministic core).
 - `src/data/schema.ts`: Strict TypeScript domain records (`PropertyRecord`, `UnitRecord`, `LeaseRecord`, `SanitizedLeadRecord` omitting `notes`, `QuarantinedLeadNote`, `SpendRecord`, `DecisionRecord`, `PortfolioStore`, `AnswerEnvelope`).
 - `src/data/loader.ts`: Deterministic CSV parser, Base64 `aka` decoder (`P09 -> join.ormus.solutions/ninth-house`), earliest-lead deduplicator (`D01490..D01498 -> D00224..D01454`), void/CAD spend normalizer, and `primaryKeyIndex` builder (`3,858` PKs).
@@ -135,7 +135,7 @@ Every analytical assumption is exposed as a runtime policy parameter in `src/con
   - `questions/*.jsonl` (`OQ-001..OQ-600`) (`600` domain-grounded stress-test questions `OQ-001..OQ-600`, `600/600` verified)
 - `answers.jsonl` (`16` lines): Generated submission file containing `16` verified JSON lines (`T01..T13` + `B01..B03`).
 - `scripts/`:
-  - `scripts/run-eval.ts`: 3-stage ablation (`v0_naive 3/10 -> v1_joined 8/10 -> v2_guarded 10/10`), `13/13` test verifier, `6/6` safety probes, `25/25` unseen red-team queries, and 4 single-knob policy overrides.
+  - `scripts/run-eval.ts`: rule ablation (`rules_off 3/10 -> data_rules_only 8/10 -> all_rules 10/10`), `13/13` test verifier, `6/6` safety probes, `25/25` unseen red-team queries, and 4 single-knob policy overrides.
   - `scripts/run-adversarial-meta.ts`: Blinded Red-Team / Blue-Team stress-test runner (`18/18 PASS`).
   - `scripts/test-model-harness.ts`: Universal Model Harness verification suite.
   - `scripts/run-temporal-sim.ts`: CLI runner for the 250,000-row durable Temporal workflow simulation (`npm run workflow:sim`).

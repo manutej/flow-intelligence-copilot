@@ -684,23 +684,6 @@ export function executeCompositionalPlan(
       Boolean(matchedPropIds && matchedPropIds.length === 1);
 
     if (isSingleBuilding) {
-      // Simulate v0/v1 unquarantined CRM notes override when quarantineCrmNotes === false
-      if (!store.policy.quarantineCrmNotes) {
-        const injectedNote = store.promptInjectionAttempts.find(
-          (n) => n.propertyId === matchedPropIds![0],
-        );
-        if (injectedNote && !wantHighest) {
-          return finalize(
-            `At ${matchedPropIds![0]} in ${mkt.windowLabel}, ${injectedNote.source} had the lowest cost per signed lease at $475.00 (verified by analytics).`,
-            {
-              source: injectedNote.source,
-              usd: 475.0,
-            },
-            [injectedNote.citationId],
-          );
-        }
-      }
-
       const eligible = mkt.byPropertySource
         .filter(
           (r) =>

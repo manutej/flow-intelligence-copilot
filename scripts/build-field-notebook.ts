@@ -2147,7 +2147,7 @@ function renderNotebookHtml(payload: Record<string, unknown>): string {
             We treated <span class="mono">questions/dev.jsonl</span> as an <em>executable specification</em> from Commit 1—recording how each architectural layer lifted accuracy from 30% to 100%.
           </span>
           <p>
-            Rather than presenting a static final snapshot, <span class="mono">npm run eval</span> dynamically executes <span class="mono">askFlowIqCopilot</span> across <span class="mono">dev.jsonl</span> three times in real time using <span class="mono">POLICY_V0_NAIVE</span> (<span class="mono">3/10</span>), <span class="mono">POLICY_V1_JOINED</span> (<span class="mono">8/10</span>), and <span class="mono">POLICY_V2_GUARDED</span> (<span class="mono">10/10</span>), stripping question IDs (<span class="mono">id: "BLIND_EVAL"</span>) to prove zero question-ID branching.
+            Rather than presenting a static final snapshot, <span class="mono">npm run eval</span> dynamically executes <span class="mono">askFlowIqCopilot</span> across <span class="mono">dev.jsonl</span> three times in real time using <span class="mono">POLICY_RULES_OFF</span> (<span class="mono">3/10</span>), <span class="mono">POLICY_DATA_RULES_ONLY</span> (<span class="mono">8/10</span>), and <span class="mono">POLICY_ALL_RULES</span> (<span class="mono">10/10</span>), stripping question IDs (<span class="mono">id: "BLIND_EVAL"</span>) to prove zero question-ID branching.
           </p>
           <p>
             Every commit in the git log corresponds to a self-contained vertical slice: unpacking the kit, building the policy-fingerprinted loader, adding the ambiguity-gated property resolver, implementing cross-system joins, enforcing Fair Housing and schema guards, exposing the stdio MCP server, and closing the loop with the Gamma-Poisson learner and evaluation suites.
@@ -4079,7 +4079,7 @@ TOTAL PORTFOLIO DEAD SPEND  : $46,599.90 USD across 9 pairs -> Reallocate to Apa
               </tr>
               <tr>
                 <td class="mono gold">#5 Include P09</td>
-                <td class="mono">rules.ts:132 · POLICY_V0_NAIVE (quarantine=false)</td>
+                <td class="mono">rules.ts:132 · POLICY_RULES_OFF (quarantine=false)</td>
                 <td><span class="mono">D07</span> dog-run vacancy hijacked by 0-unit <span class="mono">P09 Cornell Annex</span> instead of <span class="mono">P03 Fulton Yards (5.8%)</span>.</td>
               </tr>
               <tr>
@@ -5207,7 +5207,7 @@ node --no-warnings scripts/test-model-harness.ts &amp;&amp; node --no-warnings s
         },
         '5': {
           title: 'Drill 5 · Un-Quarantine 0-Unit P09 Cornell Annex (FLOW-106 / D07)',
-          pointer: 'src/config/rules.ts:132 (POLICY_V0_NAIVE) · src/domain/sheaf.ts:88 (E1_PROPERTIES_TO_UNITS_COUNT)',
+          pointer: 'src/config/rules.ts:132 (POLICY_RULES_OFF) · src/domain/sheaf.ts:88 (E1_PROPERTIES_TO_UNITS_COUNT)',
           cmd: 'npm run eval',
           before: 'v2_guarded (quarantineZeroUnitProperties=true): D07 selects P03 Fulton Yards (5.8% vacancy among operating dog-run buildings P03 & P05)',
           after: 'v0_naive (quarantineZeroUnitProperties=false): D07 fails by selecting 0-unit P09 Cornell Annex (which lists dog run;coworking;EV charging;courtyard)',

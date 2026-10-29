@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { askFlowIqCopilot } from "../agent/copilot.ts";
-import { POLICY_V0_NAIVE, POLICY_V1_JOINED, POLICY_V2_GUARDED } from "../config/rules.ts";
+import { POLICY_RULES_OFF, POLICY_DATA_RULES_ONLY, POLICY_ALL_RULES } from "../config/rules.ts";
 import { loadPortfolioStore } from "../data/loader.ts";
 import type { PortfolioStore } from "../data/schema.ts";
 import { evaluateBudgetDecisionsAndLearn } from "../domain/learner.ts";
@@ -160,9 +160,9 @@ export async function runAdversarialMetaSuite(
   const repoRoot = path.resolve(
     repoRootInput ?? new URL("../..", import.meta.url).pathname,
   );
-  const store = loadPortfolioStore(repoRoot, POLICY_V2_GUARDED);
-  const storeV0 = loadPortfolioStore(repoRoot, POLICY_V0_NAIVE);
-  const storeV1 = loadPortfolioStore(repoRoot, POLICY_V1_JOINED);
+  const store = loadPortfolioStore(repoRoot, POLICY_ALL_RULES);
+  const storeV0 = loadPortfolioStore(repoRoot, POLICY_RULES_OFF);
+  const storeV1 = loadPortfolioStore(repoRoot, POLICY_DATA_RULES_ONLY);
 
   const probes: AdversarialProbeResult[] = [];
 
