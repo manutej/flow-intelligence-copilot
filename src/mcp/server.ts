@@ -10,6 +10,7 @@ import {
   executeAgentTool,
 } from '../agent/tools.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
+import { validateToolArguments } from './validate.ts';
 
 export interface JsonRpcRequest {
   readonly jsonrpc: '2.0';
@@ -240,9 +241,25 @@ export async function handleMcpJsonRpcRequest(
       const params = req.params ?? {};
       const toolName = String(params.name ?? '');
       const toolArgs = (params.arguments ?? {}) as Record<string, unknown>;
+      const invalidParams = (problems: readonly string[]): JsonRpcResponse => ({
+        jsonrpc: '2.0',
+        id,
+        error: {
+          code: -32602,
+          message: `Invalid params for ${toolName}: ${problems.join('; ')}`,
+          data: { problems },
+        },
+      });
 
       if (toolName === 'ask_flowiq') {
-        const question = String(toolArgs.question ?? '');
+        const problems = validateToolArguments(
+          toolArgs,
+          { properties: { question: { type: 'string' } }, required: ['question'] },
+          store,
+        );
+        if (problems.length > 0) return invalidParams(problems);
+        const question = String(toolArgs.question).trim();
+        if (!question) return invalidParams(['"question" must not be blank']);
         const turn = await askFlowIqCopilot(question, { store });
         return {
           jsonrpc: '2.0',
@@ -284,11 +301,34 @@ export async function handleMcpJsonRpcRequest(
         };
       }
 
-      const trace = executeAgentTool(
-        store,
-        toolName as AgentToolName,
+      const toolDef = dynamicToolDefs.find((t) => t.name === toolName);
+      const problems = validateToolArguments(
         toolArgs,
+        (toolDef?.inputSchema ?? {}) as Parameters<typeof validateToolArguments>[1],
+        store,
       );
+      if (problems.length > 0) return invalidParams(problems);
+
+      let trace: ReturnType<typeof executeAgentTool>;
+      try {
+        trace = executeAgentTool(store, toolName as AgentToolName, toolArgs);
+      } catch (err) {
+        // A tool failure is a tool result, not a protocol error, so the
+        // client keeps the request id and the assistant can read the reason.
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: `${toolName} failed: ${err instanceof Error ? err.message : String(err)}`,
+              },
+            ],
+          },
+        };
+      }
       return {
         jsonrpc: '2.0',
         id,
@@ -349,8 +389,23 @@ if (isExecutedDirectly()) {
     if (!trimmed || /^content-length:/i.test(trimmed)) {
       return;
     }
+    let req: JsonRpcRequest;
     try {
-      const req = JSON.parse(trimmed) as JsonRpcRequest;
+      req = JSON.parse(trimmed) as JsonRpcRequest;
+    } catch (err) {
+      // Only an unparseable line has no id to echo back.
+      const errResp: JsonRpcResponse = {
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32700,
+          message: err instanceof Error ? err.message : 'Parse error',
+        },
+      };
+      process.stdout.write(`${JSON.stringify(errResp)}\n`);
+      return;
+    }
+    try {
       const resp = await handleMcpJsonRpcRequest(req);
       if (resp !== null) {
         process.stdout.write(`${JSON.stringify(resp)}\n`);
@@ -358,10 +413,10 @@ if (isExecutedDirectly()) {
     } catch (err) {
       const errResp: JsonRpcResponse = {
         jsonrpc: '2.0',
-        id: null,
+        id: req.id ?? null,
         error: {
-          code: -32700,
-          message: err instanceof Error ? err.message : 'Parse error',
+          code: -32603,
+          message: err instanceof Error ? err.message : 'Internal error',
         },
       };
       process.stdout.write(`${JSON.stringify(errResp)}\n`);
