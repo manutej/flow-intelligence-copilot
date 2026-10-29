@@ -1212,7 +1212,8 @@ export function queryMarketingSpendAndFunnel(
     );
 
   const bestPaid = paidSourceMetrics[0];
-  const bestSourceName = bestPaid?.source ?? 'Apartments.com';
+  // Empty when no paid source signed a lease; callers must say so, not guess.
+  const bestSourceName = bestPaid?.source ?? '';
   const bestSourceSpendUsd = bestPaid?.spendUsd ?? 0;
   const bestSourceSignedLeases = bestPaid?.signedLeasesInPeriod ?? 0;
   const bestSourceExactCpsl = bestPaid?.exactCostPerSignedLeaseUsd ?? 1;

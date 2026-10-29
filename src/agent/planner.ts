@@ -114,6 +114,14 @@ export function executeCompositionalPlan(
       UNKNOWN_HINT,
     );
 
+  const buildingLabel = (ids: readonly string[] | undefined): string => {
+    if (!ids || ids.length !== 1) return 'the matching buildings';
+    const p = store.properties.find((x) => x.propertyId === ids[0]);
+    return p ? `${p.name} (${p.propertyId})` : ids[0];
+  };
+  const isFreeSource = (src: string): boolean =>
+    store.organicSources.includes(src) && !store.paidSources.includes(src);
+
   const unknownBuilding = findUnknownBuildingReference(question, store);
   if (unknownBuilding) {
     return unknown(
@@ -438,6 +446,13 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'reallocation_leases') {
       const realloc = mkt.deadSpendReallocation;
+      if (!realloc.bestPortfolioPaidSource) {
+        return finalize(
+          `No paid source signed a lease in ${mkt.windowLabel}, so there is no cost per signed lease to reallocate the $${realloc.totalDeadSpendUsd.toFixed(2)} of dead spend against.`,
+          { source: null, leases: null },
+          realloc.citations.slice(0, 8),
+        );
+      }
       return finalize(
         `In ${mkt.windowLabel}, the ${realloc.deadPairs.length} zero-lease paid (building, source) pairs spent $${realloc.totalDeadSpendUsd.toFixed(2)} in total. Moving that $${realloc.totalDeadSpendUsd.toFixed(2)} to ${realloc.bestPortfolioPaidSource} — the paid source with the lowest portfolio cost per signed lease ($${realloc.bestSourcePortfolioCpslUsd.toFixed(2)}/lease, or $${realloc.bestSourceSpendUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${realloc.bestSourceSignedLeases} leases) — would buy ${realloc.projectedAdditionalWholeLeases} additional whole signed leases (rounded down from ${realloc.unroundedAdditionalLeases.toFixed(2)}).`,
         {
@@ -486,12 +501,11 @@ export function executeCompositionalPlan(
     if (intent.measure === 'tour_to_lease_rate') {
       const row = mkt.byPropertySource[0];
       if (!row) {
-        const pid = matchedPropIds?.[0] ?? "P01";
-        const src = intent.mentionedSources[0] ?? "the requested source";
+        const src = intent.mentionedSources[0] ?? 'the requested source';
         return finalize(
-          `At ${pid} in ${mkt.windowLabel}, ${src} had 0 leads and 0 tours, giving a tour-to-lease conversion rate of 0.0%.`,
-          { percent: 0 },
-          [`properties:${pid}`],
+          `At ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, ${src} had no tours, so a tour-to-lease rate is not defined.`,
+          { percent: null },
+          propRes?.citations ?? [],
         );
       }
       return finalize(
@@ -544,11 +558,18 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'cost_per_lead_and_tour') {
       const srcRow = mkt.bySource[0];
+      if (!srcRow) {
+        return finalize(
+          `No matching source had spend or leads in ${mkt.windowLabel}, so cost per lead and per tour are not defined.`,
+          { cpl_usd: null, cpt_usd: null, leads: 0, tours: 0, spend_usd: 0 },
+          propRes?.citations ?? [],
+        );
+      }
       return finalize(
-        `In ${mkt.windowLabel}, ${srcRow.source} spent $${srcRow.spendUsd.toFixed(2)} across ${srcRow.leadsCreatedCount} deduplicated leads and ${srcRow.touredCount} tours, for a cost per lead of $${(srcRow.costPerLeadUsd ?? 0).toFixed(2)} and a cost per tour of $${(srcRow.costPerTourUsd ?? 0).toFixed(2)}.`,
+        `In ${mkt.windowLabel}, ${srcRow.source} spent $${srcRow.spendUsd.toFixed(2)} across ${srcRow.leadsCreatedCount} deduplicated leads and ${srcRow.touredCount} tours, for a cost per lead of ${srcRow.costPerLeadUsd === null ? 'n/a (no leads or free source)' : `$${srcRow.costPerLeadUsd.toFixed(2)}`} and a cost per tour of ${srcRow.costPerTourUsd === null ? 'n/a (no tours or free source)' : `$${srcRow.costPerTourUsd.toFixed(2)}`}.`,
         {
-          cpl_usd: srcRow.costPerLeadUsd ?? 0,
-          cpt_usd: srcRow.costPerTourUsd ?? 0,
+          cpl_usd: srcRow.costPerLeadUsd,
+          cpt_usd: srcRow.costPerTourUsd,
           leads: srcRow.leadsCreatedCount,
           tours: srcRow.touredCount,
           spend_usd: srcRow.spendUsd,
@@ -563,19 +584,27 @@ export function executeCompositionalPlan(
           ? mkt.byPropertySource[0]
           : mkt.bySource[0];
       if (!row) {
-        const pid = matchedPropIds?.[0] ?? "P01";
-        const src = intent.mentionedSources[0] ?? "Apartments.com";
+        const src = intent.mentionedSources[0] ?? null;
         return finalize(
-          `At ${pid} in ${mkt.windowLabel}, ${src} had $0.00 spend and 0 leads ($0.00 cost per lead).`,
-          { source: src, usd: 0 },
-          [`properties:${pid}`],
+          `At ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, ${src ?? 'no source'} had no spend or leads, so cost per lead is not defined.`,
+          { source: src, usd: null },
+          propRes?.citations ?? [],
+        );
+      }
+      if (row.costPerLeadUsd === null) {
+        return finalize(
+          isFreeSource(row.source)
+            ? `${row.source} is a free source with no spend, so cost per lead is not applicable (${row.leadsCreatedCount} deduplicated leads in ${mkt.windowLabel}).`
+            : `${row.source} had $${row.spendUsd.toFixed(2)} spend but no leads in ${mkt.windowLabel}, so cost per lead is not defined.`,
+          { source: row.source, usd: null },
+          row.citations.slice(0, 8),
         );
       }
       return finalize(
-        `In ${mkt.windowLabel}, ${row.source} had a cost per lead of ${(row.costPerLeadUsd ?? 0).toFixed(2)} (${row.spendUsd.toFixed(2)} spend / ${row.leadsCreatedCount} deduplicated leads).`,
+        `In ${mkt.windowLabel}, ${row.source} had a cost per lead of $${row.costPerLeadUsd.toFixed(2)} ($${row.spendUsd.toFixed(2)} spend / ${row.leadsCreatedCount} deduplicated leads).`,
         {
           source: row.source,
-          usd: row.costPerLeadUsd ?? 0,
+          usd: row.costPerLeadUsd,
         },
         row.citations.slice(0, 8),
       );
@@ -585,14 +614,21 @@ export function executeCompositionalPlan(
       const eligible = mkt.byPropertySource.filter(
         (r) => r.isPaidSource && r.costPerTourUsd !== null,
       );
-      const top = eligible[0] ?? mkt.byPropertySource[0];
+      const top = eligible[0];
+      if (!top) {
+        return finalize(
+          `No paid source had tours in ${mkt.windowLabel}, so cost per tour is not defined.`,
+          { source: null, usd: null },
+          propRes?.citations ?? [],
+        );
+      }
       return finalize(
         `In ${mkt.windowLabel}, cost per tour by source: ${eligible.map((r) => `${r.source} $${r.costPerTourUsd!.toFixed(2)} ($${r.spendUsd.toFixed(2)} / ${r.touredCount} tours)`).join(', ')}.`,
         {
-          source: top?.source ?? '',
-          usd: top?.costPerTourUsd ?? 0,
+          source: top.source,
+          usd: top.costPerTourUsd,
         },
-        top ? top.citations.slice(0, 8) : mkt.citations.slice(0, 8),
+        top.citations.slice(0, 8),
       );
     }
 
@@ -679,27 +715,63 @@ export function executeCompositionalPlan(
             : (a.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY) -
               (b.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY),
         );
-      if (qRecord.result_schema && ("count" in qRecord.result_schema || "leases" in qRecord.result_schema) && !("source" in qRecord.result_schema)) {
+      const asksLeaseCount =
+        /\bhow\s+many\s+(?:signed\s+)?leases\b/i.test(question) &&
+        !/\bcost\b/i.test(question);
+      if (asksLeaseCount || (qRecord.result_schema && ("count" in qRecord.result_schema || "leases" in qRecord.result_schema) && !("source" in qRecord.result_schema))) {
         return finalize(
           `In ${mkt.windowLabel}, matching sources produced ${mkt.totalSignedLeases} signed leases across ${mkt.totalSpendUsd.toFixed(2)} USD posted spend (any untrusted CRM free-text notes are quarantined).`,
           { count: mkt.totalSignedLeases, leases: mkt.totalSignedLeases },
           mkt.citations.slice(0, 8),
         );
       }
-      const best = eligible[0] ?? mkt.byPropertySource[0];
+      const named = intent.mentionedSources;
+      if (named.length === 1 && !wantHighest) {
+        // A question about one named source gets that source's figure, or
+        // an honest "not defined"; it is never re-labelled the cheapest.
+        const src = named[0];
+        const row = mkt.byPropertySource.find((r) => r.source === src);
+        if (isFreeSource(src)) {
+          return finalize(
+            `${src} is a free source with no spend, so cost per signed lease is not applicable at ${buildingLabel(matchedPropIds)} (${row?.signedLeasesInPeriod ?? 0} signed leases in ${mkt.windowLabel}).`,
+            { source: src, usd: null, applicable: false },
+            row ? row.citations.slice(0, 8) : propRes?.citations ?? [],
+          );
+        }
+        if (!row || row.costPerSignedLeaseUsd === null) {
+          return finalize(
+            `${src} at ${buildingLabel(matchedPropIds)} had $${(row?.spendUsd ?? 0).toFixed(2)} spend and no signed leases in ${mkt.windowLabel}, so its cost per signed lease is not defined (no signed leases). Any CRM note claiming a figure for it is quarantined.`,
+            { source: src, usd: null, leases: 0 },
+            row ? row.citations.slice(0, 8) : propRes?.citations ?? [],
+          );
+        }
+        return finalize(
+          `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${src} cost $${row.costPerSignedLeaseUsd.toFixed(2)} per signed lease ($${row.spendUsd.toFixed(2)} spend across ${row.signedLeasesInPeriod} signed leases).`,
+          { source: src, usd: row.costPerSignedLeaseUsd },
+          row.citations.slice(0, 8),
+        );
+      }
+      const best = eligible[0];
       const zeroLeasePaid = mkt.byPropertySource
         .filter((r) => r.isPaidSource && r.signedLeasesInPeriod === 0)
         .map((r) => r.source);
+      if (!best) {
+        return finalize(
+          `No paid source signed a lease at ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, so no source has a defined cost per signed lease${zeroLeasePaid.length > 0 ? ` (${zeroLeasePaid.join(', ')} spent without a signed lease)` : ''}.`,
+          { source: null, usd: null },
+          propRes?.citations ?? [],
+        );
+      }
       const zeroNote =
         zeroLeasePaid.length > 0
           ? ` (Note: ${zeroLeasePaid.join(', ')} signed 0 leases and therefore has no defined cost per signed lease; any untrusted CRM free-text notes claiming otherwise are quarantined.)`
           : '';
 
       return finalize(
-        `At ${best.propertyName} (${best.propertyId}) in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at $${(best?.costPerSignedLeaseUsd ?? 0).toFixed(2)} ($${(best?.spendUsd ?? 0).toFixed(2)} spend across ${best?.signedLeasesInPeriod ?? 0} signed leases).${zeroNote}`,
+        `At ${best.propertyName} (${best.propertyId}) in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at $${best.costPerSignedLeaseUsd!.toFixed(2)} ($${best.spendUsd.toFixed(2)} spend across ${best.signedLeasesInPeriod} signed leases).${zeroNote}`,
         {
-          source: best?.source ?? "Apartments.com",
-          usd: best?.costPerSignedLeaseUsd ?? 0,
+          source: best.source,
+          usd: best.costPerSignedLeaseUsd!,
         },
         best.citations.slice(0, 8),
       );
@@ -720,6 +792,13 @@ export function executeCompositionalPlan(
             (b.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY),
       );
     const winner = eligible[0];
+    if (!winner) {
+      return finalize(
+        `No paid source signed a lease across the matching buildings in ${mkt.windowLabel}, so no source has a defined cost per signed lease.`,
+        { source: null, usd: null },
+        mkt.citations.slice(0, 8),
+      );
+    }
     return finalize(
       `Across the operating portfolio in ${mkt.windowLabel}, ${winner.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease at $${winner.costPerSignedLeaseUsd!.toFixed(2)} ($${winner.spendUsd.toFixed(2)} spend / ${winner.signedLeasesInPeriod} signed leases after deduplicating phone re-entry leads and excluding void invoices).`,
       {

@@ -642,7 +642,7 @@ export function runDurableWorkflowSimulation(
       kitReallocatedLeases:
         kitMkt.deadSpendReallocation.projectedAdditionalWholeLeases,
       kitLowestCpslSource:
-        kitMkt.deadSpendReallocation.bestPortfolioPaidSource || 'Apartments.com',
+        kitMkt.deadSpendReallocation.bestPortfolioPaidSource || 'none',
       kitLowestCpslUsd: Number(
         (kitMkt.deadSpendReallocation.bestSourcePortfolioCpslUsd || 2915.86).toFixed(2),
       ),
