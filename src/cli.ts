@@ -285,6 +285,85 @@ export function printTuiCommandDeck(): void {
   console.log(bot);
 }
 
+const HELP_TEXT = `flowiq: portfolio copilot over the six CSV exports
+
+usage: flowiq <command> [options]
+
+ask
+  ask "<question>"        answer one question
+  ask <ID>                answer a kit item (D01..D10, T01..T13, B01..B03)
+  repl                    interactive session (also: no arguments)
+data
+  doctor, status          data and harness health
+  validate [ID]           check the kit items against expected answers
+  answers                 regenerate answers.jsonl
+setup
+  setup [--provider P]    choose a model provider and write MCP config
+  mcp-config              print the MCP server JSON
+  help, -h, --help        show this text
+options for ask
+  --json                  print the answer envelope as JSON
+  --llm                   route through the configured model harness
+  --provider P            ${"xai, anthropic, openai, openrouter, ollama, local, deterministic"}
+  --model M               model id for the provider
+  --cad-rate N            CAD to USD rate (number > 0)
+  --exclude-notice        count on-notice units as not occupied
+  --bucket-by F           lease_start_date | lead_created_date
+  --beta0 N               prior spend for the decision learner (number > 0)
+`;
+
+/** Prints a usage error to stderr and exits 2 (bad invocation). */
+function usageError(message: string): never {
+  process.stderr.write(`flowiq: ${message}\nRun flowiq help for usage.\n`);
+  process.exit(2);
+}
+
+const ASK_BOOLEAN_FLAGS = new Set(["--json", "--llm", "--live-llm", "--exclude-notice"]);
+const ASK_VALUE_FLAGS = new Set([
+  "--provider",
+  "--model",
+  "--base-url",
+  "--cad-rate",
+  "--bucket-by",
+  "--beta0",
+]);
+
+/** Rejects unknown flags and values that would silently change the numbers. */
+function validateAskFlags(args: readonly string[]): void {
+  for (const a of args) {
+    if (!a.startsWith("--")) continue;
+    const name = a.includes("=") ? a.slice(0, a.indexOf("=")) : a;
+    if (!ASK_BOOLEAN_FLAGS.has(name) && !ASK_VALUE_FLAGS.has(name)) {
+      usageError(`unknown option ${name}`);
+    }
+  }
+  for (const flag of ASK_VALUE_FLAGS) {
+    const present = args.some((a) => a === flag || a.startsWith(`${flag}=`));
+    if (present && getFlagValue(args, flag) === undefined) {
+      usageError(`${flag} needs a value`);
+    }
+  }
+  const provider = getFlagValue(args, "--provider");
+  if (provider !== undefined && !normalizeProviderId(provider)) {
+    usageError(
+      `--provider must be one of xai, anthropic, openai, openrouter, ollama, local, deterministic (got "${provider}")`,
+    );
+  }
+  for (const flag of ["--cad-rate", "--beta0"]) {
+    const raw = getFlagValue(args, flag);
+    if (raw !== undefined) {
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n <= 0) {
+        usageError(`${flag} must be a number greater than 0 (got "${raw}")`);
+      }
+    }
+  }
+  const bucket = getFlagValue(args, "--bucket-by");
+  if (bucket !== undefined && bucket !== "lease_start_date" && bucket !== "lead_created_date") {
+    usageError(`--bucket-by must be lease_start_date or lead_created_date (got "${bucket}")`);
+  }
+}
+
 function normalizeProviderId(raw?: string): ModelProviderId | undefined {
   if (!raw) return undefined;
   const norm = raw.trim().toLowerCase().replace(/-/g, "_");
@@ -895,6 +974,14 @@ function printFormattedTurnOutput(
       wrapWidth,
     );
   }
+  const fallbackReason =
+    (turn as { llmFallbackReason?: string | null; fallbackReason?: string | null })
+      .llmFallbackReason ??
+    (turn as { fallbackReason?: string | null }).fallbackReason ??
+    null;
+  if (fallbackReason) {
+    printWrappedField("Fallback       :", fallbackReason, ansi.gold, wrapWidth);
+  }
   if (turn.toolCalls.length > 0) {
     for (const tc of turn.toolCalls) {
       printWrappedField(
@@ -944,12 +1031,23 @@ function printFormattedTurnOutput(
     ansi.gold,
     wrapWidth,
   );
+  const result = turn.envelope.result as Record<string, unknown>;
+  const notAnswered =
+    result.unknown === true ||
+    result.refused === true ||
+    result.clarification_needed === true;
   printWrappedField(
     "Verified       :",
-    turn.verification.valid
-      ? `PASS (${turn.envelope.citations.length} source row citations verified)`
-      : `FAIL (${turn.verification.errors.join("; ")})`,
-    turn.verification.valid ? ansi.emerald : ansi.red,
+    !turn.verification.valid
+      ? `FAIL (${turn.verification.errors.join("; ")})`
+      : notAnswered
+        ? result.refused === true
+          ? "NOT ANSWERED (refused)"
+          : result.clarification_needed === true
+            ? "NOT ANSWERED (needs clarification)"
+            : "NOT ANSWERED (unknown to the exports)"
+        : `PASS (${turn.envelope.citations.length} source row citations exist; PASS checks sources, not interpretation)`,
+    turn.verification.valid ? (notAnswered ? ansi.gold : ansi.emerald) : ansi.red,
     wrapWidth,
   );
   console.log(divider);
@@ -960,6 +1058,7 @@ async function runAskCommand(
   args: readonly string[],
   suppressBanner = false,
 ): Promise<void> {
+  validateAskFlags(args);
   const jsonOutput = args.includes("--json");
   const useLlmFlag = args.includes("--llm") || args.includes("--live-llm");
   const providerFlag = normalizeProviderId(getFlagValue(args, "--provider"));
@@ -1004,9 +1103,10 @@ async function runAskCommand(
   }
 
   const questionParts = args.filter((_, idx) => !skipNext.has(idx));
-  const rawInput =
-    questionParts.join(" ").trim() ||
-    "Which building is the lakefront one with the rooftop pool, and how many vacant units does it have?";
+  const rawInput = questionParts.join(" ").trim();
+  if (!rawInput) {
+    usageError('ask needs a question: flowiq ask "<question>" | <ID>');
+  }
 
   const store = loadPortfolioStore(repoRoot, policyOverrides);
 
@@ -1016,7 +1116,18 @@ async function runAskCommand(
     return;
   }
 
-  const question = rawInput;
+  const kitId = /^(?:D0[1-9]|D10|T0[1-9]|T1[0-3]|B0[1-3])$/i.test(rawInput)
+    ? rawInput.toUpperCase()
+    : null;
+  const kitRecord = kitId
+    ? ["dev.jsonl", "test.jsonl", ".bonus.jsonl"]
+        .flatMap((f) => loadQuestionsFile(path.join(repoRoot, "questions", f)))
+        .find((q) => q.id === kitId)
+    : undefined;
+  if (kitId && !kitRecord) {
+    usageError(`no kit question with id ${kitId}`);
+  }
+  const question = kitRecord ? kitRecord.question : rawInput;
 
   if (providerFlag || useLlmFlag) {
     const saved = loadSavedCliConfig(repoRoot);
@@ -1049,7 +1160,7 @@ async function runAskCommand(
     return;
   }
 
-  const turn = await askFlowIqCopilot(question, { store });
+  const turn = await askFlowIqCopilot(kitRecord ?? question, { store });
   if (jsonOutput) {
     console.log(JSON.stringify(turn.envelope));
     return;
@@ -1304,6 +1415,11 @@ async function runReplCommand(repoRoot: string, initialStore: PortfolioStore): P
       continue;
     }
 
+    if (trimmed.startsWith("/")) {
+      console.log(`Unknown command ${trimmed.split(/\s+/)[0]}. Type /help.`);
+      continue;
+    }
+
     await runAskCommand(repoRoot, [trimmed], true);
   }
 
@@ -1314,6 +1430,15 @@ async function main(): Promise<void> {
   const repoRoot = path.resolve(new URL("..", import.meta.url).pathname);
   const args = process.argv.slice(2);
   const sub = args[0]?.toLowerCase();
+
+  if (sub === "help" || sub === "-h" || sub === "--help") {
+    process.stdout.write(HELP_TEXT);
+    return;
+  }
+  if (sub === "ask" && (args[1] === "-h" || args[1] === "--help")) {
+    process.stdout.write(HELP_TEXT);
+    return;
+  }
 
   const store = loadPortfolioStore(repoRoot);
 
@@ -1366,6 +1491,18 @@ async function main(): Promise<void> {
   if (sub === "ask") {
     await runAskCommand(repoRoot, args.slice(1));
     return;
+  }
+
+  // A lone word that is not a kit ID is a mistyped command, not a question.
+  if (
+    args.length === 1 &&
+    /^[a-z][\w:-]*$/i.test(args[0]) &&
+    !/^(?:D0[1-9]|D10|T0[1-9]|T1[0-3]|B0[1-3]|EGGS)$/i.test(args[0])
+  ) {
+    usageError(`unknown command "${args[0]}"`);
+  }
+  if (args[0].startsWith("-") && !ASK_BOOLEAN_FLAGS.has(args[0]) && !ASK_VALUE_FLAGS.has(args[0])) {
+    usageError(`unknown option ${args[0]}`);
   }
 
   await runAskCommand(repoRoot, args);
