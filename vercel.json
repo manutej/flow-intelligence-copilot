@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "api/*.js": {
-      "includeFiles": "{data/**,src/**,questions/**,scripts/**,AGENTS.md,llms.txt,.flowiq-vault.json,.toq/**}"
+      "includeFiles": "{data/**,src/**,questions/**,scripts/**,AGENTS.md,llms.txt,.toq/**}"
     }
   },
   "rewrites": [

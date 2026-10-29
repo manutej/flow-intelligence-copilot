@@ -1,5 +1,9 @@
 import path from "node:path";
-import { sealEvaluatorVaultFiles } from "../src/config/key-vault.ts";
+import {
+  DEFAULT_VAULT_FILENAME,
+  readVaultPassphrase,
+  sealEvaluatorVaultFiles,
+} from "../src/config/key-vault.ts";
 import {
   runParallelTemporalLlmSwarm,
   writeTemporalLlmSwarmArtifacts,
@@ -8,8 +12,12 @@ import {
 async function main() {
   const repoRoot = path.resolve(new URL("..", import.meta.url).pathname);
 
-  // Ensure the AES-256-GCM evaluator vault is sealed and up to date
-  const vault = sealEvaluatorVaultFiles(repoRoot);
+  // Seal the evaluator vault only when FLOWIQ_VAULT_KEY is set; otherwise skip it.
+  const vault = readVaultPassphrase()
+    ? sealEvaluatorVaultFiles(repoRoot)
+    : {
+        vaultPath: `${path.join(repoRoot, DEFAULT_VAULT_FILENAME)} (skipped: FLOWIQ_VAULT_KEY unset)`,
+      };
 
   const result = await runParallelTemporalLlmSwarm({
     repoRoot,

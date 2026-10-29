@@ -44,6 +44,16 @@ function parsePolicyOverrides(raw = {}) {
   return overrides;
 }
 
+function readServerAllowlist(envName, lowercase = false) {
+  const raw = process.env[envName] || "";
+  return new Set(
+    raw
+      .split(",")
+      .map((v) => (lowercase ? v.trim().toLowerCase() : v.trim()))
+      .filter((v) => v && v.toLowerCase() !== "deterministic"),
+  );
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -85,12 +95,29 @@ export default async function handler(req, res) {
     const policyOverrides = parsePolicyOverrides(body.policy || body);
     const store = loadPortfolioStore(repoRoot, policyOverrides);
 
-    const provider = body.provider ? String(body.provider) : undefined;
-    const model = body.model ? String(body.model) : undefined;
-    const baseUrl = body.baseUrl ? String(body.baseUrl) : undefined;
-    const apiKey = body.apiKey ? String(body.apiKey) : undefined;
+    // Client-supplied apiKey and baseUrl are never read: a public endpoint must
+    // not let a caller redirect server credentials to an arbitrary host.
+    const allowedProviders = readServerAllowlist(
+      "FLOWIQ_API_ALLOWED_PROVIDERS",
+      true,
+    );
+    const allowedModels = readServerAllowlist("FLOWIQ_API_ALLOWED_MODELS");
+    const requestedProvider = body.provider
+      ? String(body.provider).trim().toLowerCase()
+      : undefined;
+    const provider =
+      requestedProvider &&
+      requestedProvider !== "deterministic" &&
+      allowedProviders.has(requestedProvider)
+        ? requestedProvider
+        : undefined;
+    const requestedModel = body.model ? String(body.model).trim() : undefined;
+    const model =
+      provider && requestedModel && allowedModels.has(requestedModel)
+        ? requestedModel
+        : undefined;
     const mode =
-      body.mode === "llm" || (provider && provider !== "deterministic")
+      provider || (body.mode === "llm" && allowedProviders.size > 0)
         ? "llm"
         : "deterministic";
 
@@ -105,8 +132,6 @@ export default async function handler(req, res) {
         mode,
         provider,
         model,
-        baseUrl,
-        harness: apiKey ? { apiKey } : undefined,
       },
     );
 

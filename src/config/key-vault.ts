@@ -7,8 +7,29 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const DEFAULT_EVALUATOR_PASSPHRASE = "REDACTED";
 export const DEFAULT_VAULT_FILENAME = ".flowiq-vault.json";
+export const VAULT_PASSPHRASE_ENV = "FLOWIQ_VAULT_KEY";
+
+/**
+ * The vault passphrase comes only from the environment. There is no built-in
+ * default: without FLOWIQ_VAULT_KEY the vault stays locked and callers fall
+ * through to BYOK env keys, the local CLI bridge, or the deterministic core.
+ */
+export function readVaultPassphrase(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const value = env[VAULT_PASSPHRASE_ENV]?.trim();
+  return value ? value : undefined;
+}
+
+function requireVaultPassphrase(passphrase: string | undefined): string {
+  if (!passphrase) {
+    throw new Error(
+      `${VAULT_PASSPHRASE_ENV} is not set; refusing to seal or open the key vault`,
+    );
+  }
+  return passphrase;
+}
 
 export type SwarmProviderId =
   | "openrouter"
@@ -87,12 +108,11 @@ function deriveVaultKey(passphrase: string, salt: Buffer): Buffer {
 
 export function encryptVaultCredentials(
   credentials: UnlockedVaultCredentials,
-  passphrase: string = process.env.FLOWIQ_VAULT_KEY ??
-    DEFAULT_EVALUATOR_PASSPHRASE,
+  passphrase: string | undefined = readVaultPassphrase(),
 ): EncryptedVaultEnvelope {
   const salt = crypto.randomBytes(16);
   const iv = crypto.randomBytes(12);
-  const key = deriveVaultKey(passphrase, salt);
+  const key = deriveVaultKey(requireVaultPassphrase(passphrase), salt);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
 
   const plaintext = JSON.stringify(credentials);
@@ -129,7 +149,7 @@ export function encryptVaultCredentials(
     cipher: "aes-256-gcm",
     kdf: "scrypt-sha256",
     keyHint:
-      "Unlocked automatically via process.env.FLOWIQ_VAULT_KEY ?? DEFAULT_EVALUATOR_PASSPHRASE",
+      `Unlocked only when ${VAULT_PASSPHRASE_ENV} is set`,
     createdAt: new Date().toISOString(),
     ivHex: iv.toString("hex"),
     saltHex: salt.toString("hex"),
@@ -142,14 +162,13 @@ export function encryptVaultCredentials(
 
 export function decryptVaultEnvelope(
   envelope: EncryptedVaultEnvelope,
-  passphrase: string = process.env.FLOWIQ_VAULT_KEY ??
-    DEFAULT_EVALUATOR_PASSPHRASE,
+  passphrase: string | undefined = readVaultPassphrase(),
 ): UnlockedVaultCredentials {
   const salt = Buffer.from(envelope.saltHex, "hex");
   const iv = Buffer.from(envelope.ivHex, "hex");
   const authTag = Buffer.from(envelope.authTagHex, "hex");
   const ciphertext = Buffer.from(envelope.ciphertextHex, "hex");
-  const key = deriveVaultKey(passphrase, salt);
+  const key = deriveVaultKey(requireVaultPassphrase(passphrase), salt);
 
   const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
   decipher.setAuthTag(authTag);
@@ -213,13 +232,13 @@ export function detectGrokCliBinary(): string | null {
  */
 export function sealEvaluatorVaultFiles(
   repoRoot?: string,
-  passphrase: string = process.env.FLOWIQ_VAULT_KEY ??
-    DEFAULT_EVALUATOR_PASSPHRASE,
+  passphrase: string | undefined = readVaultPassphrase(),
 ): {
   readonly vaultPath: string;
   readonly homeCredentialsPath: string;
   readonly envelope: EncryptedVaultEnvelope;
 } {
+  const sealingPassphrase = requireVaultPassphrase(passphrase);
   const rootDir =
     repoRoot ?? path.resolve(new URL("../..", import.meta.url).pathname);
   const vaultPath = path.join(rootDir, DEFAULT_VAULT_FILENAME);
@@ -248,7 +267,7 @@ export function sealEvaluatorVaultFiles(
     grokCliPath,
   };
 
-  const envelope = encryptVaultCredentials(credentials, passphrase);
+  const envelope = encryptVaultCredentials(credentials, sealingPassphrase);
   fs.writeFileSync(vaultPath, `${JSON.stringify(envelope, null, 2)}\n`, "utf8");
 
   try {
@@ -267,6 +286,7 @@ export function sealEvaluatorVaultFiles(
 }
 
 let cachedUnlockedVault: {
+  readonly passphrase: string;
   readonly credentials: UnlockedVaultCredentials;
   readonly envelope: EncryptedVaultEnvelope | null;
   readonly vaultPath: string;
@@ -277,8 +297,7 @@ let cachedUnlockedVault: {
  */
 export function unlockEvaluatorVault(
   repoRoot?: string,
-  passphrase: string = process.env.FLOWIQ_VAULT_KEY ??
-    DEFAULT_EVALUATOR_PASSPHRASE,
+  passphrase: string | undefined = readVaultPassphrase(),
 ): {
   readonly unlocked: boolean;
   readonly credentials: UnlockedVaultCredentials;
@@ -295,11 +314,20 @@ export function unlockEvaluatorVault(
     "credentials.json",
   );
 
+  if (!passphrase) {
+    return {
+      unlocked: false,
+      credentials: {},
+      envelope: null,
+      vaultPath,
+      homeCredentialsPath,
+    };
+  }
+
   if (
     cachedUnlockedVault &&
     cachedUnlockedVault.vaultPath === vaultPath &&
-    passphrase ===
-      (process.env.FLOWIQ_VAULT_KEY ?? DEFAULT_EVALUATOR_PASSPHRASE)
+    cachedUnlockedVault.passphrase === passphrase
   ) {
     return {
       unlocked: Boolean(cachedUnlockedVault.envelope),
@@ -319,6 +347,7 @@ export function unlockEvaluatorVault(
       ) as EncryptedVaultEnvelope;
       const credentials = decryptVaultEnvelope(raw, passphrase);
       cachedUnlockedVault = {
+        passphrase,
         credentials,
         envelope: raw,
         vaultPath,
