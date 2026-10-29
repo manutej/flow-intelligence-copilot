@@ -50,6 +50,8 @@
     "build:ui": "node --no-warnings scripts/build-dashboard.ts && node --no-warnings scripts/build-field-notebook.ts",
     "eval:600": "node --no-warnings scripts/generate-600-bank.ts",
     "mcp:smoke": "node --no-warnings scripts/test-mcp-external.ts",
+    "mcp:http": "node --no-warnings scripts/mcp-http-server.ts",
+    "mcp:http:smoke": "node --no-warnings scripts/test-mcp-http.ts",
     "flow-106": "node --no-warnings scripts/flow-106.ts",
     "mcp:demo": "node --no-warnings scripts/test-mcp-external.ts",
     "test:mcp": "node --no-warnings scripts/test-mcp-external.ts"

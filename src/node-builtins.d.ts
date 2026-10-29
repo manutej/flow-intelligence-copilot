@@ -46,6 +46,7 @@ declare module "node:fs" {
     options?: { recursive?: boolean; mode?: number },
   ): void;
   export function chmodSync(path: string, mode: number): void;
+  export function realpathSync(path: string): string;
   const fsDefault: {
     readFileSync: typeof readFileSync;
     writeFileSync: typeof writeFileSync;
@@ -53,6 +54,7 @@ declare module "node:fs" {
     statSync: typeof statSync;
     mkdirSync: typeof mkdirSync;
     chmodSync: typeof chmodSync;
+    realpathSync: typeof realpathSync;
   };
   export default fsDefault;
 }
@@ -143,14 +145,19 @@ declare module "node:http" {
     headers: Record<string, string | string[] | undefined>;
     body?: unknown;
     [Symbol.asyncIterator](): AsyncIterator<Buffer | string>;
+    on(event: "data", listener: (chunk: Buffer) => void): this;
+    on(event: "end", listener: () => void): this;
   }
   export interface ServerResponse {
     statusCode: number;
     setHeader(name: string, value: string): void;
+    writeHead(status: number, headers?: Record<string, string>): this;
     end(chunk?: string | Buffer): void;
   }
   export interface Server {
     listen(port: number, cb?: () => void): this;
+    listen(port: number, host: string, cb?: () => void): this;
+    address(): import("node:net").AddressInfo | string | null;
     close(cb?: () => void): this;
   }
   export function createServer(
@@ -159,6 +166,7 @@ declare module "node:http" {
   const httpDefault: {
     createServer: typeof createServer;
   };
+  export type { Server as HttpServer };
   export default httpDefault;
 }
 
@@ -201,4 +209,17 @@ declare module "node:assert/strict" {
 declare module "node:test" {
   export function describe(name: string, fn: () => void | Promise<void>): void;
   export function it(name: string, fn: () => void | Promise<void>): void;
+}
+
+declare module "node:url" {
+  export function fileURLToPath(url: string | URL): string;
+  export function pathToFileURL(path: string): URL;
+}
+
+declare module "node:net" {
+  export interface AddressInfo {
+    address: string;
+    family: string;
+    port: number;
+  }
 }
