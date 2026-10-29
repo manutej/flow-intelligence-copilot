@@ -1,10 +1,16 @@
-const G = '\x1b[38;2;210;158;61m';
-const B = '\x1b[1m';
-const C = '\x1b[38;2;56;189;248m';
-const E = '\x1b[38;2;52;211;153m';
-const M = '\x1b[38;2;148;163;184m';
-const W = '\x1b[38;2;236;234;227m';
-const R = '\x1b[0m';
+import { colorEnabled } from '../src/cli/style.ts';
+
+// Ormus palette, and only on a terminal that wants colour (NO_COLOR,
+// TERM=dumb and pipes get plain text). The words never change.
+const on = colorEnabled(process.stdout, process.env);
+const esc = (code: string): string => (on ? code : '');
+const G = esc('\x1b[38;2;210;158;61m');
+const B = esc('\x1b[1m');
+const C = esc('\x1b[38;2;165;176;196m');
+const E = esc('\x1b[38;2;224;178;88m');
+const M = esc('\x1b[38;2;109;120;145m');
+const W = esc('\x1b[38;2;236;234;227m');
+const R = esc('\x1b[0m');
 
 const lines = [
   `${G}${'='.repeat(72)}${R}`,
