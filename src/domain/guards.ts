@@ -288,8 +288,15 @@ export function verifyAnswerEnvelope(
     );
   }
 
+  const isNonAnswer =
+    envelope.result?.unknown === true ||
+    envelope.result?.refused === true ||
+    envelope.result?.clarification_needed === true;
   if (!Array.isArray(envelope.citations) || envelope.citations.length === 0) {
-    errors.push('Answer must include at least one row citation');
+    // A refusal or "I don't know" has no figure to source, so it may cite nothing.
+    if (!isNonAnswer) {
+      errors.push('Answer must include at least one row citation');
+    }
   } else {
     for (const cit of envelope.citations) {
       if (!store.primaryKeyIndex.has(cit)) {

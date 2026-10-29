@@ -15,6 +15,15 @@ import type {
 } from '../domain/metrics.ts';
 import type { PropertyResolutionResult } from '../domain/resolver.ts';
 import { parseQueryIntent } from './intent.ts';
+import {
+  dataCoverage,
+  describeCoverage,
+  findUnknownBuildingReference,
+  findUntrackedChannel,
+  hasUnitSignal,
+  UNKNOWN_HINT,
+  windowOverlaps,
+} from './recognition.ts';
 import { executeAgentTool, type ToolCallTrace } from './tools.ts';
 
 export interface PlannerTurnOutput {
@@ -67,8 +76,12 @@ export function executeCompositionalPlan(
     clarificationNeeded = false,
     clarifyingQuestion: string | null = null,
   ): PlannerTurnOutput => {
+    const isNonAnswer =
+      result.unknown === true || result.clarification_needed === true;
     const safeCitations: CitationId[] =
-      citations.length > 0 ? [...new Set(citations)] : ['properties:P01'];
+      citations.length > 0 || isNonAnswer
+        ? [...new Set(citations)]
+        : ['properties:P01'];
     const envelope: AnswerEnvelope = {
       id: qRecord.id,
       answer,
@@ -87,6 +100,64 @@ export function executeCompositionalPlan(
       ),
     };
   };
+
+  // Honest "I don't know" (FLOW-103): answer only what the exports can answer.
+  const unknown = (
+    reason: string,
+    citations: readonly CitationId[] = [],
+  ): PlannerTurnOutput =>
+    finalize(
+      `I don't know: ${reason} ${UNKNOWN_HINT}`,
+      { unknown: true, reason },
+      citations,
+      false,
+      UNKNOWN_HINT,
+    );
+
+  const unknownBuilding = findUnknownBuildingReference(question, store);
+  if (unknownBuilding) {
+    return unknown(
+      `no building called "${unknownBuilding}" is in data/pms/properties.csv (known buildings: ${store.properties.map((p) => `${p.propertyId} ${p.name}`).join(', ')}).`,
+    );
+  }
+
+  if (intent.domain === 'marketing' || intent.domain === 'units') {
+    const untracked = findUntrackedChannel(question, store);
+    if (untracked) {
+      return unknown(
+        `"${untracked}" is not a tracked marketing source. Spend and leads only cover ${[...new Set([...store.paidSources, ...store.organicSources])].join(', ')}.`,
+      );
+    }
+  }
+
+  const coverage = dataCoverage(store);
+  if (
+    intent.domain === 'marketing' &&
+    intent.dateExplicit &&
+    !windowOverlaps(intent.dateWindow, coverage.marketing)
+  ) {
+    return unknown(
+      `${intent.dateWindow.label} is outside the marketing data, which covers ${describeCoverage(coverage.marketing)}.`,
+    );
+  }
+  if (intent.domain === 'leases' && intent.dateExplicit) {
+    if (
+      intent.leaseStartWindow &&
+      !windowOverlaps(intent.leaseStartWindow, coverage.leaseStarts)
+    ) {
+      return unknown(
+        `no lease starts fall in ${intent.leaseStartWindow.label}; lease start dates run ${describeCoverage(coverage.leaseStarts)}.`,
+      );
+    }
+    if (
+      intent.leaseEndWindow &&
+      !windowOverlaps(intent.leaseEndWindow, coverage.leaseEnds)
+    ) {
+      return unknown(
+        `no lease ends fall in ${intent.leaseEndWindow.label}; lease end dates run ${describeCoverage(coverage.leaseEnds)}.`,
+      );
+    }
+  }
 
   // 1. Domain: Data Quality Audit (void spend rows + duplicate leads)
   if (intent.domain === 'data_quality') {
@@ -525,6 +596,14 @@ export function executeCompositionalPlan(
       );
     }
 
+    if (intent.measure === 'lead_count') {
+      return finalize(
+        `In ${mkt.windowLabel}${intent.dateExplicit ? '' : ' (the full data window, since no period was named)'}, there were ${mkt.totalLeadsCreated} leads after merging phone re-entry duplicates.`,
+        { count: mkt.totalLeadsCreated },
+        mkt.citations.slice(0, 8),
+      );
+    }
+
     if (intent.measure === 'spend_total') {
       return finalize(
         `In ${mkt.windowLabel}, total posted marketing spend across the matching operating buildings was $${mkt.totalSpendUsd.toFixed(2)} USD (with void invoices at $0 and CAD converted at ${store.policy.cadToUsdRate} USD).`,
@@ -748,6 +827,13 @@ export function executeCompositionalPlan(
               : a.averageConcessionUsd - b.averageConcessionUsd,
           );
         const winner = sorted[0];
+        if (!winner) {
+          return finalize(
+            `No ${intent.leaseType ?? 'matching'} leases started in ${intent.dateWindow.label}, so no building has an average concession to rank.`,
+            { property_id: null, leases: 0 },
+            leaseSummary.citations.slice(0, 8),
+          );
+        }
         return finalize(
           `${winner.propertyName} (${winner.propertyId}) gave the ${wantMax ? 'highest' : 'lowest'} average concession on ${intent.leaseType ?? 'matching'} leases in ${intent.dateWindow.label} at $${winner.averageConcessionUsd.toFixed(2)} across ${winner.matchingLeaseCount} leases (${store.policy.includeZeroConcessions ? 'zeros included' : 'non-zero only'}).`,
           'usd' in schema && !('property_id' in schema)
@@ -763,6 +849,13 @@ export function executeCompositionalPlan(
       }
 
       const propRow = leaseSummary.byProperty[0];
+      if (leaseSummary.totalMatchingLeases === 0) {
+        return finalize(
+          `No ${intent.leaseType ?? 'matching'} leases ${intent.leaseStartWindow ? `started in ${intent.dateWindow.label}` : 'matched'}${propRes?.matched.length === 1 ? ` at ${propRes.matched[0].name} (${propRes.matched[0].propertyId})` : ''}, so there is no average concession to report.`,
+          { usd: null, leases: 0 },
+          propRes?.citations ?? [],
+        );
+      }
       return finalize(
         `At ${propRow?.propertyName ?? 'the matching buildings'} (${propRow?.propertyId ?? ''}), the average concession on the ${leaseSummary.totalMatchingLeases} ${intent.leaseType ?? 'matching'} leases in ${intent.dateWindow.label} was $${leaseSummary.averageConcessionUsd.toFixed(2)} (${store.policy.includeZeroConcessions ? 'zeros included' : 'non-zero only'}).`,
         {
@@ -1030,6 +1123,47 @@ export function executeCompositionalPlan(
   const nonZeroProps = unitSummary.byProperty.filter(
     (p) => p.filteredUnitCount > 0,
   );
+  const asksTotalAndOccupied =
+    /\bhow\s+many\s+total\s+units\b.*\bhow\s+many\s+are\s+occupied\b/i.test(
+      question,
+    );
+  if (
+    !asksHowManyBuildings &&
+    !asksTotalAndOccupied &&
+    !('property_ids' in schema) &&
+    !hasUnitSubsetFilter &&
+    intent.unitStatus === undefined &&
+    !hasUnitSignal(question)
+  ) {
+    return unknown(
+      `I could not match "${question.trim()}" to a metric, table, or field in the portfolio exports.`,
+      propRes?.citations ?? [],
+    );
+  }
+  if (
+    (intent.aggregation === 'argmax' || intent.aggregation === 'argmin') &&
+    /\bwhich\s+(?:operating\s+)?(?:building|property)\b/i.test(question) &&
+    unitSummary.byProperty.length > 1
+  ) {
+    const wantMax = intent.aggregation === 'argmax';
+    const ranked = [...unitSummary.byProperty].sort((a, b) =>
+      wantMax
+        ? b.filteredUnitCount - a.filteredUnitCount
+        : a.filteredUnitCount - b.filteredUnitCount,
+    );
+    const top = ranked[0];
+    const tied = ranked.filter(
+      (p) => p.filteredUnitCount === top.filteredUnitCount,
+    );
+    const statusLabel = intent.unitStatus ?? 'matching';
+    return finalize(
+      tied.length > 1
+        ? `${tied.map((p) => `${p.propertyName} (${p.propertyId})`).join(' and ')} tie for the ${wantMax ? 'most' : 'fewest'} ${statusLabel} units at ${top.filteredUnitCount} each.`
+        : `${top.propertyName} (${top.propertyId}) has the ${wantMax ? 'most' : 'fewest'} ${statusLabel} units at ${top.filteredUnitCount} (next: ${ranked[1].propertyName} with ${ranked[1].filteredUnitCount})${buildExcludedOnboardingSuffix(store)}.`,
+      { property_id: top.propertyId, count: top.filteredUnitCount },
+      [...new Set(ranked.slice(0, 2).flatMap((p) => p.citations.slice(0, 4)))],
+    );
+  }
   if ('property_ids' in schema && !('count' in schema)) {
     const ids = nonZeroProps.map((p) => p.propertyId);
     return finalize(
@@ -1051,11 +1185,7 @@ export function executeCompositionalPlan(
       unitSummary.citations.slice(0, 8),
     );
   }
-  if (
-    /\bhow\s+many\s+total\s+units\b.*\bhow\s+many\s+are\s+occupied\b/i.test(
-      question,
-    )
-  ) {
+  if (asksTotalAndOccupied) {
     const ids = nonZeroProps.map((p) => p.propertyId);
     const totalUnits = nonZeroProps.reduce((acc, p) => acc + p.totalUnits, 0);
     const occupiedUnits = nonZeroProps.reduce(

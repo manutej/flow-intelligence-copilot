@@ -30,6 +30,7 @@ export type IntentMeasure =
   | 'cost_per_lead_and_tour'
   | 'cost_per_lead'
   | 'cost_per_tour'
+  | 'lead_count'
   | 'spend_h1_vs_q3'
   | 'spend_total'
   | 'signed_leases_ranking'
@@ -77,6 +78,8 @@ export interface ParsedQueryIntent {
   readonly leaseType?: LeaseType;
   readonly renewalStatus?: RenewalStatus;
   readonly dateWindow: DateWindowSpec;
+  /** False when no date was named and the default reporting window was used. */
+  readonly dateExplicit: boolean;
   readonly leaseStartWindow?: DateWindowSpec;
   readonly leaseEndWindow?: DateWindowSpec;
   readonly mentionedSources: readonly string[];
@@ -85,6 +88,9 @@ export interface ParsedQueryIntent {
   readonly decisionAccepted?: 'yes' | 'no' | 'all';
   readonly decisionDirection?: DecisionDirection;
 }
+
+const LEAD_COUNT_RE =
+  /\b(how\s+many\s+(?:[\w.]+\s+){0,2}leads|number\s+of\s+leads|lead\s+(?:count|volume))\b/i;
 
 const NUMBER_WORDS: Readonly<Record<string, number>> = {
   zero: 0,
@@ -416,6 +422,14 @@ export function parseDateWindowFromText(
   question: string,
   asOfDate = '2026-10-01',
 ): DateWindowSpec {
+  return parseExplicitDateWindow(question, asOfDate) ?? DATE_WINDOWS.APR_SEP_2026;
+}
+
+/** Returns the window the question names, or null when it names none. */
+export function parseExplicitDateWindow(
+  question: string,
+  asOfDate = '2026-10-01',
+): DateWindowSpec | null {
   const defaultYear = Number.parseInt(asOfDate.slice(0, 4), 10) || 2026;
 
   if (/\bthis\s+month\b/i.test(question)) {
@@ -619,7 +633,17 @@ export function parseDateWindowFromText(
     );
   }
 
-  return DATE_WINDOWS.APR_SEP_2026;
+  // A bare year other than the reporting year ("in 2025") is a whole calendar
+  // year; it must not silently become the default reporting window.
+  const bareYear = question.match(/\b(20\d{2})\b/);
+  if (bareYear) {
+    const yNum = Number.parseInt(bareYear[1], 10);
+    if (yNum !== defaultYear) {
+      return buildDynamicDateWindow(`YEAR_${yNum}`, `${yNum}`, yNum, 1, yNum, 12);
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -639,7 +663,12 @@ export function parseQueryIntent(
   const view = parseUnitViewFilter(question, store);
   const unitStatus = parseUnitStatusFilter(question);
   const mentionedSources = parseSourceMentions(question, store);
-  const dateWindow = parseDateWindowFromText(question, store.policy.asOfDate);
+  const explicitWindow = parseExplicitDateWindow(
+    question,
+    store.policy.asOfDate,
+  );
+  const dateWindow = explicitWindow ?? DATE_WINDOWS.APR_SEP_2026;
+  const dateExplicit = explicitWindow !== null;
 
   const isClassComparison =
     /\bclass\s+[a-z0-9+-]+\s+(?:vs\.?|versus|compared\s+to)\s+class\s+[a-z0-9+-]+/i.test(
@@ -737,6 +766,7 @@ export function parseQueryIntent(
       isWholePortfolioExplicit: true,
       isClassComparison: false,
       dateWindow,
+      dateExplicit,
       mentionedSources,
       paidOnly: false,
       decisionIds: [],
@@ -797,6 +827,7 @@ export function parseQueryIntent(
       isClassComparison,
       buildingClass,
       dateWindow,
+      dateExplicit,
       mentionedSources,
       paidOnly: true,
       decisionIds,
@@ -851,7 +882,12 @@ export function parseQueryIntent(
     (mentionedSources.length > 0 &&
       /\b(cost|spend|spent|paid|leases?|leads?|tours?|toured|converted|conversion|cpsl|cpl|cpt)\b/i.test(
         question,
-      ));
+      )) ||
+    /\b(spend|spent|ad\s+budget|marketing\s+budget)\b/i.test(question) ||
+    LEAD_COUNT_RE.test(question) ||
+    /\b(cheapest|best|most\s+efficient|most\s+expensive)\s+(?:paid\s+)?(?:listing\s+|marketing\s+|ad\s+)?(?:sources?|channels?)\b/i.test(
+      question,
+    );
 
   if (isMarketingOrFunnel) {
     let measure: IntentMeasure = 'cost_per_signed_lease';
@@ -887,6 +923,8 @@ export function parseQueryIntent(
       measure = 'cost_per_lead';
     } else if (/\b(cost\s+per\s+tour|cpt)\b/i.test(question)) {
       measure = 'cost_per_tour';
+    } else if (LEAD_COUNT_RE.test(question)) {
+      measure = 'lead_count';
     } else if (
       /\bh1\s+spend\s+(?:vs\.?|versus)\s+q3\s+spend\b/i.test(question)
     ) {
@@ -927,6 +965,7 @@ export function parseQueryIntent(
       yearBuiltMax,
       bedrooms,
       dateWindow,
+      dateExplicit,
       mentionedSources,
       paidOnly,
       decisionIds: [],
@@ -956,11 +995,13 @@ export function parseQueryIntent(
     );
 
   if (isLeasesOrRenewals) {
+    const isNewVsRenewal = /\bnew\s+(?:vs\.?|versus)\s+renewal\b/i.test(question);
     const leaseType: LeaseType | undefined =
-      /\bnew[-\s]leases?\b/i.test(question) &&
-      !/\bnew\s+(?:vs\.?|versus)\s+renewal\b/i.test(question)
+      /\bnew[-\s]leases?\b/i.test(question) && !isNewVsRenewal
         ? 'new'
-        : undefined;
+        : /\brenewal\s+leases?\b/i.test(question) && !isNewVsRenewal
+          ? 'renewal'
+          : undefined;
 
     let renewalStatus: RenewalStatus | undefined;
     if (
@@ -987,7 +1028,12 @@ export function parseQueryIntent(
         question,
       ) || /\bthis\s+month\b/i.test(question);
 
-    const leaseStartWindow = hasStartSignal ? dateWindow : undefined;
+    // A concession question that names a period ("in Q3 2026") is about
+    // leases that started in that period, even without the word "started".
+    const leaseStartWindow =
+      hasStartSignal || (isConcessionQuery && dateExplicit && !hasEndSignal)
+        ? dateWindow
+        : undefined;
     const leaseEndWindow =
       hasEndSignal && !hasStartSignal ? dateWindow : undefined;
 
@@ -1034,6 +1080,7 @@ export function parseQueryIntent(
       leaseType,
       renewalStatus,
       dateWindow,
+      dateExplicit,
       leaseStartWindow,
       leaseEndWindow,
       mentionedSources,
@@ -1087,6 +1134,7 @@ export function parseQueryIntent(
     view,
     unitStatus,
     dateWindow,
+    dateExplicit,
     mentionedSources,
     paidOnly: false,
     decisionIds: [],
