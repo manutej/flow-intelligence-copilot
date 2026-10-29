@@ -1,6 +1,6 @@
 {
   "name": "flow-intelligence-copilot",
-  "version": "2.0.0",
+  "version": "2.3.0",
   "description": "FlowIQ Multifamily Portfolio Copilot, Deterministic Domain Engine, Eval Harness, and MCP Server (FLOW-101..106)",
   "type": "module",
   "private": true,

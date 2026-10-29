@@ -27,6 +27,7 @@ declare const process: {
   };
   readonly stdout: {
     readonly isTTY?: boolean;
+    readonly columns?: number;
     write(chunk: string): boolean;
   };
   readonly stderr: {
@@ -81,6 +82,7 @@ declare module "node:path" {
   export function basename(p: string, ext?: string): string;
   export function extname(p: string): string;
   export function normalize(p: string): string;
+  export function relative(from: string, to: string): string;
   const pathDefault: {
     resolve: typeof resolve;
     join: typeof join;
@@ -88,6 +90,7 @@ declare module "node:path" {
     basename: typeof basename;
     extname: typeof extname;
     normalize: typeof normalize;
+    relative: typeof relative;
   };
   export default pathDefault;
 }
@@ -130,9 +133,15 @@ declare module "node:child_process" {
     args?: readonly string[],
     options?: Record<string, unknown>,
   ): any;
+  export function spawnSync(
+    command: string,
+    args?: readonly string[],
+    options?: Record<string, unknown>,
+  ): { status: number | null; stdout: string | unknown; stderr: string | unknown };
   const cpDefault: {
     execFile: typeof execFile;
     spawn: typeof spawn;
+    spawnSync: typeof spawnSync;
   };
   export default cpDefault;
 }
@@ -197,6 +206,24 @@ declare module "node:readline" {
   export default rlDefault;
 }
 
+declare module "node:readline/promises" {
+  export interface Interface extends AsyncIterable<string> {
+    question(query: string): Promise<string>;
+    close(): void;
+    pause(): this;
+    resume(): this;
+  }
+  export function createInterface(options: {
+    input: unknown;
+    output?: unknown;
+    terminal?: boolean;
+  }): Interface;
+  const rlPromisesDefault: {
+    createInterface: typeof createInterface;
+  };
+  export default rlPromisesDefault;
+}
+
 declare module "node:assert/strict" {
   export function equal(actual: unknown, expected: unknown, message?: string): void;
   export function deepEqual(
@@ -205,10 +232,14 @@ declare module "node:assert/strict" {
     message?: string,
   ): void;
   export function ok(value: unknown, message?: string): asserts value;
+  export function match(value: string, pattern: RegExp, message?: string): void;
+  export function throws(fn: () => unknown, error?: unknown, message?: string): void;
   const assertDefault: {
     equal: typeof equal;
     deepEqual: typeof deepEqual;
     ok: typeof ok;
+    match: typeof match;
+    throws: typeof throws;
   };
   export default assertDefault;
 }
