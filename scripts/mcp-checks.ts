@@ -53,7 +53,9 @@ export async function runMcpChecks(
   const tools = ((await rpc(2, 'tools/list')).result as {
     tools: Array<{ name: string; annotations?: { readOnlyHint?: boolean } }>;
   }).tools;
-  assert.equal(tools.length, 7);
+  assert.equal(tools.length, 8);
+  assert.equal(tools[0].name, 'ask_flowiq');
+  assert.equal(tools[tools.length - 1].name, 'flowiq_about');
   assert.ok(tools.every((t) => t.annotations?.readOnlyHint === true));
   pass('tools/list', `${tools.length} read-only tools: ${tools.map((t) => t.name).join(', ')}`);
 
@@ -90,13 +92,14 @@ export async function runMcpChecks(
     name: 'find_properties',
     arguments: { queryText: 'How many vacant units are at the South Loop building?', resolutionMode: 'single_building' },
   })).result as ToolResult;
-  const ambData = JSON.parse(amb.content[0].text) as { data: { status: string } };
+  const ambData = JSON.parse(amb.content[1].text) as { data: { status: string } };
   assert.equal(ambData.data.status, 'ambiguous_match');
+  assert.deepEqual((amb as unknown as { structuredContent: unknown }).structuredContent, ambData);
   pass('find_properties', 'South Loop -> ambiguous_match (asks which building)');
 
   const dec = (await rpc(9, 'tools/call', { name: 'evaluate_budget_decisions', arguments: { decisionIds: ['X009'] } }))
     .result as ToolResult;
-  const decData = JSON.parse(dec.content[0].text) as {
+  const decData = JSON.parse(dec.content[1].text) as {
     data: { evaluatedDecisions: Array<{ postOutcomeShrunkCpslUsd: number }> };
   };
   assert.equal(decData.data.evaluatedDecisions[0].postOutcomeShrunkCpslUsd, 3295);
@@ -126,6 +129,21 @@ export async function runMcpChecks(
   assert.equal((badIds.error as { code: number }).code, -32602);
   assert.equal(badIds.id, 11);
   pass('invalid params', '-32602 with the request id (missing question; unknown P99)');
+
+  const about = (await rpc(15, 'tools/call', { name: 'flowiq_about', arguments: {} })).result as {
+    content: Array<{ text: string }>;
+    structuredContent: { schema_version: number; portfolio: { rowsIndexed: number } };
+  };
+  assert.equal(about.structuredContent.schema_version, 1);
+  assert.equal(about.structuredContent.portfolio.rowsIndexed, 3858);
+  assert.ok(about.content[0].text.includes('|_|   |____|'));
+  pass('flowiq_about', 'context card with the wordmark, schema_version 1');
+
+  const unknownTool = await rpc(16, 'tools/call', { name: 'ask_flowqi', arguments: {} });
+  assert.equal((unknownTool.error as { code: number }).code, -32602);
+  assert.ok((unknownTool.error as { message: string }).message.includes('did you mean "ask_flowiq"'));
+  assert.equal(unknownTool.id, 16);
+  pass('unknown tool', '-32602 with the request id and the closest name');
 
   const unknownMethod = await rpc(12, 'tools/explode');
   assert.equal((unknownMethod.error as { code: number }).code, -32601);

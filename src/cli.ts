@@ -23,7 +23,7 @@ import {
   resolveModelHarnessConfig,
   runModelHarnessTurn,
 } from "./agent/model-harness.ts";
-import { buildFlowIqToolDefinitions } from "./agent/tools.ts";
+import { MCP_TOOL_NAMES } from "./mcp/catalog.ts";
 import {
   DISCOVERED_EASTER_EGGS,
   type LeaseBucketField,
@@ -618,7 +618,7 @@ async function runAnswers(ctx: Ctx): Promise<number> {
 }
 
 function agentContext(repoRoot: string): Record<string, unknown> {
-  const mcpTools = ["ask_flowiq", ...buildFlowIqToolDefinitions().map((t) => t.name)];
+  const mcpTools = [...MCP_TOOL_NAMES];
   return {
     schema_version: 1,
     name: "flowiq",
