@@ -835,6 +835,10 @@ export function executeCompositionalPlan(
       buildingClass: intent.buildingClass,
       bedrooms: intent.bedrooms,
       bathrooms: intent.bathrooms,
+      bedroomsMin: intent.bedroomsMin,
+      bedroomsMax: intent.bedroomsMax,
+      bathroomsMin: intent.bathroomsMin,
+      bathroomsMax: intent.bathroomsMax,
       view: intent.view,
       floorMin: intent.floorMin,
       floorMax: intent.floorMax,
@@ -1013,6 +1017,12 @@ export function executeCompositionalPlan(
     buildingClass: intent.buildingClass,
     bedrooms: intent.bedrooms,
     bathrooms: intent.bathrooms,
+    bedroomsMin: intent.bedroomsMin,
+    bedroomsMax: intent.bedroomsMax,
+    bathroomsMin: intent.bathroomsMin,
+    bathroomsMax: intent.bathroomsMax,
+    rentMin: intent.rentMin,
+    rentMax: intent.rentMax,
     sqftMin: intent.sqftMin,
     sqftMax: intent.sqftMax,
     floorMin: intent.floorMin,
@@ -1026,6 +1036,12 @@ export function executeCompositionalPlan(
   const hasUnitSubsetFilter =
     intent.bedrooms !== undefined ||
     intent.bathrooms !== undefined ||
+    intent.bedroomsMin !== undefined ||
+    intent.bedroomsMax !== undefined ||
+    intent.bathroomsMin !== undefined ||
+    intent.bathroomsMax !== undefined ||
+    intent.rentMin !== undefined ||
+    intent.rentMax !== undefined ||
     intent.sqftMin !== undefined ||
     intent.sqftMax !== undefined ||
     intent.floorMin !== undefined ||
@@ -1122,6 +1138,14 @@ export function executeCompositionalPlan(
       },
       unitSummary.citations.slice(0, 8),
     );
+  }
+
+  // An average over no units has no value; zero would be a fabricated figure.
+  if (
+    ['avg_market_rent_and_sqft', 'avg_market_rent', 'avg_sqft', 'rent_per_sqft'].includes(intent.measure) &&
+    unitSummary.totalFilteredUnits === 0
+  ) {
+    return unknown('no units match the filter, so there is no average to report.');
   }
 
   if (intent.measure === 'avg_market_rent_and_sqft') {

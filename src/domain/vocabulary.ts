@@ -1,3 +1,4 @@
+import { COMPARATOR_PHRASES } from './comparators.ts';
 import type { PortfolioStore } from '../data/schema.ts';
 import { resolvePropertiesFromText } from './resolver.ts';
 
@@ -97,8 +98,13 @@ export function unknownWords(question: string, store: PortfolioStore): string[] 
   const scope = named.length > 0 ? named : store.properties;
   for (const p of scope) for (const w of amenityWords(p.amenities)) known.add(w);
   const out = new Set<string>();
-  for (const raw of question.toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) ?? []) {
-    const w = raw.replace(/'s$|n't$/, '');
+  let text = question.toLowerCase();
+  // A word a comparator rule reads ("larger than 600 square feet") is understood.
+  for (const re of COMPARATOR_PHRASES) text = text.replace(re, ' ');
+  // Every letter, digit-free word or pictograph in any script is a token; one
+  // outside the vocabulary (Cyrillic, Arabic, CJK, emoji alike) is unknown.
+  for (const raw of text.normalize('NFKC').match(/[\p{L}\p{M}]+(?:['’][\p{L}]+)?|\p{Extended_Pictographic}|[\p{N}--[0-9]]+/gv) ?? []) {
+    const w = raw.replace(/['’]s$|n['’]t$/, '');
     if (FIXED.has(raw) || FIXED.has(w) || known.has(w) || /^[a-z]$/.test(w)) continue;
     if (FIXED.has(w.replace(/s$/, '')) || FIXED.has(w + 's') || FIXED.has(w.replace(/ies$/, 'y'))) continue;
     out.add(raw);

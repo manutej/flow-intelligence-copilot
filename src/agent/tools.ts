@@ -512,6 +512,12 @@ export function executeAgentTool(
           typeof args.bedrooms === 'number' ? args.bedrooms : undefined,
         bathrooms:
           typeof args.bathrooms === 'number' ? args.bathrooms : undefined,
+        bedroomsMin: typeof args.bedroomsMin === 'number' ? args.bedroomsMin : undefined,
+        bedroomsMax: typeof args.bedroomsMax === 'number' ? args.bedroomsMax : undefined,
+        bathroomsMin: typeof args.bathroomsMin === 'number' ? args.bathroomsMin : undefined,
+        bathroomsMax: typeof args.bathroomsMax === 'number' ? args.bathroomsMax : undefined,
+        rentMin: typeof args.rentMin === 'number' ? args.rentMin : undefined,
+        rentMax: typeof args.rentMax === 'number' ? args.rentMax : undefined,
         sqftMin: typeof args.sqftMin === 'number' ? args.sqftMin : undefined,
         sqftMax: typeof args.sqftMax === 'number' ? args.sqftMax : undefined,
         floorMin: typeof args.floorMin === 'number' ? args.floorMin : undefined,
@@ -545,6 +551,10 @@ export function executeAgentTool(
           typeof args.bedrooms === 'number' ? args.bedrooms : undefined,
         bathrooms:
           typeof args.bathrooms === 'number' ? args.bathrooms : undefined,
+        bedroomsMin: typeof args.bedroomsMin === 'number' ? args.bedroomsMin : undefined,
+        bedroomsMax: typeof args.bedroomsMax === 'number' ? args.bedroomsMax : undefined,
+        bathroomsMin: typeof args.bathroomsMin === 'number' ? args.bathroomsMin : undefined,
+        bathroomsMax: typeof args.bathroomsMax === 'number' ? args.bathroomsMax : undefined,
         view: typeof args.view === 'string' ? args.view : undefined,
         floorMin: typeof args.floorMin === 'number' ? args.floorMin : undefined,
         floorMax: typeof args.floorMax === 'number' ? args.floorMax : undefined,

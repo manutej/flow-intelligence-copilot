@@ -9,11 +9,21 @@ import type {
   UnitStatus,
 } from '../data/schema.ts';
 
+/** Exact value, or an inclusive range; an unset bound does not filter. */
+const inRange = (v: number, exact?: number, min?: number, max?: number) =>
+  (exact === undefined || v === exact) && (min === undefined || v >= min) && (max === undefined || v <= max);
+
 export interface UnitQueryFilter {
   readonly propertyIds?: readonly string[];
   readonly buildingClass?: string;
   readonly bedrooms?: number;
   readonly bathrooms?: number;
+  readonly bedroomsMin?: number;
+  readonly bedroomsMax?: number;
+  readonly bathroomsMin?: number;
+  readonly bathroomsMax?: number;
+  readonly rentMin?: number;
+  readonly rentMax?: number;
   readonly sqftMin?: number;
   readonly sqftMax?: number;
   readonly floorMin?: number;
@@ -132,12 +142,9 @@ export function queryUnitsAndOccupancy(
           : 100.0;
 
     const filtered = propUnits.filter((u) => {
-      if (filter.bedrooms !== undefined && u.bedrooms !== filter.bedrooms) {
-        return false;
-      }
-      if (filter.bathrooms !== undefined && u.bathrooms !== filter.bathrooms) {
-        return false;
-      }
+      if (!inRange(u.bedrooms, filter.bedrooms, filter.bedroomsMin, filter.bedroomsMax)) return false;
+      if (!inRange(u.bathrooms, filter.bathrooms, filter.bathroomsMin, filter.bathroomsMax)) return false;
+      if (!inRange(u.marketRent, undefined, filter.rentMin, filter.rentMax)) return false;
       if (filter.sqftMin !== undefined && u.sqft < filter.sqftMin) {
         return false;
       }
@@ -305,6 +312,10 @@ export interface LeaseQueryFilter {
   readonly buildingClass?: string;
   readonly bedrooms?: number;
   readonly bathrooms?: number;
+  readonly bedroomsMin?: number;
+  readonly bedroomsMax?: number;
+  readonly bathroomsMin?: number;
+  readonly bathroomsMax?: number;
   readonly view?: string;
   readonly floorMin?: number;
   readonly floorMax?: number;
@@ -433,6 +444,10 @@ export function queryLeasesAndRenewals(
     if (
       filter.bedrooms !== undefined ||
       filter.bathrooms !== undefined ||
+      filter.bedroomsMin !== undefined ||
+      filter.bedroomsMax !== undefined ||
+      filter.bathroomsMin !== undefined ||
+      filter.bathroomsMax !== undefined ||
       filter.view !== undefined ||
       filter.floorMin !== undefined ||
       filter.floorMax !== undefined
@@ -441,15 +456,8 @@ export function queryLeasesAndRenewals(
       if (!unit) {
         return false;
       }
-      if (filter.bedrooms !== undefined && unit.bedrooms !== filter.bedrooms) {
-        return false;
-      }
-      if (
-        filter.bathrooms !== undefined &&
-        unit.bathrooms !== filter.bathrooms
-      ) {
-        return false;
-      }
+      if (!inRange(unit.bedrooms, filter.bedrooms, filter.bedroomsMin, filter.bedroomsMax)) return false;
+      if (!inRange(unit.bathrooms, filter.bathrooms, filter.bathroomsMin, filter.bathroomsMax)) return false;
       if (
         filter.view !== undefined &&
         unit.view.toLowerCase() !== filter.view.toLowerCase()

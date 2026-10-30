@@ -19,7 +19,7 @@ const FRAMES_COUNT = [
   (q: string, b: string) => `At ${b}, how many ${q} units are there?`,
 ];
 const ADJ = ['furnished', 'corner', 'renovated', 'pet-friendly', 'accessible', 'smoke-free', 'penthouse', 'duplex', 'loft-style', 'sunny', 'quiet', 'haunted', 'garden-level', 'top-floor', 'ground-floor', 'unavailable', 'taken', 'reserved', 'luxury', 'affordable'];
-const PRED = ['have a balcony', 'face the lake', 'were renovated', 'allow pets', 'have in-unit laundry', 'are on the top floor', 'are newer than 2010', 'cost over $3,000', 'are under $2000', 'are bigger than 900 sq ft', 'have hardwood floors', 'are cheaper than average', 'have two parking spots'];
+const PRED = ['have a balcony', 'face the lake', 'were renovated', 'allow pets', 'have in-unit laundry', 'are on the top floor', 'are newer than 2010', 'cost over $3,000', 'are under $2000', 'have hardwood floors', 'are cheaper than average', 'have two parking spots'];
 const STAT = [
   (b: string) => `What is the cheapest unit at ${b}?`,
   (b: string) => `What's the priciest apartment at ${b}?`,

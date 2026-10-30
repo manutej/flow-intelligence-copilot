@@ -103,6 +103,9 @@ describe('audit: an unrecognised measure is not reported as a unit count', () =>
     ['What is the average square footage of one-bedroom units at Armitage Commons?', { count: 49, sqft: 705.6 }],
     ['Kedzie Works sq ft average', { count: 110, sqft: 852.5 }],
     ['How many studios are vacant at Kedzie Works?', { count: 2 }],
+    // S0b: strict comparators are filters now (CSV: sqft > 1000 is 33, floor > 5 is 48).
+    ['How many units are larger than 1000 sqft at Kedzie Works?', { count: 33 }],
+    ['How many units are above the 5th floor at Kedzie Works?', { count: 48 }],
   ];
   for (const [question, expected] of answered) {
     it(question, async () => {
@@ -117,14 +120,12 @@ describe('audit: an unrecognised measure is not reported as a unit count', () =>
     'What is the median market rent at Kedzie Works?',
     // EVAL F-027: each was answered with an unrelated count
     'Total number of bedrooms across the portfolio?',
-    'How many units are larger than 1000 sqft at Kedzie Works?',
     'What percent of units at P05 have a city view?',
     'What share of units at P05 have a city view?',
     'What fraction of Kedzie Works is vacant?',
     'What is the largest unit at Armitage Commons in sqft?',
     'What is the smallest unit at Kedzie Works?',
     'How many accessible units are at Kedzie Works?',
-    'How many units are above the 5th floor at Kedzie Works?',
     'How many parking spaces does Kedzie Works have?',
   ]) {
     it(`says it does not know: ${question}`, async () => {

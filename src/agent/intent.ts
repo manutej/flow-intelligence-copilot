@@ -71,6 +71,12 @@ export interface ParsedQueryIntent {
   readonly yearBuiltMax?: number;
   readonly bedrooms?: number;
   readonly bathrooms?: number;
+  readonly rentMin?: number;
+  readonly rentMax?: number;
+  readonly bedroomsMin?: number;
+  readonly bedroomsMax?: number;
+  readonly bathroomsMin?: number;
+  readonly bathroomsMax?: number;
   readonly sqftMin?: number;
   readonly sqftMax?: number;
   readonly floorMin?: number;
@@ -188,53 +194,20 @@ export function parseBathroomCount(question: string): number | undefined {
   return undefined;
 }
 
-export function parseSqftBounds(question: string): {
-  sqftMin?: number;
-  sqftMax?: number;
-} {
-  const minMatch =
-    question.match(
-      /\bsqft\s*(?:>=|≥|at\s+least|over|above)\s*(\d{3,5})\b/i,
-    ) ??
-    question.match(
-      /\b(?:at\s+least|over|minimum\s+of)\s*(\d{3,5})\s*(?:sq\.?\s*ft\.?|square\s+feet|sqft)\b/i,
-    );
-  const maxMatch =
-    question.match(
-      /\bsqft\s*(?:<=|≤|at\s+most|under|below)\s*(\d{3,5})\b/i,
-    ) ??
-    question.match(
-      /\b(?:under|below|at\s+most)\s*(\d{3,5})\s*(?:sq\.?\s*ft\.?|square\s+feet|sqft)\b/i,
-    );
-  return {
-    sqftMin: minMatch ? Number.parseInt(minMatch[1], 10) : undefined,
-    sqftMax: maxMatch ? Number.parseInt(maxMatch[1], 10) : undefined,
-  };
-}
-
-export function parseFloorBounds(question: string): {
-  floorMin?: number;
-  floorMax?: number;
-} {
-  const minMatch = question.match(
-    /\bfloors?\s+(\d{1,3})\s+(?:or\s+(?:higher|above|up)|and\s+(?:above|higher|up)|\+)/i,
-  );
-  const maxMatch = question.match(
-    /\bfloors?\s+(\d{1,3})\s+or\s+(?:lower|below)\b/i,
-  );
-  const exactMatch =
-    !minMatch && !maxMatch
-      ? question.match(/\bon\s+floor\s+(\d{1,3})\b/i)
-      : null;
-  if (exactMatch) {
-    const f = Number.parseInt(exactMatch[1], 10);
-    return { floorMin: f, floorMax: f };
-  }
-  return {
-    floorMin: minMatch ? Number.parseInt(minMatch[1], 10) : undefined,
-    floorMax: maxMatch ? Number.parseInt(maxMatch[1], 10) : undefined,
-  };
-}
+export {
+  parseBedroomRange,
+  parseBathroomRange,
+  parseSqftBounds,
+  parseFloorBounds,
+  parseRentBounds,
+} from '../domain/comparators.ts';
+import {
+  parseBedroomRange,
+  parseBathroomRange,
+  parseSqftBounds,
+  parseFloorBounds,
+  parseRentBounds,
+} from '../domain/comparators.ts';
 
 /**
  * Dynamically indexes all distinct unit `view` values from `store.units` (`units.csv` `view` column)
@@ -305,7 +278,7 @@ export function parseUnitStatusFilter(question: string): UnitStatus | undefined 
     return 'vacant';
   }
   if (
-    /\b(on\s+notice|in\s+notice(\s+status)?|notice\s+status|notice\s+units?|units?\s+(?:that\s+)?(?:are\s+)?on\s+notice|units?\s+with\s+notice|status\s*=\s*['"`]?notice['"`]?|(?:units?|apartments?|residents?|tenants?)\b.*(?:gave|given)\s+notice(\s+to\s+vacate|\s+to\s+move\s+out)?)\b/i.test(
+    /\b(on\s+notice|in\s+notice(\s+status)?|notice\s+status|notice\s+(?:[\w-]+\s+){0,3}?(?:units?|apartments?|homes?|studios?|flats?)|units?\s+(?:that\s+)?(?:are\s+)?on\s+notice|units?\s+with\s+notice|status\s*=\s*['"`]?notice['"`]?|(?:units?|apartments?|residents?|tenants?)\b.*(?:gave|given)\s+notice(\s+to\s+vacate|\s+to\s+move\s+out)?)\b/i.test(
       question,
     ) &&
     !/\b(leases?|monthly\s+rent|rent\s+.*at\s+risk|rent\s+exposure|notice_given)\b/i.test(
@@ -315,7 +288,7 @@ export function parseUnitStatusFilter(question: string): UnitStatus | undefined 
     return 'notice';
   }
   if (
-    /\b(occupied\s+(?:units?|apartments?|homes?|studios?|residences?)|(?:are|is)\s+(?:currently\s+|now\s+)?occupied|status\s*=\s*['"`]?occupied['"`]?)\b/i.test(
+    /\b(occupied\s+(?:[\w-]+\s+){0,3}?(?:units?|apartments?|homes?|studios?|residences?|flats?)|(?:are|is)\s+(?:currently\s+|now\s+)?occupied|status\s*=\s*['"`]?occupied['"`]?)\b/i.test(
       question,
     ) &&
     !/\b(share\s+of|percentage\s+of|occupancy\s+rate)\b/i.test(question)
@@ -666,9 +639,15 @@ function parseQueryIntentRaw(
   store: PortfolioStore,
 ): ParsedQueryIntent {
   const topK = parseTopKCount(question);
-  const bedrooms = parseBedroomCount(question);
-  const bathrooms = parseBathroomCount(question);
+  // A comparator ("at least 2 bedrooms") is a range, never the exact count.
+  const bedRange = parseBedroomRange(question);
+  const bathRange = parseBathroomRange(question);
+  const bedrooms = bedRange ? undefined : parseBedroomCount(question);
+  const bathrooms = bathRange ? undefined : parseBathroomCount(question);
+  const bedroomsMin = bedRange?.min, bedroomsMax = bedRange?.max;
+  const bathroomsMin = bathRange?.min, bathroomsMax = bathRange?.max;
   const { sqftMin, sqftMax } = parseSqftBounds(question);
+  const { rentMin, rentMax } = parseRentBounds(question);
   const { floorMin, floorMax } = parseFloorBounds(question);
   const view = parseUnitViewFilter(question, store);
   const unitStatus = parseUnitStatusFilter(question);
@@ -948,6 +927,9 @@ function parseQueryIntentRaw(
       measure = 'spend_total';
     } else if (isSignedLeasesFromLeadsRanking) {
       measure = 'signed_leases_ranking';
+    } else if (!/\b(cost|cpsl|cpa|cheap\w*|efficien\w*|per\s+(?:signed\s+)?lease|best|worst|lowest|highest)\b/i.test(question)) {
+      // Cost per lease is answered only when asked for; plain spend is spend.
+      measure = /\b(spend|spent|spending)\b/i.test(question) ? 'spend_total' : 'unsupported';
     }
 
     const paidOnly =
@@ -1084,6 +1066,10 @@ function parseQueryIntentRaw(
       yearBuiltMax,
       bedrooms,
       bathrooms,
+      bedroomsMin,
+      bedroomsMax,
+      bathroomsMin,
+      bathroomsMax,
       view,
       floorMin,
       floorMax,
@@ -1114,6 +1100,8 @@ function parseQueryIntentRaw(
     /\b(average|avg\.?|mean)\s+sq\.?\s*ft\b/i.test(question)
   ) {
     unitMeasure = 'avg_market_rent_and_sqft';
+  } else if (/\b(average|avg\.?|mean)\s+(?:sq\.?\s*ft|square\s+f(?:oo|ee)t(?:age)?)\b/i.test(question)) {
+    unitMeasure = 'avg_sqft';
   } else if (
     (/\b(average|avg\.?|mean)\b/i.test(question) &&
       /\b(market\s+rent|asking\s+rent|rent)\b/i.test(question)) ||
@@ -1125,6 +1113,11 @@ function parseQueryIntentRaw(
   } else if (/\brent\s+per\s+sq\.?\s*ft\b/i.test(question)) {
     unitMeasure = 'rent_per_sqft';
   } else if (!UNIT_COUNT_CUE_RE.test(question) || !UNIT_NOUN_RE.test(question) || unresolvedUnitWords(question, store).length > 0) {
+    unitMeasure = 'unsupported';
+  }
+  // "Leased" or "rented" units could be occupied only, or occupied plus
+  // notice; the status filter reads neither, so no unit measure is answered.
+  if (unitStatus === undefined && /\b(?:leased|rented)\s+(?:[\w-]+\s+){0,3}?(?:units?|apartments?|homes?|studios?|flats?)\b|\b(?:units?|apartments?|homes?)\b[^.?!]*\b(?:are|is)\s+(?:currently\s+)?(?:leased|rented)\b/i.test(question)) {
     unitMeasure = 'unsupported';
   }
 
@@ -1139,6 +1132,12 @@ function parseQueryIntentRaw(
     yearBuiltMax,
     bedrooms,
     bathrooms,
+    rentMin,
+    rentMax,
+    bedroomsMin,
+    bedroomsMax,
+    bathroomsMin,
+    bathroomsMax,
     sqftMin,
     sqftMax,
     floorMin,
