@@ -647,10 +647,39 @@ export function parseExplicitDateWindow(
   return null;
 }
 
-// A measure the unit tools cannot compute. Without this the question falls
-// through to unit_count and a count is reported as if it answered it.
-const UNSUPPORTED_UNIT_MEASURE_RE =
-  /\b(average|avg|mean|median|highest|lowest|max(?:imum)?|min(?:imum)?)\b|\bsquare\s+f(?:oo|ee)t|\b(?:bed|bath)rooms\s+(?:are\s+there|in\s+total)/i;
+// The unit tools compute a handful of named measures plus a plain count.
+// A count is only the answer when the question asks to count or list units,
+// and only when every condition in it is one the filters model. Anything
+// else (a share, an extreme, a sum of another column, a threshold on a
+// column with no filter) answers unknown instead of a count of the wrong thing.
+const UNIT_COUNT_CUE_RE =
+  /\b(?:how\s+many|number\s+of|count|total|list|which|show|what)\b|\bvacanc(?:y|ies)\b/i;
+const UNIT_NOUN_RE =
+  /\b(?:units?|apartments?|apts?|vacanc(?:y|ies)|studios?|flats?|homes|buildings?|properties|(?:one|two|three|four|\d)[-\s]?(?:bed(?:room)?s?|br)\b)/i;
+const UNMODELLED_UNIT_CONDITION_RE = new RegExp(
+  [
+    '\\b(?:average|avg|mean|median|highest|lowest|max(?:imum)?|min(?:imum)?|largest|smallest|biggest)\\b',
+    '\\b(?:percent(?:age)?|fraction|proportion|ratio|share|rate)\\b|%',
+    // a total of a column, not of rows: "total bedrooms", "sum of rent"
+    '\\b(?:total|sum)\\b.*(?<!(?:\\d|one|two|three|four)[-\\s]?)\\b(?:bed|bath)rooms\\b|\\b(?:total|sum)\\b.*\\brents?\\b',
+    '\\b(?:bed|bath)rooms\\s+(?:are\\s+there|in\\s+total|across)',
+    '\\bsquare\\s+f(?:oo|ee)t|\\bsq\\.?\\s*ft\\b',
+    '\\b(?:larger|bigger|smaller|more|less|cheaper|over|under|above|below|exceeding)\\b(?:\\s+than)?\\s+(?:the\\s+)?\\$?\\d',
+  ].join('|'),
+  'i',
+);
+// A word qualifying the counted noun must be a value some filter reads;
+// "accessible units" has no column, so it cannot be counted.
+const COUNTED_NOUN_QUALIFIER_RE = /\bhow\s+many\s+([a-z]+)\s+(?:units?|apartments?)\b/i;
+const KNOWN_UNIT_QUALIFIERS = new Set([
+  'vacant', 'occupied', 'empty', 'available', 'unoccupied', 'open', 'leased', 'rented', 'notice',
+  'total', 'more', 'studio', 'studios', 'one', 'two', 'three', 'four', 'city', 'lake', 'courtyard',
+  'bedroom', 'br', 'of', 'the', 'other', 'additional', 'apartment', 'residential',
+]);
+function hasUnknownQualifier(question: string): boolean {
+  const word = COUNTED_NOUN_QUALIFIER_RE.exec(question)?.[1]?.toLowerCase();
+  return word !== undefined && !KNOWN_UNIT_QUALIFIERS.has(word) && !/\d|bed|br$/.test(word);
+}
 
 /**
  * Pure semantic parser that extracts a structured `ParsedQueryIntent` AST from
@@ -1116,11 +1145,11 @@ export function parseQueryIntent(
     /\bmarket\s+rent\s+(?:average|mean)\b/i.test(question)
   ) {
     unitMeasure = 'avg_market_rent';
-  } else if (/\b(average|avg\.?|mean)\s+(?:sq\.?\s*ft|square\s+f(?:oo|ee)t(?:age)?)\b/i.test(question)) {
+  } else if (/\b(average|avg\.?|mean)\s+(?:sq\.?\s*ft|square\s+f(?:oo|ee)t(?:age)?)\b|\b(?:sq\.?\s*ft|square\s+f(?:oo|ee)tage)\s+(?:average|mean)\b/i.test(question)) {
     unitMeasure = 'avg_sqft';
   } else if (/\brent\s+per\s+sq\.?\s*ft\b/i.test(question)) {
     unitMeasure = 'rent_per_sqft';
-  } else if (UNSUPPORTED_UNIT_MEASURE_RE.test(question)) {
+  } else if (!UNIT_COUNT_CUE_RE.test(question) || !UNIT_NOUN_RE.test(question) || UNMODELLED_UNIT_CONDITION_RE.test(question) || hasUnknownQualifier(question)) {
     unitMeasure = 'unsupported';
   }
 
