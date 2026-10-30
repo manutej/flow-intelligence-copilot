@@ -13,6 +13,8 @@ export interface ClarifyOption {
   readonly label: string;
   /** The question one click on this option runs. */
   readonly question: string;
+  /** S2: the full typed query that question runs. */
+  readonly query?: ParsedQueryIntent;
 }
 
 const MEASURE_WORDS: Readonly<Record<string, string>> = {
@@ -81,7 +83,7 @@ export function clarifyOptions(question: string, unbound: readonly string[], sto
   for (const [intent, here, prefix] of readings) {
     if (!here && building === undefined) continue;
     const q = canonicalQuestion(intent, here ? building?.name : undefined);
-    if (q !== null) options.push({ label: `${prefix}${label(intent, here && building ? building.name : '')}`, question: q });
+    if (q !== null) options.push({ label: `${prefix}${label(intent, here && building ? building.name : '')}`, question: q, query: parseQueryIntent(q, store) });
   }
   return options.slice(0, 4);
 }

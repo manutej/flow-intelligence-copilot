@@ -10,3 +10,4 @@ dist/
 .flowiq-vault.json
 .env.local
 .toq/flow-copilot/cli-harness-config.json
+data-local/

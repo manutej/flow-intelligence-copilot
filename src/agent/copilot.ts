@@ -23,6 +23,10 @@ import {
 } from './model-harness.ts';
 import { classifyFrame, frameModelConfig } from './frame-model.ts';
 import { executeCompositionalPlan } from './planner.ts';
+import { modelParse, parseConfigFromEnv, type ModelParse, type ParseConfig } from './model-parse.ts';
+import type { RunStore } from './run-store.ts';
+import { canonicalQuestion } from './clarify.ts';
+import { hashOf } from './envelope.ts';
 import type { ToolCallTrace } from './tools.ts';
 
 export interface CopilotRunOptions {
@@ -35,6 +39,9 @@ export interface CopilotRunOptions {
   readonly policy?: Partial<PortfolioPolicyConfig>;
   /** Carries a refusal to later turns of the same conversation. */
   readonly session?: FairHousingSession;
+  /** S2-L1 model parse; defaults to FLOWIQ_PARSE_* env (off when unset). */
+  readonly parse?: ParseConfig | null;
+  readonly parseDeps?: Parameters<typeof modelParse>[3];
 }
 
 export interface CopilotTurnResult {
@@ -44,6 +51,10 @@ export interface CopilotTurnResult {
   readonly clarifyingQuestion: string | null;
   readonly clarifyOptions?: readonly ClarifyOption[];
   readonly restatement?: string;
+  /** S2: which parser produced the executed query, and why the model was not used. */
+  readonly parsePath?: ModelParse['path'];
+  readonly parseFallbackReason?: string | null;
+  readonly parse?: ModelParse;
   readonly modeUsed: 'deterministic' | 'llm';
   readonly providerUsed?: ModelProviderId;
   readonly modelUsed?: string;
@@ -197,7 +208,62 @@ export async function askFlowIqCopilot(
     };
   }
 
+  const parseCfg = options.parse === undefined ? parseConfigFromEnv() : options.parse;
+  if (parseCfg) return runModelParseRouter(qRecord, store, parseCfg, options.parseDeps, frameFallback);
   return runDeterministicToolRouter(qRecord, store, frameFallback);
+}
+
+/**
+ * S2-L1: the model's TypedQuery runs only when it validates and covers the
+ * question. A query that leaves a word or a stated filter unbound becomes a
+ * clarify between typed readings; a model that is off, down, slow or off
+ * schema hands the turn to the deterministic parser, and the turn says so.
+ */
+export async function runModelParseRouter(
+  qRecord: QuestionRecord,
+  store: PortfolioStore,
+  cfg: ParseConfig,
+  deps: CopilotRunOptions['parseDeps'],
+  frameFallback: string | null = null,
+): Promise<CopilotTurnResult> {
+  const mp = await modelParse(qRecord.question, store, cfg, deps);
+  const det = runDeterministicToolRouter(qRecord, store, frameFallback);
+  const tag = (t: CopilotTurnResult, path: ModelParse['path'] = mp.path): CopilotTurnResult => {
+    const r = { ...t, parsePath: path, parseFallbackReason: mp.fallbackReason, parse: mp };
+    noteTurn(deps?.runStore, mp, r);
+    return r;
+  };
+  if (mp.path === 'deterministic') return tag(det);
+  const isAnswer = (r: Record<string, unknown>) => r.unknown !== true && r.refused !== true && r.clarification_needed !== true;
+  if (mp.path === 'model') {
+    const out = closedVocabulary(executeCompositionalPlan(qRecord, store, { intent: mp.intent }), qRecord, store);
+    if (isAnswer(out.envelope.result as Record<string, unknown>)) {
+      return tag({ ...out, restatement: restate(mp.intent, qRecord.question, store), modeUsed: 'llm', providerUsed: 'local_openai', modelUsed: cfg.model, llmFallbackReason: frameFallback });
+    }
+    return tag(det, 'deterministic');
+  }
+  // model-clarify: model and lexicon disagree, or a word is unbound.
+  if (!isAnswer(det.envelope.result as Record<string, unknown>)) return tag(det);
+  const options: ClarifyOption[] = [
+    { label: restate(mp.deterministic, qRecord.question, store).replace(/^I computed: /, ''), question: qRecord.question, query: mp.deterministic },
+  ];
+  const mq = canonicalQuestion(mp.intent);
+  if (mq !== null && mq !== qRecord.question) options.push({ label: restate(mp.intent, mq, store).replace(/^I computed: /, ''), question: mq, query: mp.intent });
+  const restatement = `I could not bind ${mp.coverage.unbound.join(', ')}. I read: ${restate(mp.deterministic, qRecord.question, store).replace(/^I computed: /, '')}`;
+  const envelope: AnswerEnvelope = options.length >= 2
+    ? { id: qRecord.id, answer: `I am not sure which question you mean. Did you mean: ${options.map((o, k) => `(${k + 1}) ${o.label}`).join('; ')}?`, result: { unknown: true, clarification_needed: true }, citations: [] }
+    : { id: qRecord.id, answer: `I don't know — ${restatement}`, result: { unknown: true }, citations: [] };
+  return tag({
+    envelope, toolCalls: [], clarificationNeeded: options.length >= 2, clarifyingQuestion: options.length >= 2 ? options.map((o) => o.question).join(' / ') : null,
+    ...(options.length >= 2 ? { clarifyOptions: options } : {}), restatement,
+    modeUsed: 'llm', providerUsed: 'local_openai', modelUsed: cfg.model, llmFallbackReason: frameFallback,
+    verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+  });
+}
+
+function noteTurn(runs: RunStore | null | undefined, mp: ModelParse, t: CopilotTurnResult): void {
+  if (!runs || !mp.runKey) return;
+  runs.append({ type: 'turn', key: mp.runKey, ts: new Date().toISOString(), path: t.parsePath, clarify_options: (t.clarifyOptions ?? []).map((o) => o.question), answer_hash: hashOf({ answer: t.envelope.answer, result: t.envelope.result }) });
 }
 
 export function runDeterministicToolRouter(
@@ -209,9 +275,14 @@ export function runDeterministicToolRouter(
   const r = out.envelope.result as Record<string, unknown>;
   const answered = r.unknown !== true && r.refused !== true && r.clarification_needed !== true;
   const offered = answered || r.refused === true ? [] : out.clarifyOptions ?? unitClarify(qRecord.question, store).clarifyOptions ?? [];
+  const opts = wellFormedOptions(offered, qRecord, store);
   return {
-    ...withClarify(out, wellFormedOptions(offered, qRecord, store), qRecord, store),
-    ...(answered ? { restatement: restate(parseQueryIntent(qRecord.question, store), qRecord.question, store) } : {}),
+    ...withClarify(out, opts, qRecord, store),
+    ...(answered
+      ? { restatement: restate(parseQueryIntent(qRecord.question, store), qRecord.question, store) }
+      : opts.length > 0
+        ? { restatement: `I could not bind every word. I read: ${restate(parseQueryIntent(qRecord.question, store), qRecord.question, store).replace(/^I computed: /, '')}` }
+        : {}),
     modeUsed: 'deterministic',
     providerUsed: 'deterministic',
     modelUsed: 'flowiq-deterministic-v2.0',
