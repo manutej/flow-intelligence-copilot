@@ -1,6 +1,7 @@
 import { it as test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadPortfolioStore } from '../../src/data/loader.ts';
+import { typedQuery } from '../../src/agent/recompute.ts';
 import { verifyAnswerEnvelope } from '../../src/domain/guards.ts';
 import type { AnswerEnvelope } from '../../src/data/schema.ts';
 import { rng, SEEDS } from './rng.ts';
@@ -24,7 +25,7 @@ function trueEnvelope(r: ReturnType<typeof rng>): { env: AnswerEnvelope; pid: st
       `At ${p.name} (${p.propertyId}), ${rows.length} units are ${word}.`,
     ]);
     return {
-      env: { id: 'FUZZ', answer, result: { property_id: p.propertyId, count: rows.length }, citations: [p.citationId, ...rows.slice(0, 5).map((u) => u.citationId)] },
+      env: { id: 'FUZZ', answer, result: { property_id: p.propertyId, count: rows.length }, citations: [p.citationId, ...rows.slice(0, 5).map((u) => u.citationId)], query: typedQuery(`How many ${status} units are at ${p.name}?`, store) },
       pid: p.propertyId,
       status,
     };

@@ -1,3 +1,4 @@
+import { typedQuery } from '../src/agent/recompute.ts';
 import { evaluateSheafCoboundary, FLOW_PORTFOLIO_SHEAF_EDGES } from '../src/domain/sheaf.ts';
 /**
  * Regression tests for the Oct 30, 2026 core audit (Ormus F1-F11,
@@ -147,7 +148,8 @@ describe('audit: the verifier rejects citations that do not support the claim', 
     assert.equal(verify({ property_id: 'P02', count: 999, refused: true }, []), false);
   });
   it('accepts the true figure when a vacant P02 row is cited', () => {
-    assert.equal(verify({ property_id: 'P02', count: 7 }, ['properties:P02', 'units:U0152'], 'Marlowe Residences (P02) has 7 vacant units.'), true);
+    const query = typedQuery('How many vacant units are at Marlowe Residences?', store);
+    assert.equal(verifyAnswerEnvelope({ id: 'D01', answer: 'Marlowe Residences (P02) has 7 vacant units.', result: { property_id: 'P02', count: 7 }, citations: ['properties:P02', 'units:U0152'] as never, query }, store, schema).valid, true);
   });
   // EVAL F-029: each was VALID at fe43864
   it('rejects a count larger than the cited table holds for that property', () => {

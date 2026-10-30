@@ -192,4 +192,15 @@ export interface AnswerEnvelope {
   readonly answer: string;
   readonly result: Readonly<Record<string, unknown>>;
   readonly citations: readonly CitationId[];
+  /**
+   * L3: the typed query the answer was computed from. The verifier re-runs it
+   * against the store and accepts only figures the recompute produces.
+   */
+  readonly query?: TypedQuery;
+}
+
+export interface TypedQuery {
+  readonly question: string;
+  readonly intent: unknown;
+  readonly result_schema?: Readonly<Record<string, string>>;
 }

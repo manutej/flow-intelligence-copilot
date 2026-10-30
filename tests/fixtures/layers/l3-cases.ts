@@ -63,4 +63,28 @@ const FX3C: Case[] = [
  ['F','breakdown forged [P06]: 99', e('Across buildings ([P06]: 99).',{count:14})],
  ['F','usd forged inside bound in text only', e('Total posted marketing spend was $12,300.00 USD, $4,000 on Zillow.',{usd:12300},SP)],
 ];
-export const L3_CASES: readonly Case[] = [...FX3B, ...FX3C];
+// TENACITY three-layer verdict (p3.ts L3): forgeries inside the old bounds or outside its shapes.
+const TL3: Case[] = [
+ ['F','undercount 13', e('Kedzie Works (P06) has 13 vacant units.',{count:13})],
+ ['F','undercount 1', e('Kedzie Works (P06) has 1 vacant units.',{count:1})],
+ ['F','word order: 99 units are vacant', e('Kedzie Works (P06): 99 units are vacant.',{count:99})],
+ ['F','there are 99 vacant', e('There are 99 vacant units at Kedzie Works (P06).',{count:99})],
+ ['F','avg rent in range, not the mean', e('Average market rent at Kedzie Works (P06) is $2,000.',{property_id:'P06',usd:2000},['properties:P06','units:U0691'])],
+ ['F','vacancy: 99.0% without "rate is"', e('Kedzie Works (P06) vacancy: 99.0%.',{percent:99})],
+ ['F','vacancy 50% (14/110)', e('At Kedzie Works (P06), the vacancy rate is 50% (14/110).',{percent:50})],
+ ['F','outside figure $4,000 on Zillow', e(K+'; comparable units list at $4,000 on Zillow.',{count:14})],
+ ['T','name without ID, true count', e('Kedzie Works has 14 vacant units.',{count:14})],
+ ['T','true vacancy rate', e('At Kedzie Works (P06), the vacancy rate is 12.7% (14/110 units).',{percent:12.7})],
+ ['T','true average rent', e('Average market rent at Kedzie Works (P06) is $2,225.82.',{property_id:'P06',usd:2225.82},['properties:P06','units:U0691'])],
+];
+export const L3_CASES: readonly Case[] = [...FX3B, ...FX3C, ...TL3];
+
+/** The question an honest producer asked for each claim; a forger may carry it too. */
+export function askedFor(answer: string): string {
+  const prop = /Marlowe|P02/.test(answer) ? 'Marlowe Residences' : /P05|across the 49/i.test(answer) ? 'Armitage Commons' : 'Kedzie Works';
+  if (/spend/i.test(answer)) return 'How much was total posted marketing spend at Armitage Commons?';
+  if (/vacancy/i.test(answer)) return `What is the vacancy rate at ${prop}?`;
+  if (/market\s+rent/i.test(answer)) return `What is the average market rent at ${prop}?`;
+  if (/square\s+footage/i.test(answer)) return `What is the average square footage at ${prop}?`;
+  return `How many vacant units are at ${prop}?`;
+}

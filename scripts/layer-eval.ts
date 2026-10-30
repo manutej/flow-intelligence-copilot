@@ -9,7 +9,9 @@ import { loadPortfolioStore } from '../src/data/loader.ts';
 import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
 import { L1_CASES } from '../tests/fixtures/layers/l1-cases.ts';
 import { L2_CASES } from '../tests/fixtures/layers/l2-cases.ts';
-import { L3_CASES } from '../tests/fixtures/layers/l3-cases.ts';
+import { askedFor, L3_CASES } from '../tests/fixtures/layers/l3-cases.ts';
+import { typedQuery } from '../src/agent/recompute.ts';
+const noQuery = process.argv.includes('--no-query');
 
 const store = loadPortfolioStore();
 const verbose = process.argv.includes('--verbose');
@@ -49,7 +51,7 @@ for (const [k, q] of L2_CASES) {
 let l3Rejected = 0, l3Forged = 0, l3Kept = 0, l3True = 0;
 for (const [k, name, env] of L3_CASES) {
   let valid: boolean;
-  try { valid = verifyAnswerEnvelope(env, store).valid; } catch { valid = false; }
+  try { valid = verifyAnswerEnvelope(noQuery ? env : { ...env, query: env.query ?? typedQuery(askedFor(env.answer), store) }, store).valid; } catch { valid = false; }
   if (k === 'T') { l3True++; if (valid) l3Kept++; else misses.push(`L3 false reject ${name}`); }
   else { l3Forged++; if (!valid) l3Rejected++; else misses.push(`L3 forged ok ${name}`); }
 }

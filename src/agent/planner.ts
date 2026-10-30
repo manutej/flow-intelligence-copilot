@@ -64,6 +64,7 @@ function buildExcludedOnboardingSuffix(store: PortfolioStore): string {
 export function executeCompositionalPlan(
   qRecord: QuestionRecord,
   store: PortfolioStore,
+  { verify = true }: { readonly verify?: boolean } = {},
 ): PlannerTurnOutput {
   const question = qRecord.question;
   const schema = qRecord.result_schema ?? {};
@@ -82,17 +83,16 @@ export function executeCompositionalPlan(
       answer,
       result,
       citations: [...new Set(citations)],
+      query: { question, intent, ...(qRecord.result_schema ? { result_schema: qRecord.result_schema } : {}) },
     };
     return {
       envelope,
       toolCalls,
       clarificationNeeded,
       clarifyingQuestion,
-      verification: verifyAnswerEnvelope(
-        envelope,
-        store,
-        qRecord.result_schema,
-      ),
+      verification: verify
+        ? verifyAnswerEnvelope(envelope, store, qRecord.result_schema)
+        : { valid: true, errors: [] },
     };
   };
 

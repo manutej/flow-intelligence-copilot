@@ -7,11 +7,9 @@ import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
  * 1. The result has a closed schema: every key is known, and each kind of
  *    value has its type and range (a count is a non-negative integer, never
  *    a string; a percent is in [0, 100]; a rate or share is in [0, 1]).
- * 2. Every number the answer text states is a checked value: a result
- *    value, a date part, a store constant, a count of cited rows, the unit
- *    total of a property the answer names, or one arithmetic step (sum,
- *    difference, product, ratio, percent) from values already checked.
- *    A stated number nothing explains is a forged figure.
+ * 2. The figures the text states are read out (digits of any script,
+ *    number words, scaled forms) with dates and short windows removed, so
+ *    the recompute in agent/recompute.ts can compare them exactly.
  */
 
 type Kind = 'count' | 'percent' | 'fraction' | 'money' | 'signed_money' | 'size' | 'property' | 'properties' | 'string' | 'strings' | 'bool' | 'pairs';
@@ -114,7 +112,7 @@ function plain(text: string): string {
 }
 
 /** Scaled forms are figures too: 999k is 999000 and 1e3 is 1000. */
-function numbersIn(text: string): number[] {
+export function numbersIn(text: string): number[] {
   return [...plain(text)
     .matchAll(/(?<![\p{L}\d._])-?\d+(?:\.\d+)?(?:e[+-]?\d+|k\b|m\b)?(?![\p{L}\d])/giu)].map((m) => {
       const t = m[0].toLowerCase();
@@ -122,119 +120,9 @@ function numbersIn(text: string): number[] {
     });
 }
 
-function numericLeaves(v: unknown, out: number[] = []): number[] {
+export function numericLeaves(v: unknown, out: number[] = []): number[] {
   if (isNum(v)) out.push(v);
   else if (Array.isArray(v)) v.forEach((x) => numericLeaves(x, out));
   else if (v && typeof v === 'object') Object.values(v).forEach((x) => numericLeaves(x, out));
   return out;
-}
-
-const close = (a: number, b: number) => Math.abs(a - b) <= Math.max(0.051, Math.abs(b) * 1e-6);
-
-export function unexplainedNumbers(envelope: AnswerEnvelope, store: PortfolioStore): number[] {
-  const text = envelope.answer ?? '';
-  const stated = numbersIn(text);
-  const named = new Set([
-    ...numericLeaves([]),
-    ...((text.match(/\bP\d{2,3}\b/g) ?? [])),
-    ...[envelope.result?.property_id, ...(Array.isArray(envelope.result?.property_ids) ? envelope.result.property_ids : [])].filter((p): p is string => typeof p === 'string'),
-  ]);
-  const citedByTable = new Map<string, number>();
-  for (const c of envelope.citations ?? []) {
-    const t = c.slice(0, c.indexOf(':'));
-    citedByTable.set(t, (citedByTable.get(t) ?? 0) + 1);
-  }
-  const checked = [
-    0, 1, 100,
-    ...numericLeaves(envelope.result ?? {}),
-    store.policy.cadToUsdRate, store.policy.priorLeasesAlpha0, store.policy.priorSpendUsdBeta0,
-    ...citedByTable.values(),
-    ...store.properties.filter((p) => named.has(p.propertyId)).flatMap((p) => [p.actualUnitCount, p.declaredUnits]),
-  ];
-  // Arithmetic runs over these core values only: the claim, the store
-  // constants and the named buildings' sizes. Row amounts and bounded
-  // counts are checked as stated figures but never combined, or their many
-  // sums and products would explain any invented number.
-  const core = numericLeaves(envelope.result ?? {});
-  // Money on the cited rows themselves, one by one and in total.
-  // Rows the text names by ID count as cited, like rows in the citation list.
-  const textIds = [...text.matchAll(/\b([SLDU])(?:\d{4,5}|-P\d{2,3}-\d{3})\b/g)].map((m) => m[0]);
-  const tableOf: Readonly<Record<string, string>> = { S: 'spend', L: 'leases', D: 'leads', U: 'units' };
-  const cited = new Set<string>([...(envelope.citations ?? []), ...textIds.map((id) => `${tableOf[id[0]]}:${id}`)]);
-  const rowMoney = [
-    ...store.spend.filter((r) => cited.has(r.citationId)).flatMap((r) => [r.effectiveUsd, r.rawAmount]),
-    ...store.leases.filter((r) => cited.has(r.citationId)).map((r) => r.monthlyRent),
-    ...store.units.filter((r) => cited.has(r.citationId)).map((r) => r.marketRent),
-  ];
-  const rowMoneyChecked = [...rowMoney, rowMoney.reduce((a, b) => a + b, 0)];
-  // "N leases", "N matching units", "of which N toured": a count of rows is
-  // checked when it fits inside that table for the properties in scope.
-  const sizes = new Map<string, number>();
-  const scope = store.properties.filter((p) => named.size === 0 || named.has(p.propertyId)).map((p) => p.propertyId);
-  for (const [cit, owner] of store.primaryKeyIndex) {
-    if (!scope.includes(owner)) continue;
-    const t = cit.slice(0, cit.indexOf(':'));
-    sizes.set(t, (sizes.get(t) ?? 0) + 1);
-  }
-  const ROW_NOUNS: ReadonlyArray<readonly [RegExp, string]> = [
-    [/^(?:\w+\s+){0,2}?(?:units?|apartments?)\b|^(?:vacant|occupied|on\s+notice)\b/i, 'units'],
-    [/^(?:\w+\s+){0,2}?(?:leases?|lease\s+starts|renewals?)\b|^(?:\w+\s+){0,1}?signed\b|^renewed\b|^have\s+renewed\b/i, 'leases'],
-    [/^(?:\w+\s+){0,2}?(?:leads?|tours?)\b|^toured\b|^applied\b/i, 'leads'],
-    [/^(?:\w+\s+){0,2}?(?:rows?|invoices?)\b|^(?:[\w-]+\s+){0,3}?\(?(?:property|building),\s+source\)?\s+pairs\b/i, 'spend'],
-    [/^(?:pending|with\s+notice)\b/i, 'leases'],
-  ];
-  const text2 = plain(text);
-  for (const m of text2.matchAll(/(?<![\p{L}\d._])(\d+)(?![\d.%])\s*(?:(?:of\s+them|of\s+which)\s+)?(?=(.{0,40}))/gu)) {
-    const n = Number(m[1]);
-    const before = text2.slice(Math.max(0, m.index - 60), m.index);
-    const table = ROW_NOUNS.find(([re]) => re.test(m[2]))?.[1]
-      ?? (/\b(?:with|at)\s*$/.test(before) && /\bunits?\b/.test(before) ? 'units' : undefined);
-    if (table && n <= (sizes.get(table) ?? 0)) checked.push(n);
-  }
-  for (const m of text2.matchAll(/\bof\s+which\s+(\d+)|,\s+(\d+)\s+(?:toured|signed|have\s+renewed)|\bnotice=(\d+)/g)) {
-    const n = Number(m[1] ?? m[2] ?? m[3]);
-    if (n <= Math.max(0, ...sizes.values())) checked.push(n);
-  }
-  // A breakdown names each building: "Fulton Yards [P03]: 8".
-  for (const m of text2.matchAll(/\[(P\d{2,3})\]:\s*(\d+)(?![\d.%])/g)) {
-    const n = Number(m[2]);
-    const own = [...store.primaryKeyIndex.values()].filter((o) => o === m[1]).length;
-    if (n <= own) checked.push(n);
-  }
-  // A part and whole beside the percent they make: "5.8% (7/120)",
-  // "94.8% (92 of 97 units)". The whole must fit in a table in scope.
-  const largest = Math.max(0, ...sizes.values());
-  for (const m of text2.matchAll(/(\d+(?:\.\d+)?)%\s*\(?\s*(\d+)\s*(?:\/|\s+of\s+)\s*(\d+)/g)) {
-    const [p, a, b] = [Number(m[1]), Number(m[2]), Number(m[3])];
-    if (b > 0 && a <= b && b <= largest && Math.abs((100 * a) / b - p) <= 0.051) checked.push(p, a, b);
-  }
-  // A dollar figure is bounded, not proven (the F7 limit): it must fit
-  // inside the money the store holds for the properties in scope.
-  const inScope = (pid: string) => scope.includes(pid);
-  const moneyCeiling = Math.max(
-    citedByTable.has('spend') ? store.spend.filter((r) => inScope(r.propertyId)).reduce((a, r) => a + Math.max(r.rawAmount, r.effectiveUsd), 0) : 0,
-    citedByTable.has('leases') ? store.leases.filter((r) => inScope(r.propertyId)).reduce((a, r) => a + r.monthlyRent, 0) : 0,
-    citedByTable.has('units') ? Math.max(0, ...store.units.filter((r) => inScope(r.propertyId)).map((r) => r.marketRent)) : 0,
-  );
-  for (const m of text2.matchAll(/\$\s*(\d+(?:\.\d+)?)/g)) {
-    const n = Number(m[1]);
-    if (n <= moneyCeiling || rowMoneyChecked.some((c) => close(n, c))) checked.push(n);
-  }
-  let open = stated.filter((n) => !checked.some((c) => close(n, c)));
-  // One arithmetic step from checked values explains a stated figure; repeat
-  // until nothing new is explained. A breakdown whose parts sum to a
-  // checked total is explained as a whole.
-  for (let changed = true; changed && open.length > 0; ) {
-    changed = false;
-    const sumOpen = open.reduce((a, b) => a + b, 0);
-    if (open.length > 1 && checked.some((c) => close(sumOpen, c))) { checked.push(...open); open = []; break; }
-    for (const n of open) {
-      const ops = [...core, ...stated.filter((x) => checked.some((c) => close(x, c)) && x !== n)];
-      const ok = ops.some((a) => ops.some((b) =>
-        close(n, a + b) || close(n, a - b) || close(n, a * b) || (b !== 0 && (close(n, a / b) || close(n, (100 * a) / b))) || close(n, (a * b) / 100)));
-      if (ok) { checked.push(n); changed = true; }
-    }
-    open = open.filter((n) => !checked.includes(n));
-  }
-  return open;
 }

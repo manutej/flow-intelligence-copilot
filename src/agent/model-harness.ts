@@ -1045,6 +1045,8 @@ function finalizeAndVerifyModelResponse(
             ? parsed.result
             : deterministicReference.envelope.result,
         citations: mergedCitations,
+        // The model's figures are recomputed from the planner's typed query.
+        ...(deterministicReference.envelope.query ? { query: deterministicReference.envelope.query } : {}),
       };
 
       const verification = verifyAnswerEnvelope(
@@ -1092,6 +1094,7 @@ function finalizeAndVerifyModelResponse(
         answer: deterministicReference.envelope.answer,
         result: deterministicReference.envelope.result,
         citations: deterministicReference.envelope.citations,
+        query: deterministicReference.envelope.query,
       };
       const repairedVerification = verifyAnswerEnvelope(
         repairedEnvelope,

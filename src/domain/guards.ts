@@ -1,5 +1,5 @@
-import { claimSchemaErrors, unexplainedNumbers } from './claim.ts';
-import { typedClaimErrors } from './typed-claim.ts';
+import { claimSchemaErrors, numbersIn } from './claim.ts';
+import { recomputeErrors } from '../agent/recompute.ts';
 import type {
   AnswerEnvelope,
   CitationId,
@@ -216,7 +216,7 @@ function namedProperties(envelope: AnswerEnvelope): string[] {
 // Tables that can hold the rows a figure is computed from.
 const MONEY_TABLES = new Set(['spend', 'leases', 'decisions', 'units']);
 const UNIT_STATUS_WORDS: ReadonlyArray<[RegExp, string]> = [
-  [/\b(?:vacan(?:t|cy|cies)|empty|available|unoccupied|unleased|open|free)\b/i, 'vacant'],
+  [/\b(?:vacan(?:t|cy|cies)|empty|available|unoccupied|unleased|unrented|open|free|ready\s+to\s+(?:lease|rent))\b/i, 'vacant'],
   [/\b(?:occupied|taken|leased|rented|filled|in\s+use)\b/i, 'occupied'],
   [/\bon[-\s]notice\b/i, 'notice'],
 ];
@@ -247,10 +247,7 @@ function figureErrors(envelope: AnswerEnvelope, store: PortfolioStore): string[]
   const errors: string[] = [];
   const result = envelope.result ?? {};
   errors.push(...claimSchemaErrors(result, store));
-  errors.push(...typedClaimErrors(envelope, store));
-  for (const n of unexplainedNumbers(envelope, store)) {
-    errors.push(`The answer states ${n}, which no checked value explains`);
-  }
+  errors.push(...recomputeErrors(envelope, store));
   // A cited unit belongs to a property the answer names, by ID or by name.
   const text = envelope.answer ?? '';
   const mentioned = new Set([
@@ -264,7 +261,7 @@ function figureErrors(envelope: AnswerEnvelope, store: PortfolioStore): string[]
       }
     }
   }
-  const stated = (envelope.answer ?? '').replace(/(\d),(?=\d{3})/g, '$1').match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  const stated = numbersIn(envelope.answer ?? '');
   for (const [key, value] of Object.entries(result)) {
     if (typeof value !== 'number' || !Number.isFinite(value)) continue;
     if (!stated.some((n) => Math.abs(n - value) < 0.051 || Math.round(n) === Math.round(value) && !Number.isInteger(n) === !Number.isInteger(value))) {
