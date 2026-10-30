@@ -1039,6 +1039,7 @@ export function executeCompositionalPlan(
     floorMax: intent.floorMax,
     view: intent.view,
     status: intent.unitStatus,
+    ...(intent.unitStatusIn ? { statusIn: intent.unitStatusIn } : {}),
   });
   toolCalls.push(unitTrace);
   const unitSummary = unitTrace.rawOutput as UnitQuerySummary;
@@ -1056,7 +1057,8 @@ export function executeCompositionalPlan(
     intent.sqftMax !== undefined ||
     intent.floorMin !== undefined ||
     intent.floorMax !== undefined ||
-    intent.view !== undefined;
+    intent.view !== undefined ||
+    intent.unitStatusIn !== undefined;
 
   if (intent.measure === 'vacancy_rate') {
     if (intent.aggregation === 'argmax' || intent.aggregation === 'argmin') {
@@ -1238,6 +1240,7 @@ export function executeCompositionalPlan(
     !('property_ids' in schema) &&
     !hasUnitSubsetFilter &&
     intent.unitStatus === undefined &&
+    intent.unitStatusIn === undefined &&
     !hasUnitSignal(question)
   ) {
     return unknown(

@@ -110,8 +110,10 @@ function rulesFor(q: Quantity): Rule[] {
   r(String.raw`\b${q.noun}\s+${BARE}\s+or\s+${BARE}${NOT_OTHER_NOUN}`, union);
   // "<noun> <cmp> N": "rent above $2,500", "sqft >= 800", "floor of at least 3".
   for (const [op, c] of PREFIX_OPS) r(String.raw`\b${q.noun}\s*(?:of\s+|is\s+|are\s+)?(?:${c})\s*${BARE}${NOT_OTHER_NOUN}`, (n) => bound(op, n, q.integer));
+  // "<noun> of N <cmp>": "rent of $2,500 or more".
+  for (const [op, c] of SUFFIX_OPS) r(String.raw`\b${q.noun}\s+(?:of|is|at)\s+${BARE}(?![\d,.]*\d)(?:${c})(?![\w])`, (n) => bound(op, n, q.integer));
   // "<noun> of N": "rent of $2,000" is that value exactly.
-  r(String.raw`\b${q.noun}\s+(?:of|is|=|at)\s+${BARE}${NOT_OTHER_NOUN}(?!\s*(?:or|and|to|-)\s)`, (n) => bound('eq', n, q.integer));
+  r(String.raw`\b${q.noun}\s+(?:of|is|=|at)\s+${BARE}(?![\d,.]*\d)${NOT_OTHER_NOUN}(?!\s*(?:or|and|to|-)\s)`, (n) => bound('eq', n, q.integer));
   // "<cmp> <value>": "at least 2 bedrooms", "on or above floor 5", "under $2,000".
   for (const [op, c] of PREFIX_OPS) r(String.raw`(?:^|[\s(,])(?:${c})\s*${q.value}`, (n) => bound(op, n, q.integer));
   const NOT_NOUN_PHRASE = String.raw`(?!\s*(?:the\s+)?(?:[$\d]|${ALL_NOUNS()}))`;

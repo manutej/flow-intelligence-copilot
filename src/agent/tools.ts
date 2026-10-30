@@ -527,6 +527,9 @@ export function executeAgentTool(
           typeof args.status === 'string'
             ? (args.status as 'occupied' | 'notice' | 'vacant')
             : undefined,
+        statusIn: Array.isArray(args.statusIn)
+          ? (args.statusIn as Array<'occupied' | 'notice' | 'vacant'>)
+          : undefined,
       });
       return {
         toolName,

@@ -30,6 +30,7 @@ export interface UnitQueryFilter {
   readonly floorMax?: number;
   readonly view?: string;
   readonly status?: UnitStatus;
+  readonly statusIn?: readonly UnitStatus[];
 }
 
 export interface PropertyUnitMetrics {
@@ -164,6 +165,9 @@ export function queryUnitsAndOccupancy(
         return false;
       }
       if (filter.status !== undefined && u.status !== filter.status) {
+        return false;
+      }
+      if (filter.statusIn !== undefined && !filter.statusIn.includes(u.status)) {
         return false;
       }
       return true;

@@ -43,6 +43,10 @@ export function typedQueryErrors(i: ParsedQueryIntent): string[] {
   inSet('domain', i.domain, DOMAINS);
   inSet('aggregation', i.aggregation, AGGREGATIONS);
   inSet('unitStatus', i.unitStatus, STATUSES);
+  if (i.unitStatusIn !== undefined) {
+    const s = i.unitStatusIn;
+    if (!Array.isArray(s) || s.length !== 2 || new Set(s).size !== 2 || s.some((v) => !STATUSES.has(String(v))) || i.unitStatus !== undefined) errs.push('unitStatusIn must be two distinct statuses and exclude unitStatus');
+  }
   inSet('leaseType', i.leaseType, LEASE_TYPES);
   inSet('renewalStatus', i.renewalStatus, RENEWAL);
   inSet('decisionAccepted', i.decisionAccepted, ACCEPTED);

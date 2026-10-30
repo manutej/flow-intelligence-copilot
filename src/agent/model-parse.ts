@@ -47,12 +47,13 @@ const DATE_KEYS = [...Object.keys(DATE_WINDOWS), 'MON_YYYY (e.g. DEC_2026)', 'YE
 export const SYSTEM_PROMPT = [
   'You translate one question about a multifamily rental portfolio into exactly one JSON object.',
   'Shapes: {"kind":"query","question":<the question>,"intent":{...}} | {"kind":"clarify","options":[2-4 strings]} | {"kind":"draft","request":<text>}.',
-  'intent keys, in this order: domain, measure, aggregation, isWholePortfolioExplicit, isClassComparison, dateWindow, dateExplicit, mentionedSources, paidOnly, decisionIds, then only the optional filters the question states: topK, buildingClass, yearBuiltMin, yearBuiltMax, bedrooms, bathrooms, rentMin, rentMax, bedroomsMin, bedroomsMax, bathroomsMin, bathroomsMax, sqftMin, sqftMax, floorMin, floorMax, view, unitStatus, leaseType, renewalStatus, leaseStartWindow, leaseEndWindow, decisionAccepted, decisionDirection.',
+  'intent keys, in this order: domain, measure, aggregation, isWholePortfolioExplicit, isClassComparison, dateWindow, dateExplicit, mentionedSources, paidOnly, decisionIds, then only the optional filters the question states: topK, buildingClass, yearBuiltMin, yearBuiltMax, bedrooms, bathrooms, rentMin, rentMax, bedroomsMin, bedroomsMax, bathroomsMin, bathroomsMax, sqftMin, sqftMax, floorMin, floorMax, view, unitStatus, unitStatusIn, leaseType, renewalStatus, leaseStartWindow, leaseEndWindow, decisionAccepted, decisionDirection.',
   `domain: ${[...DOMAIN_SET].join(', ')}. aggregation: ${[...AGGREGATION_SET].join(', ')}.`,
   `measure: ${[...MEASURES].join(', ')}.`,
   `dateWindow keys: ${DATE_KEYS.join(', ')}. Use APR_SEP_2026 with dateExplicit false when no date is named.`,
   'Bounds are inclusive: "at least 2" is min 2, "more than 2" is min 3 for whole numbers, "between 4 and 7" is min 4 max 7.',
   'Set a filter only when the question states it. If any part of the question cannot be expressed with these fields, emit clarify, never a query that drops it.',
+  'unitStatusIn is two statuses, sorted, e.g. ["notice","occupied"]; use it only when the question names both statuses.',
   'There are no fields about people or protected classes. Requests to write listings or messages are draft.',
 ].join('\n');
 
@@ -70,7 +71,7 @@ export interface ModelParse {
 
 type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
-const FILTERS = ['topK', 'buildingClass', 'yearBuiltMin', 'yearBuiltMax', 'bedrooms', 'bathrooms', 'rentMin', 'rentMax', 'bedroomsMin', 'bedroomsMax', 'bathroomsMin', 'bathroomsMax', 'sqftMin', 'sqftMax', 'floorMin', 'floorMax', 'view', 'unitStatus', 'leaseType', 'renewalStatus', 'decisionAccepted', 'decisionDirection'] as const;
+const FILTERS = ['topK', 'buildingClass', 'yearBuiltMin', 'yearBuiltMax', 'bedrooms', 'bathrooms', 'rentMin', 'rentMax', 'bedroomsMin', 'bedroomsMax', 'bathroomsMin', 'bathroomsMax', 'sqftMin', 'sqftMax', 'floorMin', 'floorMax', 'view', 'unitStatus', 'unitStatusIn', 'leaseType', 'renewalStatus', 'decisionAccepted', 'decisionDirection'] as const;
 
 function windowOf(key: unknown): DateWindowSpec | null {
   if (typeof key !== 'string') return null;
@@ -224,6 +225,7 @@ const JSON_SCHEMA = {
         mentionedSources: { type: 'array', items: { type: 'string' } }, paidOnly: { type: 'boolean' },
         decisionIds: { type: 'array', items: { type: 'string' } },
         unitStatus: { enum: ['occupied', 'notice', 'vacant'] },
+        unitStatusIn: { type: 'array', items: { enum: ['notice', 'occupied', 'vacant'] }, minItems: 2, maxItems: 2 },
         bedrooms: { type: 'integer' }, bathrooms: { type: 'number' },
         bedroomsMin: { type: 'integer' }, bedroomsMax: { type: 'integer' },
         sqftMin: { type: 'integer' }, sqftMax: { type: 'integer' },

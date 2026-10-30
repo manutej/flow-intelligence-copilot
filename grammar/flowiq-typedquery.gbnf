@@ -19,7 +19,7 @@ intent ::= ( "{\"domain\":" domain ",\"measure\":" measure ",\"aggregation\":" a
   ",\"mentionedSources\":" sources ",\"paidOnly\":" bool ",\"decisionIds\":" decision-ids
   opt-topk opt-class opt-ybmin opt-ybmax opt-beds opt-baths opt-rentmin opt-rentmax
   opt-bedsmin opt-bedsmax opt-bathsmin opt-bathsmax opt-sqftmin opt-sqftmax
-  opt-floormin opt-floormax opt-view opt-ustatus opt-ltype opt-rstatus
+  opt-floormin opt-floormax opt-view opt-ustatus opt-ustatusin opt-ltype opt-rstatus
   opt-lsw opt-lew opt-daccepted opt-ddir "}" )
 
 opt-topk     ::= ( ",\"topK\":" topk )?
@@ -40,6 +40,7 @@ opt-floormin ::= ( ",\"floorMin\":" uint )?
 opt-floormax ::= ( ",\"floorMax\":" uint )?
 opt-view     ::= ( ",\"view\":" view )?
 opt-ustatus  ::= ( ",\"unitStatus\":" unit-status )?
+opt-ustatusin ::= ( ",\"unitStatusIn\":[" unit-status "," unit-status "]" )?
 opt-ltype    ::= ( ",\"leaseType\":" lease-type )?
 opt-rstatus  ::= ( ",\"renewalStatus\":" renewal-status )?
 opt-lsw      ::= ( ",\"leaseStartWindow\":" date-window )?

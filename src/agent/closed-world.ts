@@ -14,6 +14,10 @@ import { COMPARATOR_PHRASES } from '../domain/comparators.ts';
 // Phrases the unit filters parse (intent.ts parse* functions). Removing them
 // first means a word like "over" is understood only where a filter reads it.
 const FILTER_PHRASES: readonly RegExp[] = [
+  // The rent noun of a rent comparator ("rent between $2,200 and $2,500").
+  /\b(?:market\s+)?rents?\b(?=\s+(?:is\s+)?(?:between|from|at\s+least|at\s+most|under|over|below|above|no\s+more|no\s+less|less|more|greater|fewer|up\s+to|\$))/gi,
+  // A status set, as parseUnitStatusSet reads it.
+  /\bwhose\s+status\s+is\s+(?:occupied|notice|vacant)\s+or\s+(?:occupied|notice|vacant)\b/gi,
   ...COMPARATOR_PHRASES,
   /\b(?:open|available)\s+(?=(?:studio\s+)?(?:units?|apartments?|studios?|\d?br\b))/gi,
   /\b(?:with\s+)?view\s*[=:]?\s*['"`]?none['"`]?/gi,

@@ -1,5 +1,6 @@
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import { resolvePropertiesFromText } from '../domain/resolver.ts';
+import { findUnknownBuildingReference } from './recognition.ts';
 import { unboundNegators } from './closed-world.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 
@@ -39,6 +40,7 @@ export function restate(intent: ParsedQueryIntent, question: string, store: Port
   const what = MEASURE_WORDS[intent.measure] ?? intent.measure.replace(/_/g, ' ');
   const filters = [
     intent.unitStatus && `status = ${intent.unitStatus}`,
+    intent.unitStatusIn && `status in {${intent.unitStatusIn.join(', ')}}`,
     intent.bedrooms !== undefined && `bedrooms = ${intent.bedrooms}`,
     intent.bathrooms !== undefined && `bathrooms = ${intent.bathrooms}`,
     range('bedrooms', intent.bedroomsMin, intent.bedroomsMax),
@@ -49,6 +51,10 @@ export function restate(intent: ParsedQueryIntent, question: string, store: Port
     intent.view && `view = ${intent.view}`,
     intent.buildingClass && `class ${intent.buildingClass}`,
   ].filter(Boolean);
+  // A building name that is not in properties.csv is never resolved by a
+  // shared generic word ("Lakeview Tower" is not Printers Row Tower).
+  const unknownName = findUnknownBuildingReference(question, store);
+  if (unknownName) return `I computed: ${what}${filters.length ? `, ${filters.join(', ')}` : ''}, at "${unknownName}" (no such building).`;
   const named = resolvePropertiesFromText(store, question).matched;
   const scope = named.length > 0 ? named.map((p) => `${p.name} (${p.propertyId})`).join(', ') : 'all operating buildings';
   return `I computed: ${what}${filters.length ? `, ${filters.join(', ')}` : ''}, at ${scope}.`;
@@ -61,7 +67,10 @@ export function clarifyOptions(question: string, unbound: readonly string[], sto
   const options: ClarifyOption[] = [];
   // Dropping a negator inverts the question ("not vacant" -> "vacant"), so
   // no reading is offered; the turn is an honest "I don't know".
-  if (unboundNegators(unbound.join(' ')).length > 0) return [];
+  // An unknown building has no reading: guessing one by a shared word, or
+  // widening to the portfolio, answers a different question.
+  if (findUnknownBuildingReference(question, store)) return [];
+  if (unboundNegators(question).length > 0) return negatedStatusOptions(question, store);
   const quoted = unbound.map((w) => `"${w}"`).join(', ');
   let stripped = question;
   for (const w of unbound) stripped = stripped.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escape(w)}(?![\\p{L}\\p{N}])`, 'giu'), ' ');
@@ -90,6 +99,54 @@ export function clarifyOptions(question: string, unbound: readonly string[], sto
     if (q !== null) options.push({ label: `${prefix}${label(intent, here && building ? building.name : '')}`, question: q, query: parseQueryIntent(q, store) });
   }
   return options.slice(0, 4);
+}
+
+const STATUS_NEG_RE = /\b(?:(?:that|which)\s+)?(?:(?:are|is)\s+not|(?:are|is)n['’]t|not|non-?|except|excluding|other\s+than)\s*(?:currently\s+)?(vacant|occupied|on[-\s]notice|notice)\b(?:\s+units?\b)?/i;
+const ALL_STATUSES = ['notice', 'occupied', 'vacant'] as const;
+
+/**
+ * A negated status ("not vacant") has no single-status reading, so the
+ * options are its complement as a typed status set, then each remaining
+ * status on its own. Never the inverted reading. Any other negation has no
+ * typed reading and returns no options.
+ */
+function negatedStatusOptions(question: string, store: PortfolioStore): ClarifyOption[] {
+  const m = question.match(STATUS_NEG_RE);
+  if (!m) return [];
+  const neg = m[1].toLowerCase().replace(/^on[-\s]/, '');
+  const rest = ALL_STATUSES.filter((s) => s !== neg);
+  const stripped = question.replace(STATUS_NEG_RE, m[0].trim().endsWith('units') || /units?$/i.test(m[0]) ? ' units ' : ' ').replace(/\s+/g, ' ').replace(/\s+([?.!,])/g, '$1').trim();
+  if (unboundNegators(stripped).length > 0) return [];
+  const base = parseQueryIntent(stripped, store);
+  if (base.domain !== 'units' || base.measure === 'unsupported') return [];
+  const named0 = resolvePropertiesFromText(store, question).matched;
+  // A stated status already inside the complement ("on notice and not
+  // vacant") is that status alone; one equal to the negated status is a
+  // contradiction with no reading.
+  if (base.unitStatus !== undefined) {
+    if (base.unitStatus === neg) return [];
+    const scopes = named0.length === 1 ? [named0[0].name, undefined] : [undefined];
+    return scopes.flatMap((b, k) => {
+      const q = canonicalQuestion(base, b);
+      if (q === null) return [];
+      const query = parseQueryIntent(q, store);
+      return [{ label: `Only ${base.unitStatus} (already not ${neg})${k ? ', across the portfolio' : ''}: ${restate(query, q, store).replace(/^I computed: /, '').replace(/\.$/, '')}`, question: q, query }];
+    });
+  }
+  const named = resolvePropertiesFromText(store, question).matched;
+  const building = named.length === 1 ? named[0] : undefined;
+  const out: ClarifyOption[] = [];
+  const readings: Array<[ParsedQueryIntent, string]> = [
+    [{ ...base, unitStatus: undefined, unitStatusIn: [...rest] }, `Every status except ${neg}: `],
+    ...rest.map((st): [ParsedQueryIntent, string] => [{ ...base, unitStatus: st, unitStatusIn: undefined }, `Only ${st}: `]),
+  ];
+  for (const [intent, prefix] of readings) {
+    const q = canonicalQuestion(intent, building?.name);
+    if (q === null) continue;
+    const query = parseQueryIntent(q, store);
+    out.push({ label: `${prefix}${restate(query, q, store).replace(/^I computed: /, '').replace(/\.$/, '')}`, question: q, query });
+  }
+  return out.slice(0, 4);
 }
 
 export function clarifyEnvelope(id: string, question: string, unbound: readonly string[], store: PortfolioStore): { envelope: AnswerEnvelope; options: ClarifyOption[] } {
@@ -130,6 +187,7 @@ export function canonicalQuestion(intent: ParsedQueryIntent, building?: string):
       : intent.floorMin !== undefined && intent.floorMax !== undefined ? `on floors ${intent.floorMin} to ${intent.floorMax}`
         : intent.floorMin !== undefined ? `on floor ${intent.floorMin} or above` : `on floor ${intent.floorMax} or below`;
   const status = intent.unitStatus ? `${STATUS_WORD[intent.unitStatus]} ` : '';
-  const parts = [`${head[intent.measure]} ${status}units`, withs.length ? `with ${withs.join(' and ')}` : null, floor, building ? (intent.measure === 'unit_count' ? `are at ${building}` : `at ${building}`) : (intent.measure === 'unit_count' ? 'are there' : 'in the portfolio')];
+  const statusSet = intent.unitStatusIn ? ` whose status is ${intent.unitStatusIn.join(' or ')}` : '';
+  const parts = [`${head[intent.measure]} ${status}units${statusSet}`, withs.length ? `with ${withs.join(' and ')}` : null, floor, building ? (intent.measure === 'unit_count' ? `are at ${building}` : `at ${building}`) : (intent.measure === 'unit_count' ? 'are there' : 'in the portfolio')];
   return `${parts.filter(Boolean).join(' ')}?`;
 }

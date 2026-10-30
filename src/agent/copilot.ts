@@ -1,4 +1,5 @@
 import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
+import type { ParsedQueryIntent } from './intent.ts';
 import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
 import { parseQueryIntent } from './intent.ts';
 import { continuesPreviousTurn, refersBackToPeople, type FairHousingSession } from '../domain/fair-housing.ts';
@@ -261,6 +262,16 @@ export async function runModelParseRouter(
   });
 }
 
+// A negated status has no single-status field; the restatement must not
+// claim the inverted status was read.
+function negationNote(question: string): string {
+  const neg = unboundNegators(question);
+  return neg.length ? ` (${neg.map((w) => `"${w}"`).join(', ')} has no field: a typed query holds a status or a status set, never a negation)` : '';
+}
+function stripStatusIfNegated(i: ParsedQueryIntent, question: string): ParsedQueryIntent {
+  return unboundNegators(question).length ? { ...i, unitStatus: undefined } : i;
+}
+
 function noteTurn(runs: RunStore | null | undefined, mp: ModelParse, t: CopilotTurnResult): void {
   if (!runs || !mp.runKey) return;
   runs.append({ type: 'turn', key: mp.runKey, ts: new Date().toISOString(), path: t.parsePath, clarify_options: (t.clarifyOptions ?? []).map((o) => o.question), answer_hash: hashOf({ answer: t.envelope.answer, result: t.envelope.result }) });
@@ -281,8 +292,10 @@ export function runDeterministicToolRouter(
     ...(answered
       ? { restatement: restate(parseQueryIntent(qRecord.question, store), qRecord.question, store) }
       : opts.length > 0
-        ? { restatement: `I could not bind every word. I read: ${restate(parseQueryIntent(qRecord.question, store), qRecord.question, store).replace(/^I computed: /, '')}` }
-        : {}),
+        ? { restatement: `I could not bind every word${negationNote(qRecord.question)}. I read: ${restate(stripStatusIfNegated(parseQueryIntent(qRecord.question, store), qRecord.question), qRecord.question, store).replace(/^I computed: /, '')}` }
+        : r.refused === true ? {}
+          // A dead end still says what was read, so the user can rephrase.
+          : { restatement: `I did not answer${negationNote(qRecord.question)}. I read: ${restate(stripStatusIfNegated(parseQueryIntent(qRecord.question, store), qRecord.question), qRecord.question, store).replace(/^I computed: /, '')}` }),
     modeUsed: 'deterministic',
     providerUsed: 'deterministic',
     modelUsed: 'flowiq-deterministic-v2.0',

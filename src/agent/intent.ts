@@ -85,6 +85,8 @@ export interface ParsedQueryIntent {
   readonly floorMax?: number;
   readonly view?: string;
   readonly unitStatus?: UnitStatus;
+  /** A status set ("status is occupied or notice"): the complement of a negated status. */
+  readonly unitStatusIn?: readonly UnitStatus[];
   readonly leaseType?: LeaseType;
   readonly renewalStatus?: RenewalStatus;
   readonly dateWindow: DateWindowSpec;
@@ -268,6 +270,15 @@ export function parseUnitViewFilter(
     }
   }
   return undefined;
+}
+
+const STATUS_SET_RE = /\bwhose\s+status\s+is\s+(occupied|notice|vacant)\s+or\s+(occupied|notice|vacant)\b/i;
+/** "units whose status is occupied or notice" -> ['notice', 'occupied'] (sorted, distinct). */
+export function parseUnitStatusSet(question: string): UnitStatus[] | undefined {
+  const m = question.match(STATUS_SET_RE);
+  if (!m) return undefined;
+  const set = [...new Set([m[1], m[2]].map((s) => s.toLowerCase() as UnitStatus))].sort();
+  return set.length === 2 ? set : undefined;
 }
 
 export function parseUnitStatusFilter(question: string): UnitStatus | undefined {
@@ -626,6 +637,11 @@ export function parseExplicitDateWindow(
 // A unit count answers only a question that asks to count or list units
 // and whose every word a filter, the store or plain structure accounts for
 // (closed-world.ts). Anything else answers unknown, never the total.
+// Rent named as a filter ("with rent between $1900 and $2500", "$1900
+// rent") is a condition, not the measure; measure cues read the rest.
+const RENT_FILTER_RE = /\b(?:market\s+)?rents?\s+(?:of\s+|is\s+|was\s+)?(?=(?:between|at\s+least|at\s+most|under|over|below|above|from|no\s+more\s+than|no\s+less\s+than|less\s+than|more\s+than|greater\s+than|fewer\s+than|up\s+to|\$))|\$\s?\d[\d,]*(?:\.\d+)?\s+(?:in\s+)?rents?\b/gi;
+const measureText = (question: string): string => question.replace(RENT_FILTER_RE, ' ');
+
 const UNIT_COUNT_CUE_RE =
   /\b(?:how\s+many|number\s+of|count|total|list|which|show|what)\b|\bvacanc(?:y|ies)\b/i;
 const UNIT_NOUN_RE =
@@ -652,7 +668,8 @@ function parseQueryIntentRaw(
   const { rentMin, rentMax } = parseRentBounds(question);
   const { floorMin, floorMax } = parseFloorBounds(question);
   const view = parseUnitViewFilter(question, store);
-  const unitStatus = parseUnitStatusFilter(question);
+  const unitStatusIn = parseUnitStatusSet(question);
+  const unitStatus = unitStatusIn ? undefined : parseUnitStatusFilter(question);
   const mentionedSources = parseSourceMentions(question, store);
   const explicitWindow = parseExplicitDateWindow(
     question,
@@ -1098,7 +1115,7 @@ function parseQueryIntentRaw(
   ) {
     unitMeasure = 'occupied_share';
   } else if (
-    /\b(average|avg\.?|mean)\b.*\b(?:market\s+)?rent\b/i.test(question) &&
+    /\b(average|avg\.?|mean)\b.*\b(?:market\s+)?rent\b/i.test(measureText(question)) &&
     /\b(average|avg\.?|mean)\s+sq\.?\s*ft\b/i.test(question)
   ) {
     unitMeasure = 'avg_market_rent_and_sqft';
@@ -1106,7 +1123,7 @@ function parseQueryIntentRaw(
     unitMeasure = 'avg_sqft';
   } else if (
     (/\b(average|avg\.?|mean)\b/i.test(question) &&
-      /\b(market\s+rent|asking\s+rent|rent)\b/i.test(question)) ||
+      /\b(market\s+rent|asking\s+rent|rent)\b/i.test(measureText(question))) ||
     /\bmarket\s+rent\s+(?:average|mean)\b/i.test(question)
   ) {
     unitMeasure = 'avg_market_rent';
@@ -1146,6 +1163,7 @@ function parseQueryIntentRaw(
     floorMax,
     view,
     unitStatus,
+    ...(unitStatusIn ? { unitStatusIn } : {}),
     dateWindow,
     dateExplicit,
     mentionedSources,
@@ -1226,9 +1244,9 @@ const COVERAGE_RULES: ReadonlyArray<{
 }> = [
   // A unit status the parser did not turn into a filter.
   { words: /\b(?:vacant|vacanc\w*|occupied|occupancy|on\s+notice|available|unoccupied|empty)\b/i,
-    covered: (i) => i.unitStatus !== undefined || i.domain !== 'units' || /rate|share/.test(i.measure) },
+    covered: (i) => i.unitStatus !== undefined || i.unitStatusIn !== undefined || i.domain !== 'units' || /rate|share/.test(i.measure) },
   // A notice status the parser did not turn into a filter.
-  { words: /(?<!occupied\s+or\s+(?:on\s+)?)\bnotice\b/i, covered: (i) => i.unitStatus === 'notice' || i.domain !== 'units' || /rate|share/.test(i.measure) },
+  { words: /(?<!occupied\s+or\s+(?:on\s+)?)\bnotice\b/i, covered: (i) => i.unitStatus === 'notice' || i.unitStatusIn?.includes('notice') === true || i.domain !== 'units' || /rate|share/.test(i.measure) },
   // A number on a unit field must land in that field's bounds (F-060).
   ...FIELD_COVERAGE.map(([f, has]) => ({
     words: { test: (q: string) => mentionsQuantity(q, f) },
@@ -1257,7 +1275,8 @@ export function parseQueryIntent(question: string, store: PortfolioStore): Parse
   );
   // One exact value per field: two different ones cannot both hold.
   const conflicting = (['bedrooms', 'bathrooms'] as const).some((f) => intent[f] !== undefined && statedValues(question, f).length > 1);
-  const uncovered = statuses.size > 1 || conflicting || COVERAGE_RULES.some((r) => r.words.test(question) && !r.covered(intent));
+  const setStated = intent.unitStatusIn !== undefined && [...statuses].every((s) => intent.unitStatusIn!.includes(s as UnitStatus));
+  const uncovered = (statuses.size > 1 && !setStated) || conflicting || COVERAGE_RULES.some((r) => r.words.test(question) && !r.covered(intent));
   // Only a valid TypedQuery is ever executed (S1R-L1-4).
   return unmet || uncovered || typedQueryErrors(intent).length > 0 ? { ...intent, measure: 'unsupported' } : intent;
 }
