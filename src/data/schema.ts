@@ -197,6 +197,16 @@ export interface AnswerEnvelope {
    * against the store and accepts only figures the recompute produces.
    */
   readonly query?: TypedQuery;
+  /** S2-L3: binds the answer text to the typed query and its result. */
+  readonly proof?: AnswerProof;
+}
+
+export interface AnswerProof {
+  /** The fixed renderer the answer came from: domain.measure.aggregation. */
+  readonly template_id: string;
+  readonly query_hash: string;
+  readonly result_hash: string;
+  readonly row_ids: readonly string[];
 }
 
 export interface TypedQuery {

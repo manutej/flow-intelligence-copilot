@@ -1,6 +1,4 @@
-import { bindingErrors } from './binding.ts';
-import { claimSchemaErrors, numbersIn } from './claim.ts';
-import { recomputeErrors } from '../agent/recompute.ts';
+import { envelopeErrors } from '../agent/envelope.ts';
 import type {
   AnswerEnvelope,
   CitationId,
@@ -217,89 +215,10 @@ function namedProperties(envelope: AnswerEnvelope): string[] {
   );
 }
 
-// Tables that can hold the rows a figure is computed from.
-const MONEY_TABLES = new Set(['spend', 'leases', 'decisions', 'units']);
-const UNIT_STATUS_WORDS: ReadonlyArray<[RegExp, string]> = [
-  [/\b(?:vacan(?:t|cy|cies)|empty|available|unoccupied|unleased|unrented|open|free|ready\s+to\s+(?:lease|rent))\b/i, 'vacant'],
-  [/\b(?:occupied|taken|leased|rented|filled|in\s+use)\b/i, 'occupied'],
-  [/\bon[-\s]notice\b/i, 'notice'],
-];
-
-const rowsByTableAndOwner = new WeakMap<PortfolioStore, Map<string, Map<string, number>>>();
-function tableSizes(store: PortfolioStore): Map<string, Map<string, number>> {
-  let sizes = rowsByTableAndOwner.get(store);
-  if (!sizes) {
-    sizes = new Map();
-    for (const [citation, owner] of store.primaryKeyIndex) {
-      const table = citation.slice(0, citation.indexOf(':'));
-      const byOwner = sizes.get(table) ?? new Map<string, number>();
-      byOwner.set(owner, (byOwner.get(owner) ?? 0) + 1);
-      sizes.set(table, byOwner);
-    }
-    rowsByTableAndOwner.set(store, sizes);
-  }
-  return sizes;
-}
-
-/**
- * Checks a figure against what the cited rows can support, without trusting
- * the producer: the answer text states each figure, a count fits inside the
- * tables it cites, money cites a table that holds money, and each unit a
- * count cites has the one status the answer claims.
- */
 function figureErrors(envelope: AnswerEnvelope, store: PortfolioStore): string[] {
-  const errors: string[] = [];
-  const result = envelope.result ?? {};
-  errors.push(...claimSchemaErrors(result, store));
-  errors.push(...recomputeErrors(envelope, store));
-  errors.push(...bindingErrors(envelope, store));
-  // A cited unit belongs to a property the answer names, by ID or by name.
-  const text = envelope.answer ?? '';
-  const mentioned = new Set([
-    ...namedProperties(envelope),
-    ...store.properties.filter((p) => text.includes(p.propertyId) || text.includes(p.name)).map((p) => p.propertyId),
-  ]);
-  if (mentioned.size > 0) {
-    for (const u of store.units) {
-      if (envelope.citations.includes(u.citationId) && !mentioned.has(u.propertyId)) {
-        errors.push(`${u.citationId} belongs to ${u.propertyId}, which the answer does not name`);
-      }
-    }
-  }
-  const stated = numbersIn(envelope.answer ?? '');
-  for (const [key, value] of Object.entries(result)) {
-    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
-    if (!stated.some((n) => Math.abs(n - value) < 0.051 || Math.round(n) === Math.round(value) && !Number.isInteger(n) === !Number.isInteger(value))) {
-      errors.push(`Result ${key}=${value} is not what the answer text says`);
-    }
-  }
-  const tables = new Set(envelope.citations.map((c) => c.slice(0, c.indexOf(':'))));
-  if (typeof result.count === 'number') {
-    const scope = namedProperties(envelope);
-    const sizes = tableSizes(store);
-    const ceiling = Math.max(0, ...[...tables].map((t) => {
-      const byOwner = sizes.get(t) ?? new Map<string, number>();
-      return scope.length === 0 ? [...byOwner.values()].reduce((a, b) => a + b, 0) : scope.reduce((a, p) => a + (byOwner.get(p) ?? 0), 0);
-    }));
-    if (result.count < 0 || result.count > ceiling) {
-      errors.push(`Count ${result.count} cannot come from the cited tables (${[...tables].join(', ')} hold ${ceiling} rows in scope)`);
-    }
-  }
-  if (typeof result.usd === 'number' && ![...tables].some((t) => MONEY_TABLES.has(t))) {
-    errors.push(`A dollar figure must cite a spend, lease, decision or unit row`);
-  }
-  const claimed = UNIT_STATUS_WORDS.filter(([re]) => re.test(envelope.answer ?? '')).map(([, status]) => status);
-  // A count of units in one status cites the counted units; a rate cites its denominator too.
-  // A zero count cites the rows that show nothing matches, so they are of
-  // another status by design (S0b F-055).
-  if (claimed.length === 1 && typeof result.count === 'number' && result.count > 0 && !('percent' in result)) {
-    const statusById = new Map(store.units.map((u) => [u.citationId as string, u.status as string]));
-    for (const c of envelope.citations) {
-      const status = statusById.get(c);
-      if (status !== undefined && status !== claimed[0]) errors.push(`${c} is ${status}, not ${claimed[0]} as the answer says`);
-    }
-  }
-  return errors;
+  // S2-L3: the envelope check (re-execute, re-render, byte-equal) replaces
+  // the text-matching checks on figures, names, statuses and dates.
+  return envelopeErrors(envelope, store);
 }
 
 /**

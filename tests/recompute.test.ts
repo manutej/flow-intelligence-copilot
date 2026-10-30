@@ -14,11 +14,10 @@ const ok = (answer: string, result: Record<string, unknown>, citations = V6, que
   verifyAnswerEnvelope({ id: 'X', answer, result, citations: citations as never, query }, store).valid;
 
 describe('L3: every figure is the exact recompute of the typed query (TENACITY three-layer)', () => {
-  it('keeps true answers, however worded (F-042)', () => {
-    assert.ok(ok('Kedzie Works (P06) has 14 vacant units.', { count: 14 }));
-    assert.ok(ok('Kedzie Works (P06) has fourteen vacant units.', { count: 14 }));
-    assert.ok(ok('Kedzie Works (P06) has 14 vacant units; the other 96 are not vacant.', { count: 14 }));
-    assert.ok(ok('Total posted marketing spend was $12,300.00 USD.', { usd: 12300 }, SP, SPEND));
+  it('S2: keeps only the template render; a true figure reworded is not a render', () => {
+    const real = executeCompositionalPlan({ id: 'X', type: 'adhoc', question: SPEND.question }, store, { verify: false }).envelope;
+    assert.ok(verifyAnswerEnvelope(real, store).valid);
+    assert.equal(verifyAnswerEnvelope({ ...real, answer: real.answer.replace(/\.$/, '!') }, store).valid, false);
   });
   it('rejects spend x10 and +$1', () => {
     assert.equal(ok('Total posted marketing spend was $123,000.00 USD.', { usd: 123000 }, SP, SPEND), false);
@@ -42,7 +41,7 @@ describe('L3: every figure is the exact recompute of the typed query (TENACITY t
 describe('L3: stated names, ids, totals, dates and citations bind to the recompute (S0b F-054, F-059)', () => {
   const real = executeCompositionalPlan({ id: 'X', type: 'adhoc', question: VAC.question }, store, { verify: false }).envelope;
   const forged = (answer: string, citations = real.citations) =>
-    verifyAnswerEnvelope({ id: 'X', answer, result: real.result, citations: citations as never, query: VAC }, store).valid;
+    verifyAnswerEnvelope({ ...real, answer, citations: citations as never }, store).valid;
   it('keeps the real envelope', () => assert.ok(forged(real.answer)));
   it('rejects a swapped building name, id, total or date', () => {
     assert.equal(forged(real.answer.replace('Kedzie Works', 'Marlowe Residences')), false);

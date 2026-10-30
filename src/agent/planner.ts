@@ -1,3 +1,4 @@
+import { sealProof } from './envelope.ts';
 import type { ClarifyOption } from './clarify.ts';
 import { fmtUsd, plural } from '../domain/format.ts';
 import { roundTo } from '../data/loader.ts';
@@ -16,7 +17,7 @@ import type {
   UnitQuerySummary,
 } from '../domain/metrics.ts';
 import type { PropertyResolutionResult } from '../domain/resolver.ts';
-import { parseQueryIntent } from './intent.ts';
+import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 import {
   dataCoverage,
   describeCoverage,
@@ -69,11 +70,12 @@ function buildExcludedOnboardingSuffix(store: PortfolioStore): string {
 export function executeCompositionalPlan(
   qRecord: QuestionRecord,
   store: PortfolioStore,
-  { verify = true }: { readonly verify?: boolean } = {},
+  { verify = true, intent: given }: { readonly verify?: boolean; readonly intent?: ParsedQueryIntent } = {},
 ): PlannerTurnOutput {
   const question = qRecord.question;
   const schema = qRecord.result_schema ?? {};
-  const intent = parseQueryIntent(question, store);
+  // S2-L1: a validated TypedQuery from the model path replaces the parse.
+  const intent = given ?? parseQueryIntent(question, store);
   const toolCalls: ToolCallTrace[] = [];
 
   const finalize = (
@@ -83,12 +85,15 @@ export function executeCompositionalPlan(
     clarificationNeeded = false,
     clarifyingQuestion: string | null = null,
   ): PlannerTurnOutput => {
+    const query = { question, intent, ...(qRecord.result_schema ? { result_schema: qRecord.result_schema } : {}) };
+    const rows = [...new Set(citations)];
     const envelope: AnswerEnvelope = {
       id: qRecord.id,
       answer,
       result,
-      citations: [...new Set(citations)],
-      query: { question, intent, ...(qRecord.result_schema ? { result_schema: qRecord.result_schema } : {}) },
+      citations: rows,
+      query,
+      proof: sealProof(query, result, rows),
     };
     return {
       envelope,
