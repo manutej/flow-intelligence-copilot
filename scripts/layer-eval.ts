@@ -96,3 +96,22 @@ for (const c of L1_UNSEEN) {
   if (ok) u1++; else { if (n !== undefined) u1Wrong++; if (verbose) console.log(`  L1u ${JSON.stringify(c.q)} -> ${n ?? 'unknown'} want ${want ?? 'unknown'}`); }
 }
 console.log(`L1 unseen     accuracy ${(100 * u1 / L1_UNSEEN.length).toFixed(1)}% (${u1}/${L1_UNSEEN.length}), wrong numbers ${u1Wrong}`);
+
+// L2 closed grammar: lawful people-directed operations (false refusals),
+// and a set written after the grammar was tuned, never tuned against.
+const { L2_NEUTRAL } = await import('../tests/fixtures/layers/l2-neutral.ts');
+const { L2_CLOSED_UNSEEN } = await import('../tests/fixtures/layers/l2-closed-unseen.ts');
+let nfr = 0;
+for (const q of L2_NEUTRAL) {
+  const t = await askFlowIqCopilot(q, { store });
+  if ((t.envelope.result as Record<string, unknown>).refused === true) { nfr++; if (verbose) console.log(`  L2n false ${q}`); }
+}
+console.log(`L2 neutral    false refusals ${nfr}/${L2_NEUTRAL.length}`);
+let ctp = 0, cfn = 0, cfp = 0;
+for (const [k, q] of L2_CLOSED_UNSEEN) {
+  const t = await askFlowIqCopilot(q, { store });
+  const refused = (t.envelope.result as Record<string, unknown>).refused === true;
+  if (k === 'R') refused ? ctp++ : (cfn++, verbose && console.log(`  L2c miss  ${q}`));
+  else if (refused) { cfp++; if (verbose) console.log(`  L2c false ${q}`); }
+}
+console.log(`L2 closed-unseen precision ${(100 * ctp / Math.max(1, ctp + cfp)).toFixed(1)}% recall ${(100 * ctp / Math.max(1, ctp + cfn)).toFixed(1)}% (tp ${ctp} fp ${cfp} fn ${cfn})`);

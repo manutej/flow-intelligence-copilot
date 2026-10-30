@@ -240,6 +240,9 @@ export function normalizeForFairHousing(text: string): string {
   const unhyphenated = folded.replace(/(?<=[\p{L}'’])[-_.·]+(?=[\p{L}'’])/gu, '');
   return (unhyphenated === folded ? folded : `${folded} . ${unhyphenated}`)
     .replace(/(?<=\p{L})[аеіорсухѕјмкнтв013457@$](?=\p{L})|[аеіорсухѕјмкнтв](?=\p{L})|(?<=\p{L})[аеіорсухѕјмкнтв]/gu, (c) => CONFUSABLES[c] ?? c)
+    // A token of letters and leet digits only (k33p, 0ut, l1ttl3) is a word.
+    .replace(/(?<![\p{L}\d])[\p{L}013457@$]*\p{L}[\p{L}013457@$]*(?![\p{L}\d])/gu, (w) => (/[013457@$]/.test(w) ? w.replace(/[013457@$]/g, (c) => CONFUSABLES[c]) : w))
+    .replace(/(?<![\p{L}\d])[013457@$]+(?=\p{L})|(?<=\p{L})[013457@$]+(?![\p{L}\d])/gu, (d) => d.replace(/./g, (c) => CONFUSABLES[c] ?? c))
     .replace(/\b(?:[a-z][-.*_ ]){2,}[a-z]\b/g, (m) => m.replace(/[-.*_ ]/g, ''))
     .replace(/_/g, ' ')
     .replace(/\s+/g, ' ')
@@ -266,22 +269,60 @@ const TRANSLATIONS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\b(?:negros?|noirs?|schwarze\w*)\b/g, 'blacks'],
   [/\b(?:mujeres|femmes|frauen)\b/g, 'women'],
   [/\b(?:discapacitad\w*|handicape\w*|behindert\w*)\b/g, 'disabled'],
+  [/\b(?:hijos?|hijas?)\b/g, 'kids'],
+  [/\b(?:inquilin\w*|arrendatari\w*|locataires?|mieter\w*)\b/g, 'tenants'],
+  [/\b(?:deutsche\w*|alemanes|allemands)\b/g, 'germans'],
+  [/\b(?:no\s+(?:queremos|rentar|alquilar)|evita\w*|ne\s+louez\s+pas|nicht\s+vermiet\w*)\b/g, 'do not rent'],
 ];
 
-function translate(text: string): string {
+/**
+ * Chinese and Russian, read before Cyrillic look-alikes are folded to Latin
+ * (which would turn Не сдавать into he cdabatь).
+ */
+const RAW_TRANSLATIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/不要|不租|别租|不准|不许|拒绝|не\s+сда\w*|не\s+пуска\w*|отказ\w*|только|只/g, ' do not rent '],
+  [/孩子|儿童|小孩|дет\w*|ребен\w*/g, ' kids '],
+  [/家庭|семь\w*/g, ' families '],
+  [/穆斯林|мусульман\w*/g, ' muslims '],
+  [/移民|мигрант\w*|иностран\w*/g, ' immigrants '],
+  [/租给|арендатор\w*|жильц\w*/g, ' tenants '],
+];
+
+function translate(text: string, raw: string): string {
   const out = TRANSLATIONS.reduce((t, [re, en]) => t.replace(re, en), text);
-  return out === text ? text : `${text} . ${out}`;
+  const lowered = raw.normalize('NFKC').toLowerCase();
+  const rawOut = RAW_TRANSLATIONS.reduce((t, [re, en]) => t.replace(re, en), lowered);
+  return [text, ...(out === text ? [] : [out]), ...(rawOut === lowered ? [] : [rawOut.replace(/[^\x20-\x7e]+/g, ' ')])].join(' . ');
+}
+
+/**
+ * The closed grammar of L2. A sentence is refused when it refers to people
+ * and directs a treatment or decision at them, unless the criterion it uses
+ * is one of a closed list of lawful ones. The group need not be in any
+ * lexicon: "keep brown folks out" refers to people (folks) and directs an
+ * exclusion, and nothing lawful explains it, so it is refused.
+ */
+const PERSON_REF_RE =
+  /\b(?:people|persons?|folks?|applicants?|tenants?|renters?|residents?|prospects?|households?|famil(?:y|ies)|ones|users?|speakers?|holders?|recipients?|couples?|women|men|woman|man|kids|children|guys|ladies|callers?|customers?|occupants?|lessees?|neighbou?rs?|individuals?|anyone|anybody|everyone|someone|those|them|they|their|whoever|types?|crowd|kind\s+of\s+(?:tenants?|renters?|people)|germans|muslims|immigrants|foreigners|blacks|jews)\b/i;
+const TREATMENT_RE =
+  /\b(?:steer\w*|keep\s+(?:\w+[-\s]+){0,4}?(?:out|away)|leave\s+(?:\w+\s+){0,4}?out|skip\w*|exclud\w*|discourag\w*|prioriti[sz]\w*|deprioriti[sz]\w*|prefer\w*|favou?r\w*|rank\w*|reject\w*|deny|deni\w*|refus\w*|turn\s+(?:\w+\s+)?(?:away|down)|screen\s+out|filter\s+out|block\w*|ban\w*|avoid\w*|bar\b|barred|waitlist\w*|wait[-\s]list\w*|hold\s+(?:\w+\s+){0,4}?for|reserve\w*\s+(?:\w+\s+){0,4}?for|set\s+aside|offer\s+(?:\w+\s+){0,4}?(?:to|instead)|(?:do\s+not|don'?t|never|not)\s+(?:\w+\s+)?(?:want|rent|lease|show|offer|accept|allow|let|tour|call|hear)|only\s+(?:show|rent|lease|offer|accept|allow|give|market|advertis\w*)|(?:show|market|advertis\w*|target\w*)\s+(?:\w+\s+){0,4}?only|bottom\s+of|top\s+of\s+the\s+list|at\s+the\s+(?:bottom|back|end)|elsewhere|somewhere\s+else|instead|no\s+(?:\w+\s+)?(?:tenants|renters|applicants|people|folks)|only\s+(?:\w+\s+){0,2}?(?:tenants|renters|applicants|people|folks)|never\s+hear|worst|worse|longer\s+form|extra\s+(?:references|documents|checks|deposit)|charg\w*\s+more|bump\s+the|good\s+fit|not\s+a\s+fit|liabilit\w*)\b/i;
+/** Lawful criteria: the facts a landlord may act on, stated about the people. */
+const LAWFUL_CRITERION_RE =
+  /\b(?:leases?\s+(?:end\w*|expir\w*|start\w*|up)|lease\s+end|renewal\w*|renew\w*|(?:on\s+)?notice|move[-\s]?(?:in|out)|late\s+(?:rent|fees?|payments?)|past[-\s]due|unpaid|balance\s+owed|owe\w*|applications?\s+(?:is\s+)?(?:complete\w*|incomplete|fees?|submitted|first)|(?:completed|submitted|finished)\s+(?:their|an?|the)\s+application|incomplete\s+applications?|(?:already\s+)?signed(?:\s+(?:a|the))?(?:\s+lease)?|unit\s+is\s+ready|until\s+(?:the\s+)?(?:unit|apartment)|pa(?:y|id|ys)\s+on\s+time|payment\s+history|double[-\s]?book\w*|schedul\w*|(?:no[-\s])?show(?:ed)?\s+(?:up|for\s+(?:the|their)\s+tour)|missed\s+(?:the|their)\s+tours?|pets?|dogs?\s+over|smok\w*|parking|lead\s+source|from\s+(?:zillow|apartments\.com|google|facebook|the\s+website|the\s+portal|craigslist|referrals?)|everyone|all\s+applicants|regardless\s+of)\b/i;
+
+function personDirected(text: string): boolean {
+  return (text.match(/[^.?!;\n]+[.?!;\n]?/g) ?? []).some((s) => PERSON_REF_RE.test(s) && TREATMENT_RE.test(s) && !LAWFUL_CRITERION_RE.test(s));
 }
 
 /** A statement that describes the building or the task, not people. */
 const DESCRIPTIVE_RE =
-  /\b(?:(?:building|property|it|unit)\s+(?:has|have|includes?|features?|offers?)\b|translat\w*|near(?:by)?\b|close\s+to|next\s+to\s+the\s+\w+\s+(?:church|temple|mosque|synagogue|school))/i;
+  /\b(?:(?:building|property|it|unit)\s+(?:has|have|includes?|features?|offers?)\b|(?:tenants?|residents?|renters?)\s+(?:include|includes)\b|translat\w*|near(?:by)?\b|close\s+to|next\s+to\s+the\s+\w+\s+(?:church|temple|mosque|synagogue|school)|requested\s+(?:a|an)\s+(?:ramp|accommodation|modification|grab\s+bar|transfer|accessible)|reasonable\s+accommodation)/i;
 
 /** Each word spelled backwards, so "milsuM" names its group too. */
 const reversedWords = (text: string) => text.split(' ').map((w) => [...w].reverse().join('')).join(' ');
 
 export function classifyFairHousingRequest(rawQuestion: string): FairHousingClassification {
-  const text = translate(normalizeForFairHousing(rawQuestion));
+  const text = translate(normalizeForFairHousing(rawQuestion), rawQuestion);
   const restricted = RESTRICTION_OVERRIDE_RE.test(text);
   const clauses = text.split(CLAUSE_SPLIT_RE).filter((c) => c.trim());
   const isInclusive = (c: string) => !restricted && INCLUSIVE_RE.test(c);
@@ -302,8 +343,11 @@ export function classifyFairHousingRequest(rawQuestion: string): FairHousingClas
     .filter((sentence) => !sentence.split(CLAUSE_SPLIT_RE).some(isInclusive) && !DESCRIPTIVE_RE.test(sentence))
     .some((sentence) => PROTECTED_CLASS_RULES.some((r) => r.pattern.test(sentence) || r.pattern.test(reversedWords(sentence))));
   if (directive && actions.length === 0) actions.push('differential');
+  const directed = personDirected(question);
+  if (directed && !actions.includes('differential')) actions.push('differential');
+  const refusedByClass = classes.length > 0 && actions.length > 0 && !(DESCRIPTIVE_RE.test(question) && !directed && !actions.some((a) => a !== 'differential'));
   return {
-    refused: classes.length > 0 && actions.length > 0,
+    refused: refusedByClass || directed,
     actions,
     classes,
     inclusive,
