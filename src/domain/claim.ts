@@ -61,7 +61,7 @@ export function claimSchemaErrors(result: Readonly<Record<string, unknown>>, sto
 const NUMBER_WORDS: Readonly<Record<string, number>> = {
   zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
   eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
-  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+  dozen: 12, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
 };
 const SCALE: Readonly<Record<string, number>> = { hundred: 100, thousand: 1000, million: 1e6 };
 const NUMBER_WORD_RE = new RegExp(`\\b(?:${[...Object.keys(NUMBER_WORDS), ...Object.keys(SCALE)].join('|')})(?:[-\\s]+(?:and[-\\s]+)?(?:${[...Object.keys(NUMBER_WORDS), ...Object.keys(SCALE)].join('|')}))*\\b`, 'gi');
@@ -81,15 +81,45 @@ function wordsToDigits(text: string): string {
 }
 
 const MONTH = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
-const DATE_RE = new RegExp(`\\b\\d{4}-\\d{2}(?:-\\d{2})?\\b|\\b(?:q[1-4]|h[12]|${MONTH})\\s+\\d{4}\\b|\\b\\d+\\s+(?:days?|weeks?|months?|years?)\\b|\\b(?:in|of|during|for|since|through|to)\\s+\\d{4}\\b(?!-\\d)`, 'gi');
+const DATE_RE = new RegExp(`\\b\\d{4}-\\d{2}(?:-\\d{2})?\\b|\\b(?:q[1-4]|h[12]|${MONTH})\\s+\\d{4}\\b|\\b(?:in|of|during|for|since|through|to)\\s+\\d{4}\\b(?!-\\d)`, 'gi');
 
-function plain(text: string): string {
-  return wordsToDigits(text).replace(DATE_RE, ' ').replace(/(\d),(?=\d{3})/g, '$1');
+/** Every script's digits read as ASCII digits: ９ and ٩ are 9 (F-041). */
+const DIGIT_ZEROS = [0x660, 0x6f0, 0x7c0, 0x966, 0x9e6, 0xa66, 0xae6, 0xb66, 0xbe6, 0xc66, 0xce6, 0xd66, 0xe50, 0xed0, 0xf20, 0x1040, 0x17e0, 0x1810];
+function asciiDigits(text: string): string {
+  return text.normalize('NFKC').replace(/[^\x00-\x7f]/g, (c) => {
+    const cp = c.codePointAt(0) ?? 0;
+    const zero = DIGIT_ZEROS.find((z) => cp >= z && cp < z + 10);
+    return zero === undefined ? c : String(cp - zero);
+  });
 }
 
+/** A date is only a date when it is a real day near the store's data. */
+function isRealDate(m: string): boolean {
+  const iso = m.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+  if (!iso) return true;
+  const [y, mo, d] = [Number(iso[1]), Number(iso[2]), iso[3] ? Number(iso[3]) : 1];
+  const day = new Date(Date.UTC(y, mo - 1, d));
+  return y >= 2015 && y <= 2035 && day.getUTCMonth() === mo - 1 && day.getUTCDate() === d;
+}
+
+function plain(text: string): string {
+  return wordsToDigits(asciiDigits(text))
+    .replace(/\ba\s+12\b/g, '12')
+    .replace(DATE_RE, (m) => (isRealDate(m) ? ' ' : m.replace(/-/g, ' ')))
+    // A window length is a date part while it fits the data's span: two
+    // years. "999 days" or "37 months" is a figure and is checked.
+    .replace(/\b(\d+)\s+(days?|weeks?|months?|years?)\b/gi, (m, n, unit) =>
+      Number(n) <= ({ d: 731, w: 104, m: 24, y: 2 } as Record<string, number>)[unit[0].toLowerCase()] ? ' ' : `${n} ${unit}`)
+    .replace(/(\d),(?=\d{3})/g, '$1');
+}
+
+/** Scaled forms are figures too: 999k is 999000 and 1e3 is 1000. */
 function numbersIn(text: string): number[] {
   return [...plain(text)
-    .matchAll(/(?<![\p{L}\d._])-?\d+(?:\.\d+)?(?![\p{L}\d])/gu)].map((m) => Number(m[0]));
+    .matchAll(/(?<![\p{L}\d._])-?\d+(?:\.\d+)?(?:e[+-]?\d+|k\b|m\b)?(?![\p{L}\d])/giu)].map((m) => {
+      const t = m[0].toLowerCase();
+      return t.endsWith('k') ? Number(t.slice(0, -1)) * 1e3 : t.endsWith('m') ? Number(t.slice(0, -1)) * 1e6 : Number(t);
+    });
 }
 
 function numericLeaves(v: unknown, out: number[] = []): number[] {

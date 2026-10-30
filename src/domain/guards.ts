@@ -1,4 +1,5 @@
 import { claimSchemaErrors, unexplainedNumbers } from './claim.ts';
+import { typedClaimErrors } from './typed-claim.ts';
 import type {
   AnswerEnvelope,
   CitationId,
@@ -246,6 +247,7 @@ function figureErrors(envelope: AnswerEnvelope, store: PortfolioStore): string[]
   const errors: string[] = [];
   const result = envelope.result ?? {};
   errors.push(...claimSchemaErrors(result, store));
+  errors.push(...typedClaimErrors(envelope, store));
   for (const n of unexplainedNumbers(envelope, store)) {
     errors.push(`The answer states ${n}, which no checked value explains`);
   }
