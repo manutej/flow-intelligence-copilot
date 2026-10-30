@@ -1,3 +1,4 @@
+import { bindingErrors } from './binding.ts';
 import { claimSchemaErrors, numbersIn } from './claim.ts';
 import { recomputeErrors } from '../agent/recompute.ts';
 import type {
@@ -251,6 +252,7 @@ function figureErrors(envelope: AnswerEnvelope, store: PortfolioStore): string[]
   const result = envelope.result ?? {};
   errors.push(...claimSchemaErrors(result, store));
   errors.push(...recomputeErrors(envelope, store));
+  errors.push(...bindingErrors(envelope, store));
   // A cited unit belongs to a property the answer names, by ID or by name.
   const text = envelope.answer ?? '';
   const mentioned = new Set([

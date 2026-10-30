@@ -70,3 +70,28 @@ describe('F-062: unbound words lead to clarify with 2-4 options, answers carry a
     assert.match(t.restatement ?? '', /^I computed: the number of units, status = vacant, at Kedzie Works \(P06\)\.$/);
   });
 });
+
+describe('F-066..F-068: claims are bound to the result, not trusted as prose', async () => {
+  const { verifyAnswerEnvelope } = await import('../src/domain/guards.ts');
+  const t = await askFlowIqCopilot('How many vacant units are at Kedzie Works?', { store });
+  const base = t.envelope;
+  const forged = (answer: string) => verifyAnswerEnvelope({ ...base, answer }, store).valid;
+  const otherAlias = store.properties.find((p) => p.propertyId !== 'P06' && p.aka.some((a) => a.length >= 3))!;
+  it('the real answer verifies', () => assert.ok(verifyAnswerEnvelope(base, store).valid, base.answer));
+  it('F-066 another building\'s alias, or an id in another form, is rejected', () => {
+    assert.equal(forged(base.answer.replace('Kedzie Works (P06)', `${otherAlias.aka.find((a) => a.length >= 3)} (P06)`)), false);
+    assert.equal(forged(base.answer.replace('(P06)', '(p06)')), false);
+    assert.equal(forged(base.answer.replace('(P06)', '(P-06)')), false);
+  });
+  it('F-067 a negated status or a count/total swap is rejected', () => {
+    assert.equal(forged(base.answer.replace(/\bvacant units\b/, 'non-vacant units')), false);
+    const m = base.answer.match(/out of (\d+) total units/);
+    if (m) assert.equal(forged(base.answer.replace(m[0], `out of ${Number(base.result.count) - 1} total units`)), false);
+  });
+  it('F-068 relative dates and garbled numbers are rejected', () => {
+    assert.equal(forged(`${base.answer} (as of last Tuesday)`), false);
+    assert.equal(forged(`${base.answer} since March.`), false);
+    assert.equal(forged(base.answer.replace('P06', 'Psix')), false);
+    assert.equal(forged(base.answer.replace('P06', 'P0six')), false);
+  });
+});
