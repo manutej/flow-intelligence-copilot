@@ -16,6 +16,7 @@ import {
   resolveModelHarnessConfig,
   runUniversalModelHarness,
 } from './model-harness.ts';
+import { classifyFrame, frameModelConfig } from './frame-model.ts';
 import { executeCompositionalPlan } from './planner.ts';
 import type { ToolCallTrace } from './tools.ts';
 
@@ -121,6 +122,31 @@ export async function askFlowIqCopilot(
         qRecord.result_schema,
       ),
     };
+  }
+
+  // L2 model layer: decomposed sub-questions that can only add a refusal to
+  // the deterministic check above. Off unless FLOWIQ_FRAME_MODEL is set.
+  if (frameModelConfig()) {
+    const frame = await classifyFrame(question);
+    if (frame.refuse) {
+      const envelope: AnswerEnvelope = {
+        id: qRecord.id,
+        answer: `Refused: this asks to treat people differently based on ${frame.answers?.group.replace(/_/g, ' ')}, which the Fair Housing Act and the Illinois Human Rights Act prohibit. I can help with the same task without that criterion.`,
+        result: { refused: true },
+        citations: [],
+      };
+      return {
+        envelope,
+        toolCalls,
+        clarificationNeeded: false,
+        clarifyingQuestion: null,
+        modeUsed: 'deterministic',
+        providerUsed: 'deterministic',
+        modelUsed: 'flowiq-deterministic-v2.0',
+        llmFallbackReason: null,
+        verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+      };
+    }
   }
 
   if (options.mode === 'llm' || options.provider || options.harness) {
