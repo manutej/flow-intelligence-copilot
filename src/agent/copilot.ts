@@ -208,14 +208,58 @@ export function runDeterministicToolRouter(
   const out = closedVocabulary(executeCompositionalPlan(qRecord, store), qRecord, store);
   const r = out.envelope.result as Record<string, unknown>;
   const answered = r.unknown !== true && r.refused !== true && r.clarification_needed !== true;
+  const offered = answered || r.refused === true ? [] : out.clarifyOptions ?? unitClarify(qRecord.question, store).clarifyOptions ?? [];
   return {
-    ...out,
-    ...(!answered && out.clarifyOptions === undefined && r.refused !== true ? unitClarify(qRecord.question, store) : {}),
+    ...withClarify(out, wellFormedOptions(offered, qRecord, store), qRecord, store),
     ...(answered ? { restatement: restate(parseQueryIntent(qRecord.question, store), qRecord.question, store) } : {}),
     modeUsed: 'deterministic',
     providerUsed: 'deterministic',
     modelUsed: 'flowiq-deterministic-v2.0',
     llmFallbackReason,
+  };
+}
+
+/**
+ * Clarify options are well-formed (S1R F-077): each carries a non-empty
+ * question, no two are the same, and each one FlowIQ runs to an answer, so
+ * one click never lands on another unknown. A reading that fails is dropped.
+ */
+function wellFormedOptions(options: readonly ClarifyOption[], qRecord: QuestionRecord, store: PortfolioStore): ClarifyOption[] {
+  const seen = new Set<string>();
+  return options.filter((o) => {
+    const q = o.question.trim();
+    if (q.length === 0 || o.label.trim().length === 0 || seen.has(q.toLowerCase()) || q === qRecord.question.trim()) return false;
+    seen.add(q.toLowerCase());
+    const res = closedVocabulary(executeCompositionalPlan({ ...qRecord, question: q }, store), { ...qRecord, question: q }, store).envelope.result as Record<string, unknown>;
+    return res.unknown !== true && res.refused !== true && res.clarification_needed !== true;
+  }).slice(0, 4);
+}
+
+/** Options offered means clarification_needed is true, in the result and on the turn; none offered means none claimed. */
+function withClarify(
+  out: ReturnType<typeof executeCompositionalPlan>,
+  options: ClarifyOption[],
+  qRecord: QuestionRecord,
+  store: PortfolioStore,
+): ReturnType<typeof executeCompositionalPlan> {
+  const r = out.envelope.result as Record<string, unknown>;
+  if (options.length === 0) {
+    const { clarifyOptions: _drop, ...rest } = out;
+    return rest;
+  }
+  const head = out.envelope.answer.replace(/\s*Did you mean:[\s\S]*$/, '').trim();
+  const envelope: AnswerEnvelope = {
+    ...out.envelope,
+    answer: `${head} Did you mean: ${options.map((o, k) => `(${k + 1}) ${o.label}`).join('; ')}?`,
+    result: { ...r, unknown: true, clarification_needed: true },
+  };
+  return {
+    ...out,
+    envelope,
+    clarifyOptions: options,
+    clarificationNeeded: true,
+    clarifyingQuestion: out.clarifyingQuestion ?? options.map((o) => o.question).join(' / '),
+    verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
   };
 }
 

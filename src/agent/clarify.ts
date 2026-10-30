@@ -61,16 +61,28 @@ export function clarifyOptions(question: string, unbound: readonly string[], sto
   for (const w of unbound) stripped = stripped.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escape(w)}(?![\\p{L}\\p{N}])`, 'giu'), ' ');
   stripped = stripped.replace(/\s+/g, ' ').replace(/\s+([?.!,])/g, '$1').trim();
   const strippedIntent = parseQueryIntent(stripped, store);
-  if (stripped !== question && strippedIntent.measure !== 'unsupported') {
-    options.push({ label: `Without ${quoted}: ${restate(strippedIntent, stripped, store).replace(/^I computed: /, '')}`, question: stripped });
-  }
+  // A reading keeps a measure the question itself states (F-077): with the
+  // unbound words removed, the question must still parse to a unit measure.
+  // Otherwise there is no reading, because a unit count in place of, say, a
+  // spend figure is a different question.
+  if (strippedIntent.measure === 'unsupported' || strippedIntent.domain !== 'units') return [];
+  const asked = strippedIntent;
   const named = resolvePropertiesFromText(store, question).matched;
-  if (named.length === 1) {
-    const q = `How many units are at ${named[0].name}?`;
-    if (q !== stripped) options.push({ label: `All units at ${named[0].name} (${named[0].propertyId}), no filters`, question: q });
+  const building = named.length === 1 ? named[0] : undefined;
+  const label = (i: ParsedQueryIntent, scope: string) => restate(i, scope, store).replace(/^I computed: /, '').replace(/\.$/, '');
+  // Each option's question is rendered from the typed reading, never cut out
+  // of the user's words, so it is always a whole question.
+  const unfiltered: ParsedQueryIntent = { ...asked, ...Object.fromEntries(FILTER_KEYS.map((k) => [k, undefined])) } as ParsedQueryIntent;
+  const readings: Array<[ParsedQueryIntent, boolean, string]> = [
+    [strippedIntent, true, `Without ${quoted}: `],
+    [strippedIntent, false, `Without ${quoted}, across the portfolio: `],
+    [unfiltered, true, 'No filters: '],
+  ];
+  for (const [intent, here, prefix] of readings) {
+    if (!here && building === undefined) continue;
+    const q = canonicalQuestion(intent, here ? building?.name : undefined);
+    if (q !== null) options.push({ label: `${prefix}${label(intent, here && building ? building.name : '')}`, question: q });
   }
-  options.push({ label: `Say ${quoted} as a field FlowIQ reads: bedrooms, bathrooms, sqft, floor, market rent, view, status or building class`, question: '' });
-  if (options.length < 2) options.push({ label: 'Ask a different question', question: '' });
   return options.slice(0, 4);
 }
 
@@ -83,4 +95,35 @@ export function clarifyEnvelope(id: string, question: string, unbound: readonly 
     citations: ['properties:P01'],
   };
   return { envelope, options };
+}
+
+const FILTER_KEYS = ['bedrooms', 'bathrooms', 'bedroomsMin', 'bedroomsMax', 'bathroomsMin', 'bathroomsMax', 'sqftMin', 'sqftMax', 'floorMin', 'floorMax', 'rentMin', 'rentMax', 'view', 'buildingClass'] as const;
+const STATUS_WORD: Readonly<Record<string, string>> = { vacant: 'vacant', occupied: 'occupied', notice: 'on-notice' };
+const between = (noun: string, min?: number, max?: number, prefix = ''): string | null => {
+  if (min === undefined && max === undefined) return null;
+  if (min !== undefined && max !== undefined) return min === max ? `${prefix}${min} ${noun}` : `between ${prefix}${min} and ${prefix}${max} ${noun}`;
+  return min !== undefined ? `at least ${prefix}${min} ${noun}` : `at most ${prefix}${max} ${noun}`;
+};
+
+/** A whole question for one typed reading, or null when the reading has no unit measure FlowIQ phrases. */
+export function canonicalQuestion(intent: ParsedQueryIntent, building?: string): string | null {
+  const head: Readonly<Record<string, string>> = {
+    unit_count: 'How many',
+    avg_market_rent: 'What is the average market rent of',
+    avg_sqft: 'What is the average sq ft of',
+  };
+  if (intent.domain !== 'units' || head[intent.measure] === undefined) return null;
+  const withs = [
+    intent.bedrooms !== undefined ? `${intent.bedrooms} bedrooms` : between('bedrooms', intent.bedroomsMin, intent.bedroomsMax),
+    intent.bathrooms !== undefined ? `${intent.bathrooms} bathrooms` : between('bathrooms', intent.bathroomsMin, intent.bathroomsMax),
+    between('sq ft', intent.sqftMin, intent.sqftMax),
+    intent.rentMin !== undefined || intent.rentMax !== undefined ? `rent ${between('', intent.rentMin, intent.rentMax, '$')!.trim()}` : null,
+  ].filter((x): x is string => x !== null);
+  const floor = intent.floorMin === undefined && intent.floorMax === undefined ? null
+    : intent.floorMin === intent.floorMax ? `on floor ${intent.floorMin}`
+      : intent.floorMin !== undefined && intent.floorMax !== undefined ? `on floors ${intent.floorMin} to ${intent.floorMax}`
+        : intent.floorMin !== undefined ? `on floor ${intent.floorMin} or above` : `on floor ${intent.floorMax} or below`;
+  const status = intent.unitStatus ? `${STATUS_WORD[intent.unitStatus]} ` : '';
+  const parts = [`${head[intent.measure]} ${status}units`, withs.length ? `with ${withs.join(' and ')}` : null, floor, building ? (intent.measure === 'unit_count' ? `are at ${building}` : `at ${building}`) : (intent.measure === 'unit_count' ? 'are there' : 'in the portfolio')];
+  return `${parts.filter(Boolean).join(' ')}?`;
 }
