@@ -103,7 +103,14 @@ const ACTION_RULES: ReadonlyArray<{ readonly action: FairHousingAction; readonly
   },
   {
     action: 'exclusion',
-    pattern: /\b\w+(?:[-\s]\w+)?\s+only\b|\bonly\s+(?:rent|lease|show|market|advertise|accept|allow|want)\b/i,
+    pattern: /\b\w+(?:[-\s]\w+)?\s+only\b|\bonly\s+\w+/i,
+  },
+  {
+    // Denial by misstatement: telling someone a unit is gone, or marking it
+    // unavailable for someone, when it is not.
+    action: 'exclusion',
+    pattern:
+      /\b(?:tell|inform|say|claim|pretend|answer)\w*\b.*\b(?:full|unavailable|taken|rented|leased|no\s+vacanc\w*|not\s+available|nothing\s+(?:(?:is|was)\s+)?(?:left|available|open))\b|\b(?:unavailable|full|taken|not\s+available|closed)\s+(?:for|to)\b/i,
   },
   {
     action: 'targeting',
@@ -156,16 +163,36 @@ const CONFUSABLES: Readonly<Record<string, string>> = {
  * leetspeak folded inside words, s-p-e-l-l-e-d words joined, base64 decoded,
  * lower case, single spaces.
  */
+const HTML_NAMED: Readonly<Record<string, string>> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
+/** Undo transport encodings (percent, HTML entities) so a rule sees the letters. */
+function decodeTransport(text: string): string {
+  return text
+    .replace(/&#x([0-9a-f]{1,6});?/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d{1,7});?/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&([a-z]+);/gi, (m, n) => HTML_NAMED[n.toLowerCase()] ?? m)
+    .replace(/(?:%[0-9a-f]{2})+/gi, (m) => {
+      try { return decodeURIComponent(m); } catch { return m; }
+    });
+}
+
 export function normalizeForFairHousing(text: string): string {
-  const decoded = (text.match(/[A-Za-z0-9+/]{16,}={0,2}/g) ?? [])
+  const plain = decodeTransport(text);
+  const decoded = (plain.match(/[A-Za-z0-9+/]{16,}={0,2}/g) ?? [])
     .map((t) => Buffer.from(t, 'base64').toString('latin1'))
     .filter((t) => /^[\x20-\x7e]+$/.test(t));
-  return [text, ...decoded]
+  // Case-fold before stripping marks so dotless ı plus a combining dot
+  // folds to i; then a de-hyphenated copy catches fami-lies.
+  const folded = [plain, ...decoded]
     .join(' ')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f\u00ad\u200b-\u200f\u2060-\u2064\ufeff]/g, '')
     .normalize('NFKC')
     .toLowerCase()
+    .replace(/ı/g, 'i')
+    .normalize('NFKD')
+    .replace(/[\p{M}\u00ad\u200b-\u200f\u2060-\u2064\ufeff]/gu, '')
+    .normalize('NFKC');
+  const unhyphenated = folded.replace(/(?<=\p{L})-(?=\p{L})/gu, '');
+  return (unhyphenated === folded ? folded : `${folded} . ${unhyphenated}`)
     .replace(/(?<=\p{L})[аеіорсухѕј013457@$](?=\p{L})|[аеіорсухѕј](?=\p{L})|(?<=\p{L})[аеіорсухѕј]/gu, (c) => CONFUSABLES[c] ?? c)
     .replace(/\b(?:[a-z][-.*_ ]){2,}[a-z]\b/g, (m) => m.replace(/[-.*_ ]/g, ''))
     .replace(/\s+/g, ' ')
