@@ -1,5 +1,6 @@
 import { roundTo } from '../data/loader.ts';
 import type { CitationId, PortfolioStore } from '../data/schema.ts';
+import { rowFactViolations } from '../data/row-facts.ts';
 import {
   FLOW_PORTFOLIO_SCHEMA,
   type QuarantineKind,
@@ -83,8 +84,6 @@ export function evaluateSheafCoboundary<TStore>(
  * Declarative cellular sheaf specification for the 6 FLOW tables (E1..E6).
  * Every restriction map runs in O(N) via single-pass Map indices.
  */
-/** A lease rent this far from its unit's market rent is a data error, not a deal. */
-const RENT_TO_MARKET_MAX_RATIO = 3;
 
 type Row = { readonly citationId: CitationId };
 
@@ -134,9 +133,8 @@ function rowIntegrityResiduals(store: PortfolioStore): CoboundaryResidual[] {
     const u = unitById.get(l.unitId);
     if (!u) flag('leases', 'units', l.unitId, `${l.citationId} names missing unit ${l.unitId}`, [l.citationId]);
     else if (u.propertyId !== l.propertyId) flag('leases', 'units', l.unitId, `${l.citationId} is at ${l.propertyId} but unit ${l.unitId} is at ${u.propertyId}`, [l.citationId, u.citationId], l.propertyId, u.propertyId);
-    else if (!(l.monthlyRent >= 0) || !(u.marketRent > 0) || l.monthlyRent / u.marketRent > RENT_TO_MARKET_MAX_RATIO || u.marketRent / Math.max(l.monthlyRent, 1e-9) > RENT_TO_MARKET_MAX_RATIO)
-      flag('leases', 'units', l.unitId, `${l.citationId} rent ${l.monthlyRent} is implausible against market ${u.marketRent}`, [l.citationId, u.citationId], l.monthlyRent, u.marketRent);
   }
+  for (const v of rowFactViolations(store)) flag(v.table, v.target, v.key, v.description, v.citations as CitationId[], v.left, v.right);
   for (const ld of store.leads) {
     if (ld.leaseId && !leaseIds.has(ld.leaseId)) flag('leads', 'leases', ld.leaseId, `${ld.citationId} names missing lease ${ld.leaseId}`, [ld.citationId]);
   }

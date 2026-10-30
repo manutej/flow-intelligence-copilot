@@ -617,7 +617,7 @@ async function runEvalHarness(): Promise<{
   console.log('--- 5. Cross-Table Integrity & Decomposed Query Agreement ---');
   const sheafCoboundary = evaluateSheafCoboundary(store, FLOW_PORTFOLIO_SHEAF_EDGES);
   printWrapped(
-    '[PASS] CROSS-TABLE | ',
+    `[${sheafCoboundary.isGlobalSection ? 'PASS' : 'FAIL'}] CROSS-TABLE | `,
     `blockingResiduals=${sheafCoboundary.blockingResidualCount}, historicalExceptions=${sheafCoboundary.totalResidualCount} across ${store.primaryKeyIndex.size} rows`,
   );
 

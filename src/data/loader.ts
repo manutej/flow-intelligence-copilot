@@ -1,3 +1,4 @@
+import { rowFactViolations } from './row-facts.ts';
 import { fileURLToPath } from "node:url";
 import fs from 'node:fs';
 import path from 'node:path';
@@ -678,6 +679,12 @@ export function loadPortfolioStore(
     primaryKeyIndex,
   };
 
+  // A store that breaks a row fact never answers: the CLI exits 10 and the
+  // MCP server reports the load error, before any question is read.
+  const violations = rowFactViolations(store);
+  if (violations.length > 0) {
+    throw new DataLoadError(`${violations.length} row${violations.length > 1 ? 's break' : ' breaks'} the data contract: ${violations.slice(0, 3).map((v) => v.description).join('; ')}`);
+  }
   storeCache.set(cacheKey, store);
   while (storeCache.size > MAX_CACHED_STORES) {
     const oldest = storeCache.keys().next().value;

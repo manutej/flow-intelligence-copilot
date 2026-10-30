@@ -419,3 +419,32 @@ describe('audit: a question with an unresolved qualifier or statistic is not ans
     assert.ok(store.units.length > 0);
   });
 });
+
+const REPO_ROOT_FX5C = path.resolve(new URL('..', import.meta.url).pathname);
+
+describe('F-038 / FX5c: a store that breaks a row fact never loads', () => {
+  const cases: Array<[string, (dir: string) => void, RegExp]> = [
+    ['lease ends before it starts', (d) => edit(d, 'pms/leases.csv', 2, (f) => { f[5] = '2020-01-01'; }), /before it starts/],
+    ['unit status banana', (d) => edit(d, 'pms/units.csv', 2, (f) => { f[9] = 'banana'; }), /status "banana"/],
+    ['unit sqft negative', (d) => edit(d, 'pms/units.csv', 2, (f) => { f[5] = '-700'; }), /sqft -700/],
+    ['unit sqft zero', (d) => edit(d, 'pms/units.csv', 2, (f) => { f[5] = '0'; }), /sqft 0/],
+    ['lease rent 10x market', (d) => edit(d, 'pms/leases.csv', 2, (f) => { f[6] = String(Number(f[6]) * 10); }), /implausible/],
+  ];
+  function edit(dir: string, file: string, line: number, change: (fields: string[]) => void) {
+    const p = path.join(dir, file);
+    const lines = fs.readFileSync(p, 'utf8').split(/\r?\n/);
+    const fields = lines[line - 1].split(',');
+    change(fields);
+    lines[line - 1] = fields.join(',');
+    fs.writeFileSync(p, lines.join('\n'));
+  }
+  for (const [name, corrupt, message] of cases) {
+    it(`${name} fails the load with DataLoadError`, () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fx5c-'));
+      fs.cpSync(path.join(REPO_ROOT_FX5C, 'data'), path.join(dir, 'data'), { recursive: true });
+      corrupt(path.join(dir, 'data'));
+      assert.throws(() => loadPortfolioStore(dir), (e: Error) => e.name === 'DataLoadError' && message.test(e.message));
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+  }
+});
