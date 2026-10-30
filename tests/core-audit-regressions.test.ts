@@ -280,3 +280,33 @@ describe('audit: an invalid request with a detectable id gets that id back (EVAL
     });
   }
 });
+
+describe('audit: npm run eval fails when a held-out answer is wrong (Ormus F10)', () => {
+  const evalIn = (dir: string) =>
+    spawnSync('node', ['--no-warnings', 'scripts/run-eval.ts'], { cwd: dir, encoding: 'utf-8', env: { ...process.env, FLOW_DATA_DIR: '' } });
+  const scratch = () => {
+    const dir = scratchRepo();
+    for (const d of ['scripts', 'questions']) fs.cpSync(d, path.join(dir, d), { recursive: true });
+    return dir;
+  };
+  it('exits 0 when every check passes', () => {
+    const dir = scratch();
+    try {
+      assert.equal(evalIn(dir).status, 0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it('exits 1 when one held-out expectation is not met', () => {
+    const dir = scratch();
+    try {
+      const file = path.join(dir, 'questions', 'heldout.jsonl');
+      fs.writeFileSync(file, fs.readFileSync(file, 'utf-8').replace('"expected": {"count": 7}', '"expected": {"count": 8}'));
+      const r = evalIn(dir);
+      assert.match(r.stdout as string, /\[FAIL\] H01/);
+      assert.equal(r.status, 1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
