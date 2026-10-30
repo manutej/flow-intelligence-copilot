@@ -40,4 +40,13 @@ Sources read: the README, `docs/PATTERNS.md`, `internal/cli/exitcodes.go`, and t
 
 ## MCP
 
-On this branch the MCP server is unchanged, apart from the "did you mean" in argument errors. A fuller pass is drafted but not applied: tool titles, shorter selection-tuned descriptions, `additionalProperties: false`, argument `examples`, an `outputSchema` for `ask_flowiq`, plain text plus `structuredContent` for every tool, a `prompts/get` handler for the prompt it already lists, and a `flowiq_about` context tool with the ASCII wordmark. It is the Printing Press "context" tool adapted for FlowIQ, and it would sit outside answers so the art never lands in a reply.
+The server keeps its tool names, its answers, stdio and Streamable HTTP, no key, and read-only tools. What an assistant sees changed, after the Printing Press MCP conventions:
+
+- `initialize` returns `serverInfo.title` "FlowIQ by Ormus", version 2.3.0, and instructions that say to call `ask_flowiq` first, relay its first text block, and branch on `structuredContent.status`.
+- Every tool has a title and a description tuned for tool selection. Every input schema is closed (`additionalProperties: false`) and carries `examples`.
+- `ask_flowiq` has an `outputSchema`. Every tool returns a plain-text block first, the same data as JSON second, and `structuredContent`. For the `query_*` tools the first block used to be the JSON; it is now a sentence plus the source rows line, and the JSON is the second block.
+- `flowiq_about` (tool) and `flowiq://about` (resource) are the Printing Press "context" tool for FlowIQ: the ASCII wordmark in a code block, coverage, the row ID format, what it cannot answer, the what-if defaults and which tool to use when. The art lives only there, never inside an answer.
+- `prompts/get` serves the `portfolio-executive-audit` prompt that `prompts/list` already named.
+- An unknown tool is -32602 with the closest name and the request id (was -32601); unknown arguments name the closest allowed one.
+
+The presentation lives in `src/mcp/catalog.ts`; the engine tools in `src/agent/tools.ts` are untouched. The HTTP endpoint runs the same handler, so both transports match.

@@ -18,7 +18,7 @@ What you get:
 Grok Bot has no settings form for MCP servers; you add one in chat.
 
 1. In any Grok Bot chat, send: `Add a custom MCP server called flowiq at https://repo-sigma-one-80.vercel.app/api/mcp`
-2. Check the name and URL on the confirmation card and click to add it. There is no sign-in step; the bot reports 7 tools.
+2. Check the name and URL on the confirmation card and click to add it. There is no sign-in step; the bot reports 8 tools: `ask_flowiq`, the six `find_`/`query_`/`evaluate_`/`audit_` tools, and `flowiq_about` (a deployment from before this branch reports 7, without `flowiq_about`).
 3. Ask: `Using flowiq, which paid source cost us the least per signed lease at Kedzie Works from April to September 2026?`
    Expected: Google Ads at $2,005.00 ($4,010.00 over 2 signed leases), with source rows such as `spend:S0125` and `leases:L00105`.
 
