@@ -1,4 +1,4 @@
-import { refersBackToPeople, type FairHousingSession } from '../domain/fair-housing.ts';
+import { continuesPreviousTurn, dataQuestionOf, refersBackToPeople, type FairHousingSession } from '../domain/fair-housing.ts';
 import { unknownWords } from '../domain/vocabulary.ts';
 import type { PortfolioPolicyConfig } from '../config/rules.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
@@ -77,7 +77,10 @@ export async function askFlowIqCopilot(
   const toolCalls: ToolCallTrace[] = [];
 
   const fhCheck = sessionRefusal(options.session, question) ?? checkFairHousingGuard(question, store);
-  if (fhCheck.refused && options.session) options.session.refusedEarlier = true;
+  if (fhCheck.refused && options.session) {
+    options.session.refusedEarlier = true;
+    options.session.refusedQuestion ||= dataQuestionOf(question) || undefined;
+  }
   if (fhCheck.refused) {
     const envelope: AnswerEnvelope = {
       id: qRecord.id,
@@ -249,7 +252,11 @@ function hasCount(result: Record<string, unknown>): boolean {
 }
 
 function sessionRefusal(session: FairHousingSession | undefined, question: string) {
-  if (!session?.refusedEarlier || !refersBackToPeople(question)) return null;
+  if (!session?.refusedEarlier) return null;
+  // Points back at the people, carries on from the refused turn, or asks
+  // the refused turn's own question again with the instruction left off.
+  const repeats = session.refusedQuestion !== undefined && dataQuestionOf(question) === session.refusedQuestion;
+  if (!refersBackToPeople(question) && !continuesPreviousTurn(question) && !repeats) return null;
   return {
     refused: true,
     reason:

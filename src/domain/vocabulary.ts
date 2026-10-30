@@ -11,7 +11,8 @@ import { resolvePropertiesFromText } from './resolver.ts';
  * when no building is named or a named building has it: "units at Kedzie
  * Works with parking" is not answered as if parking were not asked about.
  */
-const FIXED = new Set(
+/** Words FlowIQ reads in a question; fair-housing.ts uses them to tell English from other languages. */
+export const FIXED = new Set(
   [
   'a above absolute accepted across ads after alder all among amount an and',
   'apartment apartments appfolio applied apply april are armitage as aster at',

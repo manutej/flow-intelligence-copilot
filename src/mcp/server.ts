@@ -157,7 +157,7 @@ const RESOURCES = [
 ] as const;
 
 /** One MCP connection is one conversation; initialize starts a new one. */
-const session: FairHousingSession = { refusedEarlier: false };
+const stdioSession: FairHousingSession = { refusedEarlier: false };
 
 /**
  * Handles a single JSON-RPC 2.0 MCP request (exported for unit tests and stdio loop).
@@ -165,6 +165,7 @@ const session: FairHousingSession = { refusedEarlier: false };
  */
 export async function handleMcpJsonRpcRequest(
   req: JsonRpcRequest,
+  session: FairHousingSession = stdioSession,
 ): Promise<JsonRpcResponse | null> {
   const id = req.id ?? null;
 
@@ -184,6 +185,7 @@ export async function handleMcpJsonRpcRequest(
   switch (req.method) {
     case 'initialize': {
       session.refusedEarlier = false;
+      delete session.refusedQuestion;
       const requested = req.params?.protocolVersion;
       const clientProtocol =
         typeof requested === 'string' &&

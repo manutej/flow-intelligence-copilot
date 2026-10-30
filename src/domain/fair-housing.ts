@@ -1,3 +1,4 @@
+import { FIXED } from './vocabulary.ts';
 /**
  * Fair Housing request classifier (FLOW-103).
  *
@@ -305,49 +306,85 @@ function translate(text: string, raw: string): string {
 const PERSON_REF_RE =
   /\b(?:people|persons?|folks?|applicants?|tenants?|renters?|residents?|prospects?|households?|famil(?:y|ies)|ones|users?|speakers?|holders?|recipients?|couples?|women|men|woman|man|kids|children|guys|ladies|callers?|customers?|occupants?|lessees?|neighbou?rs?|individuals?|anyone|anybody|everyone|someone|those|them|they|their|whoever|types?|crowd|kind\s+of\s+(?:tenants?|renters?|people)|germans|muslims|immigrants|foreigners|blacks|jews)\b/i;
 const TREATMENT_RE =
-  /\b(?:steer\w*|keep\s+(?:\w+[-\s]+){0,4}?(?:out|away)|leave\s+(?:\w+\s+){0,4}?out|skip\w*|exclud\w*|discourag\w*|prioriti[sz]\w*|deprioriti[sz]\w*|prefer\w*|favou?r\w*|rank\w*|reject\w*|deny|deni\w*|refus\w*|turn\s+(?:\w+\s+)?(?:away|down)|screen\s+out|filter\s+out|block\w*|ban\w*|avoid\w*|bar\b|barred|waitlist\w*|wait[-\s]list\w*|hold\s+(?:\w+\s+){0,4}?for|reserve\w*\s+(?:\w+\s+){0,4}?for|set\s+aside|offer\s+(?:\w+\s+){0,4}?(?:to|instead)|(?:do\s+not|don'?t|never|not)\s+(?:\w+\s+)?(?:want|rent|lease|show|offer|accept|allow|let|tour|call|hear)|only\s+(?:show|rent|lease|offer|accept|allow|give|market|advertis\w*)|(?:show|market|advertis\w*|target\w*)\s+(?:\w+\s+){0,4}?only|bottom\s+of|top\s+of\s+the\s+list|at\s+the\s+(?:bottom|back|end)|elsewhere|somewhere\s+else|instead|no\s+(?:\w+\s+)?(?:tenants|renters|applicants|people|folks)|only\s+(?:\w+\s+){0,2}?(?:tenants|renters|applicants|people|folks)|never\s+hear|worst|worse|longer\s+form|extra\s+(?:references|documents|checks|deposit)|charg\w*\s+more|bump\s+the|good\s+fit|not\s+a\s+fit|liabilit\w*)\b/i;
+  /\b(?:steer\w*|discriminat\w*|pretend\w*|(?:quote|charge)\w*\s+(?:\S+\s+){0,3}?\$?\d+\s+(?:more|extra|higher)|first\s+in\s+(?:the\s+)?(?:queue|line)|rais\w*\s+(?:the\s+|their\s+)?(?:quotes?|rents?|prices?|deposits?)\s+(?:for|on)|end\s+up\s+in|(?:should|must|will|do)?\s*not\s+reach|requir\w*\s+(?:\S+\s+){0,5}?to\s+(?:have|pay|provide|bring|show|get)|(?:add|charge|impose|apply)\w*\s+(?:\S+\s+){0,3}?(?:fees?|surcharges?|deposits?|premiums?)\s+(?:for|on|to)|(?:route|send|assign|transfer|refer|hand)\w*\s+(?:\S+\s+){0,6}?to\s+(?:a\s+|the\s+)?(?:different|another|separate|other|special)|talk\s+\w+\s+out\s+of|(?:let|tell|inform|say\s+to)\s+(?:\S+\s+){0,5}?(?:know|that)\b[^.?!]*\b(?:full|taken|unavailable|gone|booked|none\s+left|no\s+openings)|keep\s+(?:\w+[-\s]+){0,4}?(?:out|away|off)|\w+\s+than\s+(?:everyone|everybody|anyone|anybody|others|the\s+rest|other\s+\w+)|wait\s+(?:for|on|longer)|leave\s+(?:\w+\s+){0,4}?out|skip\w*|exclud\w*|discourag\w*|prioriti[sz]\w*|deprioriti[sz]\w*|prefer\w*|favou?r\w*|rank\w*|reject\w*|deny|deni\w*|refus\w*|turn\s+(?:\w+\s+)?(?:away|down)|screen\s+out|filter\s+out|block\w*|ban\w*|avoid\w*|bar\b|barred|waitlist\w*|wait[-\s]list\w*|hold\s+(?:\w+\s+){0,4}?for|reserve\w*\s+(?:\w+\s+){0,4}?for|set\s+aside|offer\s+(?:\w+\s+){0,4}?(?:to|instead)|(?:do\s+not|don'?t|never|not)\s+(?:\w+\s+)?(?:want|rent|lease|show|offer|accept|allow|let|tour|call|hear)|only\s+(?:show|rent|lease|offer|accept|allow|give|market|advertis\w*)|(?:show|market|advertis\w*|target\w*)\s+(?:\w+\s+){0,4}?only|bottom\s+of|top\s+of\s+the\s+list|at\s+the\s+(?:bottom|back|end)|elsewhere|somewhere\s+else|instead|no\s+(?:\w+\s+)?(?:tenants|renters|applicants|people|folks)|only\s+(?:\w+\s+){0,2}?(?:tenants|renters|applicants|people|folks)|never\s+hear|worst|worse|longer\s+(?:\w+\s+)?form|extra\s+(?:\w+\s+)?(?:references|documents|checks|deposits?|fees?)|not\s+qualified|charg\w*\s+more|bump\s+the|good\s+fit|not\s+a\s+fit|liabilit\w*)\b/i;
 /** Lawful criteria: the facts a landlord may act on, stated about the people. */
 const LAWFUL_CRITERION_RE =
-  /\b(?:leases?\s+(?:end\w*|expir\w*|start\w*|up)|lease\s+end|renewal\w*|renew\w*|(?:on\s+)?notice|move[-\s]?(?:in|out)|late\s+(?:rent|fees?|payments?)|past[-\s]due|unpaid|balance\s+owed|owe\w*|applications?\s+(?:is\s+)?(?:complete\w*|incomplete|fees?|submitted|first)|(?:completed|submitted|finished)\s+(?:their|an?|the)\s+application|incomplete\s+applications?|(?:already\s+)?signed(?:\s+(?:a|the))?(?:\s+lease)?|unit\s+is\s+ready|until\s+(?:the\s+)?(?:unit|apartment)|pa(?:y|id|ys)\s+on\s+time|payment\s+history|double[-\s]?book\w*|schedul\w*|(?:no[-\s])?show(?:ed)?\s+(?:up|for\s+(?:the|their)\s+tour)|missed\s+(?:the|their)\s+tours?|pets?|dogs?\s+over|smok\w*|parking|lead\s+source|from\s+(?:zillow|apartments\.com|google|facebook|the\s+website|the\s+portal|craigslist|referrals?)|everyone|all\s+applicants|regardless\s+of)\b/i;
+  /\b(?:credit\s+(?:checks?|scores?|history|reports?)|(?:standard|the\s+same)\s+screening|(?:complete|completed|missing)\s+(?:paperwork|documents?|id|applications?)|corporate\s+leases?|business\s+leases?|leases?\s+(?:end\w*|expir\w*|start\w*|up)|lease\s+end|renewal\w*|renew\w*|(?:on\s+)?notice|move[-\s]?(?:in|out)|late\s+(?:rent|fees?|payments?)|past[-\s]due|unpaid|balance\s+owed|owe\w*|applications?\s+(?:is\s+)?(?:complete\w*|incomplete|fees?|submitted|first)|(?:completed|submitted|finished)\s+(?:their|an?|the)\s+application|incomplete\s+applications?|(?:already\s+)?signed(?:\s+(?:a|the))?(?:\s+lease)?|unit\s+is\s+ready|until\s+(?:the\s+)?(?:unit|apartment)|pa(?:y|id|ys)\s+on\s+time|payment\s+history|double[-\s]?book\w*|schedul\w*|(?:no[-\s])?show(?:ed)?\s+(?:up|for\s+(?:the|their)\s+tour)|missed\s+(?:the|their)\s+tours?|pets?|dogs?\s+over|smok\w*|parking|lead\s+source|from\s+(?:zillow|apartments\.com|google|facebook|the\s+website|the\s+portal|craigslist|referrals?)|everyone|all\s+applicants|regardless\s+of)\b/i;
+
+const COMPARED_WITH_REST_RE = /\bthan\s+(?:everyone|everybody|anyone|anybody|others|the\s+rest|other\s+\w+)(?:\s+else)?/g;
+
+/** A person noun, or a protected-class term, which names people itself. */
+const refersToPeople = (s: string) => PERSON_REF_RE.test(s) || PROTECTED_CLASS_RULES.some((r) => r.pattern.test(s));
 
 function personDirected(text: string): boolean {
-  return (text.match(/[^.?!;\n]+[.?!;\n]?/g) ?? []).some((s) => PERSON_REF_RE.test(s) && TREATMENT_RE.test(s) && !LAWFUL_CRITERION_RE.test(s));
+  // "than everyone else" compares a group with the rest; it is not the
+  // lawful "everyone" of a rule applied to all.
+  return (text.match(/[^.?!;\n]+[.?!;\n]?/g) ?? []).some((s) => refersToPeople(s) && TREATMENT_RE.test(s) && !LAWFUL_CRITERION_RE.test(s.replace(COMPARED_WITH_REST_RE, ' ')));
 }
 
 /** A statement that describes the building or the task, not people. */
 const DESCRIPTIVE_RE =
   /\b(?:(?:building|property|it|unit)\s+(?:has|have|includes?|features?|offers?)\b|(?:tenants?|residents?|renters?)\s+(?:include|includes)\b|translat\w*|near(?:by)?\b|close\s+to|next\s+to\s+the\s+\w+\s+(?:church|temple|mosque|synagogue|school)|requested\s+(?:a|an)\s+(?:ramp|accommodation|modification|grab\s+bar|transfer|accessible)|reasonable\s+accommodation)/i;
 
+// English function words: a sentence of three or more words with none of
+// them is in a language the grammar does not read.
+const ENGLISH_FUNCTION_WORDS = new Set(
+  'a an the is are was were be been am do does did to of in on at for from by with and or but not no nor if so as than that this these those it its we our us you your they them their he she his her i me my all any each every some only please thanks thank can could will would should may must have has had within without after before until between per via now then too very more less same other what which who how when where why there here up out off over under into about also just'.split(' '),
+);
+
+/**
+ * A statement (not a question) carrying letters outside the Latin script, or
+ * three or more words with no English function word, is an instruction the
+ * closed grammar cannot read. Questions are left to L1, which answers unknown.
+ */
+function unreadableInstruction(raw: string): boolean {
+  const text = decodeTransport(raw).normalize('NFKC').replace(/[\p{Cf}\u200b-\u200f\u2060-\u2064\ufeff]/gu, '');
+  return (text.match(/[^.?!;\n。！？；]+[.?!;\n。！？；]?/gu) ?? []).some((x) => {
+    if (/[?？]\s*$/.test(x)) return false;
+    if (/[\p{L}--[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}]]/v.test(x) && !/^[\p{Script=Latin}\p{N}\p{P}\p{Z}\p{S}]*$/u.test(x)) return true;
+    if (/[\p{Script=Cyrillic}\p{Script=Greek}]{2,}/u.test(x) && !/[\p{Script=Latin}]{2,}/u.test(x.replace(/[\p{Script=Cyrillic}\p{Script=Greek}]+/gu, ''))) return true;
+    const words = x.toLowerCase().match(/\p{L}+/gu) ?? [];
+    // Short English fragments ("Percent, one decimal.") lack function
+    // words too, so three words need a non-ASCII letter and four suffice.
+    const long = words.length >= 4 || (words.length >= 3 && /[^\x00-\x7f]/.test(words.join('')));
+    return long && !words.some((w) => ENGLISH_FUNCTION_WORDS.has(w) || FIXED.has(w));
+  });
+}
+
 /** Each word spelled backwards, so "milsuM" names its group too. */
 const reversedWords = (text: string) => text.split(' ').map((w) => [...w].reverse().join('')).join(' ');
 
 export function classifyFairHousingRequest(rawQuestion: string): FairHousingClassification {
-  const text = translate(normalizeForFairHousing(rawQuestion), rawQuestion);
+  const text = translate(normalizeForFairHousing(rawQuestion), rawQuestion).replace(COMPARED_WITH_REST_RE, ' than others');
   const restricted = RESTRICTION_OVERRIDE_RE.test(text);
   const clauses = text.split(CLAUSE_SPLIT_RE).filter((c) => c.trim());
   const isInclusive = (c: string) => !restricted && INCLUSIVE_RE.test(c);
   const inclusive = clauses.some(isInclusive);
-  const question = clauses.filter((c) => !isInclusive(c)).join(' . ');
+  // Drop inclusive clauses but keep each sentence's other clauses together,
+  // so "If the caller sounds X, quote $200 more" stays one decision.
+  const question = (text.match(/[^.?!;\n]+[.?!;\n]?/g) ?? [])
+    .map((sen) => sen.split(CLAUSE_SPLIT_RE).filter((c) => c.trim() && !isInclusive(c)).join(' , '))
+    .filter((sen) => sen.trim())
+    .join(' . ');
   const classes = PROTECTED_CLASS_RULES.filter((r) => r.pattern.test(question) || r.pattern.test(reversedWords(question)));
   const actions: FairHousingAction[] = [
     ...new Set(ACTION_RULES.filter((r) => r.pattern.test(question)).map((r) => r.action)),
   ];
-  // Deny by default: a portfolio question never needs an instruction about a
-  // protected group. A statement or command (not a question) that names one,
-  // and is neither inclusive nor a description of the building, is refused
-  // even when no action word matched.
-  // "family-size units", "family room": the word names a size, not people.
-  const aboutPeople = text.replace(/\bfamil(?:y|ies)[-\s]+(?:size[d]?|room|style|owned|run|plan)\b/g, ' ');
-  const directive = (aboutPeople.match(/[^.?!;\n]+[.?!;\n]?/g) ?? [])
-    .filter((sentence) => !sentence.trim().endsWith('?'))
-    .filter((sentence) => !sentence.split(CLAUSE_SPLIT_RE).some(isInclusive) && !DESCRIPTIVE_RE.test(sentence))
-    .some((sentence) => PROTECTED_CLASS_RULES.some((r) => r.pattern.test(sentence) || r.pattern.test(reversedWords(sentence))));
-  if (directive && actions.length === 0) actions.push('differential');
+  // A class and an action count only when they share a sentence: naming a
+  // group ("Jewish holidays", "speaks Spanish") is not a decision about it.
+  const sentences = (question.match(/[^.?!;\n]+[.?!;\n]?/g) ?? []).filter((x) => x.trim());
+  const refusedByClass = sentences.some((x) => {
+    const named = PROTECTED_CLASS_RULES.some((r) => r.pattern.test(x) || r.pattern.test(reversedWords(x)));
+    const acts = ACTION_RULES.filter((r) => r.pattern.test(x)).map((r) => r.action);
+    return named && acts.length > 0 && !(DESCRIPTIVE_RE.test(x) && !acts.some((a) => a !== 'differential'));
+  });
   const directed = personDirected(question);
-  if (directed && !actions.includes('differential')) actions.push('differential');
-  const refusedByClass = classes.length > 0 && actions.length > 0 && !(DESCRIPTIVE_RE.test(question) && !directed && !actions.some((a) => a !== 'differential'));
+  // Deny by default, whatever the script: an instruction FlowIQ cannot read
+  // cannot be shown to be lawful.
+  const unreadable = unreadableInstruction(rawQuestion);
+  if ((directed || unreadable) && !actions.includes('differential')) actions.push('differential');
   return {
-    refused: refusedByClass || directed,
+    refused: refusedByClass || directed || unreadable,
     actions,
     classes,
     inclusive,
@@ -361,6 +398,26 @@ export function classifyFairHousingRequest(rawQuestion: string): FairHousingClas
  */
 export interface FairHousingSession {
   refusedEarlier: boolean;
+  /** The data question of the refused turn, with its instruction removed. */
+  refusedQuestion?: string;
+}
+
+/**
+ * A turn that carries on from the last one rather than asking afresh:
+ * "Same for Fulton Yards.", "Continue.", "Repeat for P03.", "Apply the
+ * earlier instruction.". After a refusal such a turn inherits the refused
+ * instruction, so it is refused too.
+ */
+const CONTINUATION_RE =
+  /^(?:same|now|and|also|again|repeat|redo|continue|proceed|next|then|ditto|do\s+(?:it|that|the\s+same|.*\bnext))\b|\b(?:same\s+(?:rule|policy|instruction|thing|approach|as\s+before)|as\s+before|(?:earlier|previous|last|prior|above)\s+(?:instruction|rule|request|policy)|continue|carry\s+on|keep\s+going|like\s+before)\b/i;
+
+export function continuesPreviousTurn(question: string): boolean {
+  return (normalizeForFairHousing(question).match(/[^.?!;]+/g) ?? []).some((s) => CONTINUATION_RE.test(s.trim()));
+}
+
+/** The question sentences of a turn, lower-cased, with any instruction dropped. */
+export function dataQuestionOf(question: string): string {
+  return (normalizeForFairHousing(question).match(/[^.?!;]+\?/g) ?? []).map((s) => s.trim().toLowerCase()).join(' ');
 }
 
 const ANAPHOR_RE =
