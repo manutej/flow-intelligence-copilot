@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
+import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 
 function mcpStdio(lines: string[]) {
   const r = spawnSync('node', ['--no-warnings', 'src/mcp/server.ts'], {
@@ -74,6 +75,39 @@ describe('audit: broken CSV exports exit 10 with a clear message', () => {
       } finally {
         fs.rmSync(dir, { recursive: true, force: true });
       }
+    });
+  }
+});
+
+async function ask(question: string) {
+  const turn = await askFlowIqCopilot({ id: 'AUDIT', type: 'adhoc', question });
+  return { result: turn.envelope.result, valid: turn.verification.valid };
+}
+
+describe('audit: an unrecognised measure is not reported as a unit count', () => {
+  // Expected values computed with python over data/pms/units.csv (TENACITY f1b).
+  const answered: Array<[string, Record<string, number>]> = [
+    ['vacancies at Kedzie Works', { count: 14 }],
+    ['Kedzie Works vacancy', { count: 14 }],
+    ['How many 3-bedroom vacancies at Kedzie Works?', { count: 1 }],
+    ['What is the average square footage of one-bedroom units at Armitage Commons?', { count: 49, sqft: 705.6 }],
+  ];
+  for (const [question, expected] of answered) {
+    it(question, async () => {
+      const r = await ask(question);
+      assert.deepEqual(r.result, expected);
+      assert.equal(r.valid, true);
+    });
+  }
+  for (const question of [
+    'How many bedrooms are there in total at Kedzie Works?',
+    'What is the total square footage at Kedzie Works?',
+    'What is the median market rent at Kedzie Works?',
+  ]) {
+    it(`says it does not know: ${question}`, async () => {
+      const r = await ask(question);
+      assert.equal(r.result.unknown, true);
+      assert.equal('count' in r.result, false);
     });
   }
 });

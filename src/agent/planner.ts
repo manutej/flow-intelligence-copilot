@@ -77,17 +77,11 @@ export function executeCompositionalPlan(
     clarificationNeeded = false,
     clarifyingQuestion: string | null = null,
   ): PlannerTurnOutput => {
-    const isNonAnswer =
-      result.unknown === true || result.clarification_needed === true;
-    const safeCitations: CitationId[] =
-      citations.length > 0 || isNonAnswer
-        ? [...new Set(citations)]
-        : ['properties:P01'];
     const envelope: AnswerEnvelope = {
       id: qRecord.id,
       answer,
       result,
-      citations: safeCitations,
+      citations: [...new Set(citations)],
     };
     return {
       envelope,
@@ -166,6 +160,12 @@ export function executeCompositionalPlan(
         `no lease ends fall in ${intent.leaseEndWindow.label}; lease end dates run ${describeCoverage(coverage.leaseEnds)}.`,
       );
     }
+  }
+
+  if (intent.measure === 'unsupported') {
+    return unknown(
+      `the unit exports cannot compute the measure asked for in "${question.trim()}".`,
+    );
   }
 
   // 1. Domain: Data Quality Audit (void spend rows + duplicate leads)

@@ -48,7 +48,8 @@ export type IntentMeasure =
   | 'avg_market_rent'
   | 'avg_sqft'
   | 'rent_per_sqft'
-  | 'unit_count';
+  | 'unit_count'
+  | 'unsupported';
 
 export type IntentAggregation =
   | 'value'
@@ -295,7 +296,7 @@ export function parseUnitViewFilter(
 
 export function parseUnitStatusFilter(question: string): UnitStatus | undefined {
   if (
-    /\b(vacant|unoccupied|empty|open\s+(?:units?|apartments?|studios?|1br|2br)|available\s+(?:units?|apartments?|studios?)|status\s*=\s*['"`]?vacant['"`]?)\b/i.test(
+    /\b(vacant|vacanc(?:y|ies)|unoccupied|empty|open\s+(?:units?|apartments?|studios?|1br|2br)|available\s+(?:units?|apartments?|studios?)|status\s*=\s*['"`]?vacant['"`]?)\b/i.test(
       question,
     ) &&
     !/\bvacancy\s+rate\b/i.test(question)
@@ -645,6 +646,11 @@ export function parseExplicitDateWindow(
 
   return null;
 }
+
+// A measure the unit tools cannot compute. Without this the question falls
+// through to unit_count and a count is reported as if it answered it.
+const UNSUPPORTED_UNIT_MEASURE_RE =
+  /\b(average|avg|mean|median|highest|lowest|max(?:imum)?|min(?:imum)?)\b|\bsquare\s+f(?:oo|ee)t|\b(?:bed|bath)rooms\s+(?:are\s+there|in\s+total)/i;
 
 /**
  * Pure semantic parser that extracts a structured `ParsedQueryIntent` AST from
@@ -1110,10 +1116,12 @@ export function parseQueryIntent(
     /\bmarket\s+rent\s+(?:average|mean)\b/i.test(question)
   ) {
     unitMeasure = 'avg_market_rent';
-  } else if (/\b(average|avg\.?|mean)\s+sq\.?\s*ft\b/i.test(question)) {
+  } else if (/\b(average|avg\.?|mean)\s+(?:sq\.?\s*ft|square\s+f(?:oo|ee)t(?:age)?)\b/i.test(question)) {
     unitMeasure = 'avg_sqft';
   } else if (/\brent\s+per\s+sq\.?\s*ft\b/i.test(question)) {
     unitMeasure = 'rent_per_sqft';
+  } else if (UNSUPPORTED_UNIT_MEASURE_RE.test(question)) {
+    unitMeasure = 'unsupported';
   }
 
   return {
