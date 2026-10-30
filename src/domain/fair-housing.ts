@@ -398,8 +398,6 @@ export function classifyFairHousingRequest(rawQuestion: string): FairHousingClas
  */
 export interface FairHousingSession {
   refusedEarlier: boolean;
-  /** The data question of the refused turn, with its instruction removed. */
-  refusedQuestion?: string;
 }
 
 /**
@@ -415,10 +413,6 @@ export function continuesPreviousTurn(question: string): boolean {
   return (normalizeForFairHousing(question).match(/[^.?!;]+/g) ?? []).some((s) => CONTINUATION_RE.test(s.trim()));
 }
 
-/** The question sentences of a turn, lower-cased, with any instruction dropped. */
-export function dataQuestionOf(question: string): string {
-  return (normalizeForFairHousing(question).match(/[^.?!;]+\?/g) ?? []).map((s) => s.trim().toLowerCase()).join(' ');
-}
 
 const ANAPHOR_RE =
   /\b(?:them|they|their|(?:those|these|such|the\s+same)\s+(?:people|persons|folks|famil(?:y|ies)|tenants|renters|applicants|prospects|households|ones|groups?|kinds?|types?|crowd)|(?:the|those)\s+(?:people|folks|ones|group|famil(?:y|ies)|applicants|tenants)\s+(?:i|we|you)\s+(?:mentioned|said|described|named|meant|talked\s+about)|(?:that|this)\s+(?:group|crowd|kind|type)|(?:the\s+)?(?:people|folks|group)\s+(?:above|from\s+before|earlier))\b/i;

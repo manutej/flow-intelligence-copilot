@@ -185,7 +185,6 @@ export async function handleMcpJsonRpcRequest(
   switch (req.method) {
     case 'initialize': {
       session.refusedEarlier = false;
-      delete session.refusedQuestion;
       const requested = req.params?.protocolVersion;
       const clientProtocol =
         typeof requested === 'string' &&
