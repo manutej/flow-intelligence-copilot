@@ -95,3 +95,17 @@ describe('F-066..F-068: claims are bound to the result, not trusted as prose', a
     assert.equal(forged(base.answer.replace('P06', 'P0six')), false);
   });
 });
+
+describe('F-069: the loader refuses unbounded spend and case-folded duplicate ids', async () => {
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const withRow = (rel: string, row: string) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 's1r-'));
+    fs.cpSync('data', path.join(dir, 'data'), { recursive: true });
+    fs.appendFileSync(path.join(dir, 'data', rel), row + '\n');
+    try { loadPortfolioStore(dir); return null; } catch (e) { return String(e); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  };
+  it('1e9 spend is refused', () => assert.match(withRow('ils/spend.csv', 'S9997,2026-08,P01,Zillow,1e9,USD,posted') ?? '', /S9997 has amount 1e9/));
+  it('spend over the row ceiling is refused', () => assert.match(withRow('ils/spend.csv', 'S9996,2026-08,P01,Zillow,1000000000,USD,posted') ?? '', /S9996 has amount/));
+  it('a lowercase duplicate unit id is refused', () => assert.match(withRow('pms/units.csv', 'u0001,P01,826,1,1,600,8,none,2315,occupied') ?? '', /repeats unit_id u0001/));
+});

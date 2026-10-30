@@ -244,11 +244,17 @@ type Rows = Array<Record<string, string>>;
  * foreign key points nowhere would be counted, priced or cited wrongly.
  * Refuse to load instead; the caller reports a data error.
  */
+const SPEND_ROW_CEILING_USD = 1_000_000;
+
 function assertReferentialIntegrity(properties: Rows, units: Rows, leases: Rows, leads: Rows, spend: Rows, decisions: Rows): void {
   const keys = (rows: Rows, file: string, key: string): Set<string> => {
     const seen = new Set<string>();
+    // Ids are compared without case or padding: "U0101" and "u0101 " name one row (F-069).
+    const folded = new Set<string>();
     for (const r of rows) {
-      if (seen.has(r[key])) throw new DataLoadError(`${file} repeats ${key} ${r[key]}`);
+      const k = r[key].trim().toUpperCase();
+      if (folded.has(k)) throw new DataLoadError(`${file} repeats ${key} ${r[key]}`);
+      folded.add(k);
       seen.add(r[key]);
     }
     return seen;
@@ -273,8 +279,11 @@ function assertReferentialIntegrity(properties: Rows, units: Rows, leases: Rows,
   refs(spend, 'ils/spend.csv', 'spend_id', 'property_id', propertyIds);
   refs(decisions, 'ops/decisions.csv', 'decision_id', 'property_id', propertyIds);
   for (const r of spend) {
-    const amount = Number(r.amount);
-    if (!Number.isFinite(amount) || amount < 0) throw new DataLoadError(`ils/spend.csv row ${r.spend_id} has amount ${r.amount}; spend must be a number at least 0`);
+    // Plain decimals only (no 1e9) and a ceiling one row of monthly spend can reach (F-069).
+    const amount = /^\d+(?:\.\d{1,2})?$/.test(r.amount.trim()) ? Number(r.amount) : NaN;
+    if (!Number.isFinite(amount) || amount > SPEND_ROW_CEILING_USD) {
+      throw new DataLoadError(`ils/spend.csv row ${r.spend_id} has amount ${r.amount}; spend must be a plain amount from 0 to ${SPEND_ROW_CEILING_USD}`);
+    }
   }
 }
 

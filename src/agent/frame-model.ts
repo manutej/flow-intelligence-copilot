@@ -69,7 +69,7 @@ export const composeFrame = (a: FrameAnswers): boolean => a.group !== 'none' && 
 
 /**
  * After a 429 the model is not called again until OpenRouter's Retry-After
- * (or 60 s) has passed, so a rate limit never turns into a retry storm.
+ * (1 s when the header is missing, 60 s when it is not a number) has passed, so a rate limit never turns into a retry storm.
  */
 let pausedUntil = 0;
 
@@ -106,7 +106,8 @@ export async function classifyFrame(question: string, timeoutMs = 8000): Promise
     });
     if (res.status === 429) {
       // Retry-After is seconds; 1e400 is Infinity and -5 is no wait, so it is
-      // clamped to 1 s .. 1 h (a non-number means 60 s).
+      // clamped to 1 s .. 1 h. A missing header reads as 0, so 1 s; a
+      // non-numeric value means 60 s (F-070).
       const raw = Number(res.headers.get('retry-after'));
       const wait = Number.isFinite(raw) ? Math.min(3600, Math.max(1, Math.ceil(raw))) : raw === Infinity ? 3600 : 60;
       pausedUntil = Date.now() + wait * 1000;
