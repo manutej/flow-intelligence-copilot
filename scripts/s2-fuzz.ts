@@ -41,7 +41,22 @@ const num = (noun: 'bed' | 'sqft' | 'floor' | 'rent'): Filter => {
   const a = pick(vals), b = pick(vals.filter((v) => v > a).concat([a + (noun === 'bed' ? 1 : noun === 'floor' ? 2 : 200)]));
   const unit = { bed: (n: number) => `${n} bedrooms`, sqft: (n: number) => `${n} sq ft`, floor: (n: number) => `floor ${n}`, rent: (n: number) => `$${n} rent` }[noun];
   const key = { bed: 'bed', sqft: 'sqft', floor: 'floor', rent: 'rent' }[noun] as 'bed' | 'sqft' | 'floor' | 'rent';
-  const forms: Array<[string, (v: number) => boolean]> = [
+  // Rent and floor are phrased as people say them ("rent between $1900 and
+  // $2500", "on floor 3 or above"), not as "$1900 rent" or "at least floor 3".
+  const forms: Array<[string, (v: number) => boolean]> = noun === 'rent' ? [
+    [`with rent of at least $${a}`, (v) => v >= a],
+    [`with rent of $${a} or more`, (v) => v >= a],
+    [`with rent no more than $${a}`, (v) => v <= a],
+    [`with rent over $${a}`, (v) => v > a],
+    [`with rent under $${a}`, (v) => v < a],
+    [`with rent between $${a} and $${b}`, (v) => v >= a && v <= b],
+  ] : noun === 'floor' ? [
+    [`on floor ${a} or above`, (v) => v >= a],
+    [`on floor ${a} or below`, (v) => v <= a],
+    [`above floor ${a}`, (v) => v > a],
+    [`below floor ${a}`, (v) => v < a],
+    [`on floors ${a} to ${b}`, (v) => v >= a && v <= b],
+  ] : [
     [`with at least ${unit(a)}`, (v) => v >= a],
     [`with ${unit(a)} or more`, (v) => v >= a],
     [`with no more than ${unit(a)}`, (v) => v <= a],
@@ -76,7 +91,6 @@ const measures = [
   { q: (w: string, b: string) => `What is the average sq ft of units ${w} at ${b}?`, v: (x: Row[]) => (x.length ? x.reduce((a, u) => a + u.sqft, 0) / x.length : null), key: 'sqft' },
 ];
 const close = (a: unknown, b: number | null) => typeof a === 'number' && b !== null && Math.abs(a - b) <= 0.06 + Math.abs(b) * 1e-6;
-const figure = (r: Record<string, unknown>) => r.count ?? r.usd ?? r.sqft;
 
 // Forgery classes, each a small edit of a true envelope.
 const FORGE: Record<string, (e: AnswerEnvelope) => AnswerEnvelope | null> = {
@@ -103,6 +117,7 @@ const FORGE: Record<string, (e: AnswerEnvelope) => AnswerEnvelope | null> = {
   intent: (e) => { const i = e.query?.intent as { unitStatus?: string } | undefined; return i ? { ...e, query: { ...e.query!, intent: { ...i, unitStatus: i.unitStatus === 'notice' ? 'vacant' : 'notice' } } } : null; },
 };
 
+let deadEndsAnswerable = 0, answerable = 0;
 let answered = 0, wrong = 0, clarified = 0, deadEnds = 0, truthClar = 0, rescued = 0, falseReject = 0, restateMissing = 0;
 const negUnapp = { asked: 0, wrong: 0 };
 const forg: Record<string, { tried: number; accepted: number }> = Object.fromEntries(Object.keys(FORGE).map((k) => [k, { tried: 0, accepted: 0 }]));
@@ -117,6 +132,7 @@ for (let i = 0; i < N; i++) {
   const sel = hasTruth ? rows.filter((u) => u.p === p.propertyId && fsel.every((f) => f.ok!(u))) : [];
   const tv = hasTruth ? m.v(sel) : null;
   const truth = tv === null ? null : Math.round(tv * 100) / 100;
+  if (truth !== null) answerable++;
   const special = fsel.some((f) => f.tag === 'negation' || f.tag === 'unappliable');
   if (special) negUnapp.asked++;
   const t = await ask(q);
@@ -124,7 +140,13 @@ for (let i = 0; i < N; i++) {
   const r = t.envelope.result as Record<string, unknown>;
   if (r.unknown === true || r.refused === true || r.clarification_needed === true) {
     const opts = t.clarifyOptions ?? [];
-    if (opts.length === 0) { deadEnds++; continue; }
+    if (opts.length === 0) {
+      deadEnds++;
+      if (truth !== null) deadEndsAnswerable++;
+      if (!t.restatement) restateMissing++;
+      if (process.env.SHOW_CLARIFY) console.log(`DEADEND ${truth !== null ? 'answerable' : 'no-truth'} ${q}`);
+      continue;
+    }
     clarified++;
     if (!t.restatement) restateMissing++;
     if (truth === null) continue;
@@ -133,7 +155,7 @@ for (let i = 0; i < N; i++) {
     let ok = false;
     for (const o of opts) {
       const r2 = (await ask(o.question)).envelope.result as Record<string, unknown>;
-      if (close(figure(r2), truth)) { ok = true; break; }
+      if (close(r2[m.key], truth)) { ok = true; break; }
     }
     if (ok) rescued++;
     else if (process.env.SHOW_CLARIFY) console.log(`NORESCUE ${q} -> ${opts.map((o) => o.question).join(' | ')}`);
@@ -160,7 +182,7 @@ const out = {
   seed: SEED, questions: N, parse: parse ? `model ${parse.baseUrl} (uncached)` : 'deterministic', paths, answered, wrong,
   wrongPctOfAnswered: pct(wrong, answered),
   coveragePct: pct(answered - wrong + rescued, N),
-  clarified, deadEndPct: pct(deadEnds, N), correctAfterOneClarifyPct: pct(rescued, truthClar), clarifyWithTruth: truthClar,
+  clarified, deadEndPct: pct(deadEnds, N), deadEnds, answerable, deadEndsAnswerable, deadEndAnswerablePct: pct(deadEndsAnswerable, answerable), correctAfterOneClarifyPct: pct(rescued, truthClar), clarifyWithTruth: truthClar,
   negationUnappliable: negUnapp, restatementMissing: restateMissing,
   forgeryAcceptancePct: pct(acc, tried), forgeriesTried: tried, forgeryByClass: forg, falseRejections: falseReject,
 };
