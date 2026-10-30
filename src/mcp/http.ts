@@ -12,6 +12,7 @@
  * to `handleMcpHttpRequest`.
  */
 import {
+  classifyIncoming,
   handleMcpJsonRpcRequest,
   type JsonRpcRequest,
   type JsonRpcResponse,
@@ -53,21 +54,15 @@ function rpcError(id: JsonRpcResponse['id'], code: number, message: string): Jso
   return { jsonrpc: '2.0', id, error: { code, message } };
 }
 
-function isJsonRpcMessage(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 async function handleOne(msg: unknown): Promise<JsonRpcResponse | null> {
-  if (!isJsonRpcMessage(msg)) {
-    return rpcError(null, -32600, 'Invalid Request: expected a JSON-RPC object');
+  const incoming = classifyIncoming(msg);
+  if (incoming.kind === 'client_response') return null;
+  if (incoming.kind === 'invalid') {
+    return rpcError(incoming.id, -32600, 'Invalid Request: jsonrpc must be "2.0" and method a string');
   }
-  const id =
-    typeof msg.id === 'string' || typeof msg.id === 'number' ? msg.id : null;
-  if (msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') {
-    return rpcError(id, -32600, 'Invalid Request: jsonrpc must be "2.0" and method a string');
-  }
+  const id = incoming.request.id ?? null;
   try {
-    return await handleMcpJsonRpcRequest(msg as unknown as JsonRpcRequest);
+    return await handleMcpJsonRpcRequest(incoming.request);
   } catch (err) {
     return rpcError(id, -32603, err instanceof Error ? err.message : 'Internal error');
   }

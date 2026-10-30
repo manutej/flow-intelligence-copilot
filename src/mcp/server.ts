@@ -37,6 +37,25 @@ export interface JsonRpcResponse {
 }
 
 /** Protocol versions this server speaks, newest first. */
+/**
+ * One shape rule for both transports. A message with no method but with a
+ * result or error is the client answering us: no reply. Anything else that
+ * is not a 2.0 request with a string method is -32600, echoing a readable id.
+ */
+export type IncomingMessage =
+  | { readonly kind: 'request'; readonly request: JsonRpcRequest }
+  | { readonly kind: 'client_response' }
+  | { readonly kind: 'invalid'; readonly id: string | number | null };
+
+export function classifyIncoming(parsed: unknown): IncomingMessage {
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { kind: 'invalid', id: null };
+  const msg = parsed as Record<string, unknown>;
+  const id = typeof msg.id === 'string' || typeof msg.id === 'number' ? msg.id : null;
+  if (!('method' in msg) && ('result' in msg || 'error' in msg)) return { kind: 'client_response' };
+  if (msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') return { kind: 'invalid', id };
+  return { kind: 'request', request: msg as unknown as JsonRpcRequest };
+}
+
 export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const;
 
 /** Every tool only reads the exports; clients can call them without approval prompts. */
@@ -374,14 +393,13 @@ if (isExecutedDirectly()) {
     }
     let req: JsonRpcRequest;
     try {
-      const parsed: unknown = JSON.parse(trimmed);
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed) || typeof (parsed as { method?: unknown }).method !== 'string') {
-        const rawId = typeof parsed === 'object' && parsed !== null ? (parsed as { id?: unknown }).id : null;
-        const id = typeof rawId === 'string' || typeof rawId === 'number' ? rawId : null;
-        process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32600, message: 'Invalid Request: expected a JSON-RPC object with a string method' } })}\n`);
+      const incoming = classifyIncoming(JSON.parse(trimmed));
+      if (incoming.kind === 'client_response') return;
+      if (incoming.kind === 'invalid') {
+        process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: incoming.id, error: { code: -32600, message: 'Invalid Request: jsonrpc must be "2.0" and method a string' } })}\n`);
         return;
       }
-      req = parsed as JsonRpcRequest;
+      req = incoming.request;
     } catch (err) {
       // Only an unparseable line has no id to echo back.
       const errResp: JsonRpcResponse = {

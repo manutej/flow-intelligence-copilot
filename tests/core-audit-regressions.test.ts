@@ -323,3 +323,43 @@ describe('audit: npm run eval fails when a held-out answer is wrong (Ormus F10)'
     }
   });
 });
+
+describe('audit: a client response gets no reply; a method-less non-response is invalid (TENACITY FX1c, EVAL F-031)', () => {
+  const post = async (body: string) => handleMcpHttpRequest({ method: 'POST', headers: {}, body });
+  for (const line of ['{"jsonrpc":"2.0","id":5,"result":{}}', '{"jsonrpc":"2.0","id":6,"error":{"code":-1,"message":"x"}}']) {
+    it(`stays silent on ${line}`, async () => {
+      const stdio = mcpStdio([line, '{"jsonrpc":"2.0","id":2,"method":"tools/list"}']);
+      assert.equal(stdio.replies.length, 1);
+      assert.equal(stdio.replies[0].id, 2);
+      const http = await post(line);
+      assert.equal(http.status, 202);
+      assert.equal(http.body, '');
+    });
+  }
+  it('rejects jsonrpc "1.0" on stdio as HTTP does', async () => {
+    const line = '{"jsonrpc":"1.0","id":"a","method":"tools/list"}';
+    const stdio = mcpStdio([line]);
+    assert.equal(stdio.replies[0].error?.code, -32600);
+    assert.equal(stdio.replies[0].id, 'a');
+    const reply = JSON.parse((await post(line)).body) as { id: unknown; error?: { code: number } };
+    assert.equal(reply.error?.code, -32600);
+    assert.equal(reply.id, 'a');
+  });
+  it('answers only the requests and invalid members of a mixed HTTP batch', async () => {
+    const http = await post(JSON.stringify([
+      { jsonrpc: '2.0', id: 5, result: {} },
+      { jsonrpc: '2.0', id: 9 },
+      { jsonrpc: '2.0', id: 10, method: 'tools/list' },
+    ]));
+    assert.equal(http.status, 200);
+    const replies = JSON.parse(http.body) as Array<{ id: unknown; error?: { code: number }; result?: unknown }>;
+    assert.deepEqual(replies.map((r) => r.id), [9, 10]);
+    assert.equal(replies[0].error?.code, -32600);
+    assert.ok(replies[1].result);
+  });
+  it('returns 202 for a batch of client responses only', async () => {
+    const http = await post('[{"jsonrpc":"2.0","id":5,"result":{}},{"jsonrpc":"2.0","id":6,"result":{}}]');
+    assert.equal(http.status, 202);
+    assert.equal(http.body, '');
+  });
+});
