@@ -83,7 +83,79 @@ export function evaluateSheafCoboundary<TStore>(
  * Declarative cellular sheaf specification for the 6 FLOW tables (E1..E6).
  * Every restriction map runs in O(N) via single-pass Map indices.
  */
+/** A lease rent this far from its unit's market rent is a data error, not a deal. */
+const RENT_TO_MARKET_MAX_RATIO = 3;
+
+type Row = { readonly citationId: CitationId };
+
+/**
+ * E0: the row-level facts every other edge assumes. It runs on the store as
+ * given, so a hand-built or mutated store is checked without the loader:
+ * unique primary keys, every foreign key resolves, a lease agrees with its
+ * unit's property, money is non-negative, and lease rent is near market.
+ */
+function rowIntegrityResiduals(store: PortfolioStore): CoboundaryResidual[] {
+  const out: CoboundaryResidual[] = [];
+  const flag = (table: string, target: string, key: string, description: string, citations: CitationId[], left: unknown = key, right: unknown = null) =>
+    out.push({
+      edgeId: 'E0_ROW_INTEGRITY',
+      description,
+      severity: 'hard_integrity_error',
+      joinKey: key,
+      leftStalk: table,
+      rightStalk: target,
+      leftProjection: left,
+      rightProjection: right,
+      residualMagnitude: 1,
+      blocking: true,
+      citations,
+    });
+  const tables: Record<string, readonly Row[]> = {
+    properties: store.properties, units: store.units, leases: store.leases,
+    leads: store.leads, spend: store.spend, decisions: store.decisions,
+  };
+  for (const [table, rows] of Object.entries(tables)) {
+    const seen = new Set<CitationId>();
+    for (const r of rows) {
+      if (seen.has(r.citationId)) flag(table, table, r.citationId, `Duplicate primary key ${r.citationId}`, [r.citationId]);
+      seen.add(r.citationId);
+    }
+  }
+  const propertyIds = new Set(store.properties.map((p) => p.propertyId));
+  const unitById = new Map(store.units.map((u) => [u.unitId, u]));
+  const leaseIds = new Set(store.leases.map((l) => l.leaseId));
+  for (const [table, rows] of Object.entries(tables)) {
+    if (table === 'properties') continue;
+    for (const r of rows as readonly (Row & { propertyId: string })[]) {
+      if (!propertyIds.has(r.propertyId)) flag(table, 'properties', r.propertyId, `${r.citationId} names missing property ${r.propertyId}`, [r.citationId]);
+    }
+  }
+  for (const l of store.leases) {
+    const u = unitById.get(l.unitId);
+    if (!u) flag('leases', 'units', l.unitId, `${l.citationId} names missing unit ${l.unitId}`, [l.citationId]);
+    else if (u.propertyId !== l.propertyId) flag('leases', 'units', l.unitId, `${l.citationId} is at ${l.propertyId} but unit ${l.unitId} is at ${u.propertyId}`, [l.citationId, u.citationId], l.propertyId, u.propertyId);
+    else if (!(l.monthlyRent >= 0) || !(u.marketRent > 0) || l.monthlyRent / u.marketRent > RENT_TO_MARKET_MAX_RATIO || u.marketRent / Math.max(l.monthlyRent, 1e-9) > RENT_TO_MARKET_MAX_RATIO)
+      flag('leases', 'units', l.unitId, `${l.citationId} rent ${l.monthlyRent} is implausible against market ${u.marketRent}`, [l.citationId, u.citationId], l.monthlyRent, u.marketRent);
+  }
+  for (const ld of store.leads) {
+    if (ld.leaseId && !leaseIds.has(ld.leaseId)) flag('leads', 'leases', ld.leaseId, `${ld.citationId} names missing lease ${ld.leaseId}`, [ld.citationId]);
+  }
+  for (const sp of store.spend) {
+    if (!(sp.rawAmount >= 0) || !(sp.effectiveUsd >= 0)) flag('spend', 'spend', sp.spendId, `${sp.citationId} has negative or non-numeric amount ${sp.rawAmount}`, [sp.citationId], sp.rawAmount, 0);
+  }
+  return out;
+}
+
 export const FLOW_PORTFOLIO_SHEAF_EDGES: readonly SheafRestrictionEdge<PortfolioStore>[] = [
+  {
+    edgeId: 'E0_ROW_INTEGRITY',
+    description: 'Unique primary keys, resolving foreign keys, non-negative spend, lease rent within 3x of market',
+    leftStalk: 'all',
+    rightStalk: 'all',
+    severity: 'hard_integrity_error',
+    blocking: true,
+    evaluateEdge: rowIntegrityResiduals,
+  },
   {
     edgeId: 'E1_PROPERTIES_TO_UNITS_COUNT',
     description:

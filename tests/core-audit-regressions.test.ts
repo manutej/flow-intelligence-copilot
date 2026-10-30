@@ -1,3 +1,4 @@
+import { evaluateSheafCoboundary, FLOW_PORTFOLIO_SHEAF_EDGES } from '../src/domain/sheaf.ts';
 /**
  * Regression tests for the Oct 30, 2026 core audit (Ormus F1-F11,
  * TENACITY F1-F12). Each case replays one repro against the real code.
@@ -387,4 +388,19 @@ describe('audit: a client response gets no reply; a method-less non-response is 
     assert.equal(http.status, 202);
     assert.equal(http.body, '');
   });
+});
+
+describe('audit: the sheaf checker rejects corrupt rows on an in-memory store (EVAL F-030)', () => {
+  const s = loadPortfolioStore();
+  const L = s.leases[0];
+  const isSection = (st: typeof s) => evaluateSheafCoboundary(st, FLOW_PORTFOLIO_SHEAF_EDGES).isGlobalSection;
+  it('accepts the clean store', () => assert.equal(isSection(s), true));
+  const cases: Record<string, typeof s> = {
+    'an orphan lease': { ...s, leases: [...s.leases, { ...L, leaseId: 'LX', citationId: 'leases:LX', unitId: 'U_NOPE' }] },
+    'negative spend': { ...s, spend: [{ ...s.spend[0], rawAmount: -5, effectiveUsd: -5 }, ...s.spend.slice(1)] },
+    'a broken property FK': { ...s, decisions: [{ ...s.decisions[0], propertyId: 'P99' }, ...s.decisions.slice(1)] },
+    'a duplicate unit': { ...s, units: [...s.units, s.units[0]] },
+    'a 10x-rent lease': { ...s, leases: [{ ...L, monthlyRent: L.monthlyRent * 10 }, ...s.leases.slice(1)] },
+  };
+  for (const [name, st] of Object.entries(cases)) it(`rejects ${name}`, () => assert.equal(isSection(st), false));
 });
