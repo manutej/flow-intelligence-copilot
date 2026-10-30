@@ -1,6 +1,6 @@
 /**
  * S1R seeded fuzz (S1R-G5, U1-U3). Seed chosen once before any run and never
- * used to tune. Round 1 used 7311; round 2 uses 4826 (fixed before its run).
+ * used to tune. Seed 7311 (round 1) is the reported gate per S1R.md:47; 4826 is a second seed.
  * Exits 1 when any answer is wrong or an unbound filter is answered (F-084). Truth is computed from data/pms/units.csv here,
  * without FlowIQ code. Usage: node --no-warnings scripts/s1r-fuzz.ts [N]
  */
@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
 
-const SEED = Number(process.env.SEED ?? 4826);
+const SEED = Number(process.env.SEED ?? 7311);
 const N = Number(process.argv[2] ?? 2000);
 let s = SEED >>> 0;
 const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
