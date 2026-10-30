@@ -341,7 +341,7 @@ function unreadableInstruction(raw: string): boolean {
   const text = decodeTransport(raw).normalize('NFKC').replace(/[\p{Cf}\u200b-\u200f\u2060-\u2064\ufeff]/gu, '');
   return (text.match(/[^.?!;\n。！？；]+[.?!;\n。！？；]?/gu) ?? []).some((x) => {
     if (/[?？]\s*$/.test(x)) return false;
-    if (/[\p{L}--[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}]]/v.test(x) && !/^[\p{Script=Latin}\p{N}\p{P}\p{Z}\p{S}]*$/u.test(x)) return true;
+    if (/(?![\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}])\p{L}/u.test(x) && !/^[\p{Script=Latin}\p{N}\p{P}\p{Z}\p{S}]*$/u.test(x)) return true;
     if (/[\p{Script=Cyrillic}\p{Script=Greek}]{2,}/u.test(x) && !/[\p{Script=Latin}]{2,}/u.test(x.replace(/[\p{Script=Cyrillic}\p{Script=Greek}]+/gu, ''))) return true;
     const words = x.toLowerCase().match(/\p{L}+/gu) ?? [];
     // Short English fragments ("Percent, one decimal.") lack function

@@ -104,7 +104,7 @@ export function unknownWords(question: string, store: PortfolioStore): string[] 
   for (const re of COMPARATOR_PHRASES) text = text.replace(re, ' ');
   // Every letter, digit-free word or pictograph in any script is a token; one
   // outside the vocabulary (Cyrillic, Arabic, CJK, emoji alike) is unknown.
-  for (const raw of text.normalize('NFKC').match(/[\p{L}\p{M}]+(?:['’][\p{L}]+)?|\p{Extended_Pictographic}|[\p{N}--[0-9]]+/gv) ?? []) {
+  for (const raw of text.normalize('NFKC').match(/[\p{L}\p{M}]+(?:['’][\p{L}]+)?|\p{Extended_Pictographic}|(?:(?![0-9])\p{N})+/gu) ?? []) {
     const w = raw.replace(/['’]s$|n['’]t$/, '');
     if (FIXED.has(raw) || FIXED.has(w) || known.has(w) || /^[a-z]$/.test(w)) continue;
     if (FIXED.has(w.replace(/s$/, '')) || FIXED.has(w + 's') || FIXED.has(w.replace(/ies$/, 'y'))) continue;

@@ -80,7 +80,15 @@ export async function classifyFrame(question: string, timeoutMs = 8000): Promise
     if (cfg) console.error(`[flowiq] frame model fallback: ${fallbackReason}`);
     return { refuse: false, answers: null, fallbackReason };
   };
-  if (!cfg) return { refuse: false, answers: null, fallbackReason: null };
+  if (!cfg) {
+    // Asked for a model but given no key: say so rather than fall back silently.
+    if (process.env.FLOWIQ_FRAME_MODEL && !process.env.OPENROUTER_API_KEY) {
+      const fallbackReason = 'FLOWIQ_FRAME_MODEL is set but OPENROUTER_API_KEY is not; L2 ran on the deterministic grammar only';
+      console.error(`[flowiq] frame model fallback: ${fallbackReason}`);
+      return { refuse: false, answers: null, fallbackReason };
+    }
+    return { refuse: false, answers: null, fallbackReason: null };
+  }
   if (Date.now() < pausedUntil) {
     return off(`frame model rate-limited (HTTP 429), not called again until ${new Date(pausedUntil).toISOString()}`);
   }
@@ -97,7 +105,10 @@ export async function classifyFrame(question: string, timeoutMs = 8000): Promise
       }),
     });
     if (res.status === 429) {
-      const wait = Number(res.headers.get('retry-after')) || 60;
+      // Retry-After is seconds; 1e400 is Infinity and -5 is no wait, so it is
+      // clamped to 1 s .. 1 h (a non-number means 60 s).
+      const raw = Number(res.headers.get('retry-after'));
+      const wait = Number.isFinite(raw) ? Math.min(3600, Math.max(1, Math.ceil(raw))) : raw === Infinity ? 3600 : 60;
       pausedUntil = Date.now() + wait * 1000;
       return off(`frame model rate-limited by OpenRouter (HTTP 429), not retried for ${wait} s`);
     }

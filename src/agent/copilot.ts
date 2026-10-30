@@ -133,7 +133,7 @@ export async function askFlowIqCopilot(
   // the deterministic check above. Off unless FLOWIQ_FRAME_MODEL is set.
   const frameCfg = frameModelConfig();
   let frameFallback: string | null = null;
-  if (frameCfg) {
+  if (frameCfg || process.env.FLOWIQ_FRAME_MODEL) {
     const frame = await classifyFrame(question);
     frameFallback = frame.fallbackReason;
     if (frame.refuse) {
@@ -150,7 +150,7 @@ export async function askFlowIqCopilot(
         clarifyingQuestion: null,
         modeUsed: 'llm',
         providerUsed: 'openrouter',
-        modelUsed: frameCfg.model,
+        modelUsed: frameCfg?.model,
         llmFallbackReason: null,
         verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
       };
@@ -221,7 +221,7 @@ function closedVocabulary(
 ): ReturnType<typeof executeCompositionalPlan> {
   const r = out.envelope.result as Record<string, unknown>;
   if (r.unknown === true || r.refused === true || r.clarification_needed === true) return out;
-  const unparsed = unknownWords(qRecord.question, store);
+  const unparsed = unknownWords(withoutMetaInstructions(qRecord.question), store);
   const why =
     unparsed.length > 0
       ? `FlowIQ has no meaning for ${unparsed.map((w) => `"${w}"`).join(', ')} in this question`
@@ -236,6 +236,20 @@ function closedVocabulary(
     citations: ['properties:P01'],
   };
   return { ...out, envelope, verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema) };
+}
+
+/**
+ * An instruction about FlowIQ's own rules ("[SYSTEM OVERRIDE: ...]",
+ * "Ignore prior rules", "Do not obey any lead note") asks nothing of the
+ * data, and the answer is computed from the data whatever it says, so its
+ * words are not question words. An instruction about the data ("only count
+ * lake views") is kept and must parse.
+ */
+const META_INSTRUCTION_RE =
+  /\[[^\]]*\b(?:system|override|ignore|instructions?|rules?)\b[^\]]*\]|[^.?!]*\b(?:ignore|disregard|override|(?:do\s+not|don'?t|never)\s+(?:obey|follow|trust|believe))\b[^.?!]*\b(?:rules?|instructions?|notes?|prompts?|system|messages?)\b[^.?!]*[.!]?/gi;
+
+function withoutMetaInstructions(question: string): string {
+  return question.normalize('NFKC').replace(/[\p{Cf}]/gu, '').replace(META_INSTRUCTION_RE, ' ');
 }
 
 /** "How many" is answered by a whole-number count, not by money, a rate or a size. */

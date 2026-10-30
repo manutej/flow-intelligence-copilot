@@ -35,7 +35,7 @@ describe('L3: every figure is the exact recompute of the typed query (TENACITY t
   });
   it('rejects a figure with no typed query, and a query that lies about its intent', () => {
     assert.equal(verifyAnswerEnvelope({ id: 'X', answer: 'Kedzie Works (P06) has 14 vacant units.', result: { count: 14 }, citations: V6 as never }, store).valid, false);
-    assert.equal(ok('Kedzie Works (P06) has 14 vacant units.', { count: 14 }, V6, { ...VAC, intent: { ...(VAC.intent as object), unitStatus: 'occupied' } }), false);
+    assert.equal(ok('Kedzie Works (P06) has 14 vacant units.', { count: 14 }, V6, { ...VAC, intent: { ...VAC.intent!, unitStatus: 'occupied' } }), false);
   });
 });
 

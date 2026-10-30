@@ -108,6 +108,7 @@ declare module "node:crypto" {
     update(data: string | Buffer): { digest(encoding: "hex" | "base64"): string };
   };
   export function randomBytes(size: number): Buffer;
+  export function randomUUID(): string;
   export function scryptSync(password: string | Buffer, salt: string | Buffer, keylen: number): Buffer;
   export function createCipheriv(algorithm: string, key: Buffer, iv: Buffer): {
     update(data: string | Buffer, inputEncoding?: string): Buffer;
@@ -239,6 +240,7 @@ declare module "node:assert/strict" {
     expected: unknown,
     message?: string,
   ): void;
+  export function notEqual(actual: unknown, expected: unknown, message?: string): void;
   export function ok(value: unknown, message?: string): asserts value;
   export function match(value: string, pattern: RegExp, message?: string): void;
   export function doesNotMatch(value: string, pattern: RegExp, message?: string): void;
@@ -246,6 +248,7 @@ declare module "node:assert/strict" {
   const assertDefault: {
     equal: typeof equal;
     deepEqual: typeof deepEqual;
+    notEqual: typeof notEqual;
     ok: typeof ok;
     match: typeof match;
     doesNotMatch: typeof doesNotMatch;
@@ -257,6 +260,7 @@ declare module "node:assert/strict" {
 declare module "node:test" {
   export function describe(name: string, fn: () => void | Promise<void>): void;
   export function it(name: string, fn: () => void | Promise<void>): void;
+  export function test(name: string, fn: () => void | Promise<void>): void;
 }
 
 declare module "node:url" {
