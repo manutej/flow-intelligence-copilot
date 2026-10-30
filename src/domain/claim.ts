@@ -79,7 +79,9 @@ function wordsToDigits(text: string): string {
 }
 
 const MONTH = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
-const DATE_RE = new RegExp(`\\b\\d{4}-\\d{2}(?:-\\d{2})?\\b|\\b(?:q[1-4]|h[12]|${MONTH})\\s+\\d{4}\\b|\\b(?:in|of|during|for|since|through|to)\\s+\\d{4}\\b(?!-\\d)`, 'gi');
+// A bare four-digit number reads as a year only from 2000 to 2099: "out of
+// 1300 total" is a figure.
+const DATE_RE = new RegExp(`\\b\\d{4}-\\d{2}(?:-\\d{2})?\\b|\\b(?:q[1-4]|h[12]|${MONTH})\\s+\\d{4}\\b|\\b(?:in|of|during|for|since|through|to)\\s+20\\d{2}\\b(?!-\\d)`, 'gi');
 
 /** Every script's digits read as ASCII digits: ９ and ٩ are 9 (F-041). */
 const DIGIT_ZEROS = [0x660, 0x6f0, 0x7c0, 0x966, 0x9e6, 0xa66, 0xae6, 0xb66, 0xbe6, 0xc66, 0xce6, 0xd66, 0xe50, 0xed0, 0xf20, 0x1040, 0x17e0, 0x1810];

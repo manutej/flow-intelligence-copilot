@@ -278,6 +278,53 @@ function assertReferentialIntegrity(properties: Rows, units: Rows, leases: Rows,
   }
 }
 
+/**
+ * The data dictionary's domains (S0b F-046). A value outside them would be
+ * counted, averaged or compared as if it were real: a 700.5 sq ft unit
+ * breaks whole-number bounds, a negative rent drags an average, and
+ * 2026-02-30 shifts a window. Refuse to load instead, as for a broken key.
+ */
+function assertFieldDomains(units: Rows, leases: Rows, spend: Rows): void {
+  const bad = (file: string, id: string, col: string, v: string, want: string) => {
+    throw new DataLoadError(`${file} row ${id} has ${col} ${JSON.stringify(v)}; ${col} must be ${want}`);
+  };
+  const int = (v: string, lo: number, hi: number) => /^-?\d+$/.test(v) && Number(v) >= lo && Number(v) <= hi;
+  const num = (v: string, lo: number, hi: number) => /^-?\d+(?:\.\d+)?$/.test(v) && Number(v) >= lo && Number(v) <= hi;
+  const day = (v: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (!m) return undefined;
+    const t = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+    return new Date(t).toISOString().slice(0, 10) === v ? t : undefined;
+  };
+  const rentOf = new Map<string, number>();
+  for (const u of units) {
+    const f = 'pms/units.csv', id = u.unit_id;
+    if (!int(u.bedrooms, 0, 10)) bad(f, id, 'bedrooms', u.bedrooms, 'a whole number from 0 to 10');
+    if (!num(u.bathrooms, 0.5, 10) || Number(u.bathrooms) % 0.5 !== 0) bad(f, id, 'bathrooms', u.bathrooms, 'a multiple of 0.5 from 0.5 to 10');
+    if (!int(u.sqft, 100, 20000)) bad(f, id, 'sqft', u.sqft, 'a whole number from 100 to 20000');
+    if (!int(u.floor, 0, 200)) bad(f, id, 'floor', u.floor, 'a whole number from 0 to 200');
+    if (!['vacant', 'occupied', 'notice'].includes(u.status)) bad(f, id, 'status', u.status, 'vacant, occupied or notice, exactly');
+    if (!num(u.market_rent, 1, 50000)) bad(f, id, 'market_rent', u.market_rent, 'a positive amount up to 50000');
+    rentOf.set(id, Number(u.market_rent));
+  }
+  for (const l of leases) {
+    const f = 'pms/leases.csv', id = l.lease_id;
+    const start = day(l.start_date), end = day(l.end_date);
+    if (start === undefined) bad(f, id, 'start_date', l.start_date, 'a real YYYY-MM-DD date');
+    if (end === undefined) bad(f, id, 'end_date', l.end_date, 'a real YYYY-MM-DD date');
+    const days = ((end as number) - (start as number)) / 864e5;
+    if (days < 28 || days > 1096) bad(f, id, 'end_date', l.end_date, 'from 28 days to 3 years after start_date');
+    const market = rentOf.get(l.unit_id);
+    if (!num(l.monthly_rent, 1, 50000) || (market !== undefined && (Number(l.monthly_rent) < market / 2 || Number(l.monthly_rent) > market * 2))) {
+      bad(f, id, 'monthly_rent', l.monthly_rent, "positive and within half to twice the unit's market_rent");
+    }
+    if (l.concession_usd !== '' && !num(l.concession_usd, 0, 50000)) bad(f, id, 'concession_usd', l.concession_usd, 'empty or an amount at least 0');
+  }
+  for (const r of spend) {
+    if (!/^\d{4}-(?:0[1-9]|1[0-2])$/.test(r.month)) bad('ils/spend.csv', r.spend_id, 'month', r.month, 'a real YYYY-MM month');
+  }
+}
+
 export function loadPortfolioStore(
   repoRootDir?: string,
   policyOverrides?: Partial<PortfolioPolicyConfig>,
@@ -685,6 +732,7 @@ export function loadPortfolioStore(
   if (violations.length > 0) {
     throw new DataLoadError(`${violations.length} row${violations.length > 1 ? 's break' : ' breaks'} the data contract: ${violations.slice(0, 3).map((v) => v.description).join('; ')}`);
   }
+  assertFieldDomains(rawUnits, rawLeases, rawSpend);
   storeCache.set(cacheKey, store);
   while (storeCache.size > MAX_CACHED_STORES) {
     const oldest = storeCache.keys().next().value;

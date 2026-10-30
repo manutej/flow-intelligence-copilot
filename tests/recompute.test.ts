@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { typedQuery } from '../src/agent/recompute.ts';
+import { executeCompositionalPlan } from '../src/agent/planner.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
 import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
 
 const store = loadPortfolioStore();
-const V6 = ['properties:P06', 'units:U0691', 'units:U0693', 'units:U0700', 'units:U0707', 'units:U0726'];
 const SP = ['properties:P05', 'spend:S0101', 'spend:S0102', 'spend:S0103'];
+const V6 = ['properties:P06', 'units:U0691', 'units:U0693', 'units:U0700', 'units:U0707', 'units:U0726'];
 const VAC = typedQuery('How many vacant units are at Kedzie Works?', store);
 const SPEND = typedQuery('How much was total posted marketing spend at Armitage Commons?', store);
 const ok = (answer: string, result: Record<string, unknown>, citations = V6, query = VAC) =>
@@ -35,5 +36,21 @@ describe('L3: every figure is the exact recompute of the typed query (TENACITY t
   it('rejects a figure with no typed query, and a query that lies about its intent', () => {
     assert.equal(verifyAnswerEnvelope({ id: 'X', answer: 'Kedzie Works (P06) has 14 vacant units.', result: { count: 14 }, citations: V6 as never }, store).valid, false);
     assert.equal(ok('Kedzie Works (P06) has 14 vacant units.', { count: 14 }, V6, { ...VAC, intent: { ...(VAC.intent as object), unitStatus: 'occupied' } }), false);
+  });
+});
+
+describe('L3: stated names, ids, totals, dates and citations bind to the recompute (S0b F-054, F-059)', () => {
+  const real = executeCompositionalPlan({ id: 'X', type: 'adhoc', question: VAC.question }, store, { verify: false }).envelope;
+  const forged = (answer: string, citations = real.citations) =>
+    verifyAnswerEnvelope({ id: 'X', answer, result: real.result, citations: citations as never, query: VAC }, store).valid;
+  it('keeps the real envelope', () => assert.ok(forged(real.answer)));
+  it('rejects a swapped building name, id, total or date', () => {
+    assert.equal(forged(real.answer.replace('Kedzie Works', 'Marlowe Residences')), false);
+    assert.equal(forged(real.answer.replace('P06', 'P60')), false);
+    assert.equal(forged(real.answer.replace(/(\d+) total/, '$10 total')), false);
+    assert.equal(forged(`${real.answer} As of 2026-12-31.`), false);
+  });
+  it('rejects an answer whose citations were dropped', () => {
+    assert.equal(forged(real.answer, real.citations.filter((c) => c.startsWith('properties:'))), false);
   });
 });

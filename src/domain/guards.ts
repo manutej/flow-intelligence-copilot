@@ -288,7 +288,9 @@ function figureErrors(envelope: AnswerEnvelope, store: PortfolioStore): string[]
   }
   const claimed = UNIT_STATUS_WORDS.filter(([re]) => re.test(envelope.answer ?? '')).map(([, status]) => status);
   // A count of units in one status cites the counted units; a rate cites its denominator too.
-  if (claimed.length === 1 && typeof result.count === 'number' && !('percent' in result)) {
+  // A zero count cites the rows that show nothing matches, so they are of
+  // another status by design (S0b F-055).
+  if (claimed.length === 1 && typeof result.count === 'number' && result.count > 0 && !('percent' in result)) {
     const statusById = new Map(store.units.map((u) => [u.citationId as string, u.status as string]));
     for (const c of envelope.citations) {
       const status = statusById.get(c);
