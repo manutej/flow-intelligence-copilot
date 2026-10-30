@@ -149,4 +149,14 @@ describe('S1R round 2: intervals, noun binding, rent on averages, short aliases,
     const want = Math.round((s.reduce((a, u) => a + u.sqft, 0) / s.length) * 10) / 10;
     assert.equal((await ask('Average sq ft of units with rent under $2,500 at P04?')).sqft, want);
   });
+  const t = await askFlowIqCopilot('How many vacant units are at Kedzie Works?', { store });
+  const base = t.envelope;
+  const forged = (answer: string) => verifyAnswerEnvelope({ ...base, answer }, store).valid;
+  it('F-078 every other building\'s alias is rejected, at any length', () => {
+    for (const p of store.properties) if (p.propertyId !== 'P06') for (const a of p.aka)
+      assert.equal(forged(base.answer.replace('Kedzie Works (P06)', `${a} (P06)`)), false, a);
+  });
+  it('F-080 a period with no fixed window is rejected', () => {
+    for (const s of ['in Q3', 'year to date', 'over the past 30 days', 'for H2']) assert.equal(forged(`${base.answer} (${s})`), false, s);
+  });
 });

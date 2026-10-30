@@ -20,6 +20,9 @@ const RELATIVE_DATE_RE = new RegExp(
   'i',
 );
 // A negated status bound to the counted noun: "14 non-vacant units".
+// A period with no year, a to-date span, or a span counted back from now
+// (F-080). The renderer always writes "Q3 2026" or an ISO window.
+const UNANCHORED_PERIOD_RE = /\b(?:[QH][1-4])\b(?!\s*(?:20\d{2}|'\d{2}))|\b(?:year|month|quarter|week)[-\s]+to[-\s]+date\b|\b[YMQ]TD\b|\b(?:past|last|trailing|previous|prior|next|coming)\s+(?:\d+|few|several|couple\s+of)\s+(?:days?|weeks?|months?|quarters?|years?)\b/i;
 const STATUS_INVERSION_RE = /([\d,]+)\s+(?:non|not|un)[-\s]?(?:vacant|occupied|on[-\s]notice)\s+(?:units?|apartments?|homes?)\b/gi;
 const GARBLED_RE = new RegExp(String.raw`(?<![\p{L}])(?:[Pp]?\d+(?:${NUMBER_WORD})|(?:${NUMBER_WORD})\d+|[Pp](?:${NUMBER_WORD}))[\p{L}\d]*`, 'iu');
 
@@ -39,8 +42,11 @@ export function bindingErrors(envelope: AnswerEnvelope, store: PortfolioStore): 
   );
   for (const p of store.properties) {
     for (const alias of p.aka) {
-      if (alias.length < 3 || named.has(p.propertyId)) continue;
-      const re = new RegExp(`(?<![\\p{L}\\d])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\d])`, 'iu');
+      if (named.has(p.propertyId)) continue;
+      // Every alias counts, whatever its length (F-078). A short one ("FY")
+      // is matched in its own case, so it is not found inside ordinary words.
+      const flags = alias.length <= 3 ? 'u' : 'iu';
+      const re = new RegExp(`(?<![\\p{L}\\d])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\d])`, flags);
       if (store.properties.some((o) => o.propertyId !== p.propertyId && o.name.toLowerCase().includes(alias.toLowerCase()) && text.includes(o.name))) continue;
       if (re.test(text)) errors.push(`"${alias}" is ${p.propertyId}'s alias, but the answer does not name ${p.propertyId}`);
     }
@@ -66,6 +72,7 @@ export function bindingErrors(envelope: AnswerEnvelope, store: PortfolioStore): 
   }
 
   // Dates: absolute only. Numbers: digits only.
+  if (UNANCHORED_PERIOD_RE.test(text)) errors.push('A period with no year, or counted back from now, has no fixed window to check');
   if (RELATIVE_DATE_RE.test(text)) errors.push('A relative date has no fixed window to check');
   const garbled = text.match(GARBLED_RE);
   if (garbled) errors.push(`"${garbled[0]}" mixes digits and number words`);
