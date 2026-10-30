@@ -136,12 +136,8 @@ describe('audit: an unrecognised measure is not reported as a unit count', () =>
 describe('audit: the verifier rejects citations that do not support the claim', () => {
   const store = loadPortfolioStore();
   const schema = { property_id: 'string', count: 'int' };
-  const verify = (result: Record<string, unknown>, citations: string[]) =>
-    verifyAnswerEnvelope(
-      { id: 'D01', answer: 'Marlowe Residences (P02) has 999 vacant units.', result, citations: citations as never },
-      store,
-      schema,
-    ).valid;
+  const verify = (result: Record<string, unknown>, citations: string[], answer = 'Marlowe Residences (P02) has 999 vacant units.', sch: Record<string, string> | undefined = schema) =>
+    verifyAnswerEnvelope({ id: 'D01', answer, result, citations: citations as never }, store, sch).valid;
 
   it('rejects a P02 figure that cites only P01 rows (TENACITY f1)', () => {
     assert.equal(verify({ property_id: 'P02', count: 999 }, ['properties:P01', 'units:U0001']), false);
@@ -149,8 +145,24 @@ describe('audit: the verifier rejects citations that do not support the claim', 
   it('rejects a refusal that also carries figures (TENACITY f1)', () => {
     assert.equal(verify({ property_id: 'P02', count: 999, refused: true }, []), false);
   });
-  it('accepts the same figure when a P02 row is cited', () => {
-    assert.equal(verify({ property_id: 'P02', count: 7 }, ['properties:P02', 'units:U0152']), true);
+  it('accepts the true figure when a vacant P02 row is cited', () => {
+    assert.equal(verify({ property_id: 'P02', count: 7 }, ['properties:P02', 'units:U0152'], 'Marlowe Residences (P02) has 7 vacant units.'), true);
+  });
+  // EVAL F-029: each was VALID at fe43864
+  it('rejects a count larger than the cited table holds for that property', () => {
+    assert.equal(verify({ property_id: 'P02', count: 999 }, ['properties:P02', 'units:U0159']), false);
+  });
+  it('rejects a vacant-unit count that cites an occupied unit', () => {
+    assert.equal(verify({ property_id: 'P02', count: 7 }, ['properties:P02', 'units:U0159'], 'P02 has 7 vacant units.'), false);
+  });
+  it('rejects answer text that disagrees with the result', () => {
+    assert.equal(verify({ property_id: 'P02', count: 7 }, ['properties:P02', 'units:U0152']), false);
+  });
+  it('rejects a dollar figure that cites no row holding money', () => {
+    assert.equal(verify({ property_id: 'P02', usd: 999999 }, ['properties:P02'], 'P02 spend was $999,999.', { property_id: 'string', usd: 'float' }), false);
+  });
+  it('rejects a count with no schema that the cited table cannot hold', () => {
+    assert.equal(verify({ count: 999 }, ['properties:P01'], '999 units', undefined), false);
   });
   it('cites every building a list answer names, not the first eight', async () => {
     const turn = await askFlowIqCopilot({
