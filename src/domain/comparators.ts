@@ -9,6 +9,8 @@
  * integer bounds because the loader admits only whole numbers.
  */
 
+import { CARDINAL, CARDINAL_WORD, ORDINAL, ORDINAL_WORD, TENS_WORD, parseNumber } from './numbers.ts';
+
 export interface IntRange {
   readonly min?: number;
   readonly max?: number;
@@ -36,11 +38,10 @@ const SUFFIX_OPS: ReadonlyArray<readonly [Op, string]> = [
 ];
 
 // ---- quantity lexicon: one entry per field ----
-const NUM = String.raw`(\d[\d,]*(?:\.\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten)`;
-const WORDS: Readonly<Record<string, number>> = {
-  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-};
-const toNum = (raw: string) => WORDS[raw.toLowerCase()] ?? Number.parseFloat(raw.replace(/,/g, ''));
+// Numbers come from the shared lexicon (numbers.ts), so digits, number
+// words and ordinal words read the same in every field (F-089).
+const NUM = `(${CARDINAL})`;
+const toNum = parseNumber;
 
 /** A field's noun, and the forms of "N <noun>" / "<noun> N" its values take. */
 interface Quantity {
@@ -49,7 +50,7 @@ interface Quantity {
   readonly value: string;
   readonly integer: boolean;
 }
-const ORD = String.raw`(\d{1,3})(?:st|nd|rd|th)?`;
+const ORD = `(${ORDINAL}|${CARDINAL_WORD})`;
 const QUANTITIES: Readonly<Record<Field, Quantity>> = {
   bedrooms: { noun: String.raw`(?:bed(?:room)?s?|brs?|bdrms?|bds?)\b`, value: String.raw`${NUM}[-\s]*(?:bed(?:room)?s?|brs?|bdrms?|bds?)\b`, integer: true },
   bathrooms: { noun: String.raw`(?:bath(?:room)?s?|bas?)\b`, value: String.raw`${NUM}[-\s]*(?:bath(?:room)?s?|bas?)\b`, integer: false },
@@ -94,9 +95,8 @@ function rulesFor(q: Quantity): Rule[] {
   const union = (a: number, b = a) => (Math.abs(a - b) <= (q.integer ? 1 : 0.5) ? range(a, b) : { min: Math.max(a, b), max: Math.min(a, b) });
   const NOT_OTHER_NOUN = String.raw`(?![\d,.]*\s*(?:-\s*)?(?:${ALL_NOUNS()}))`;
   const AND = String.raw`\s*(?:and|to|through|thru|-|–)\s*`;
-  const ORDS = q.integer ? String.raw`(?:st|nd|rd|th)?` : '';
   // A number with no noun of its own: "$2,500", "the 3rd".
-  const BARE = String.raw`(?:the\s+)?\$?\s?${NUM}${ORDS}`;
+  const BARE = q.integer ? `(?:the\\s+)?\\$?\\s?(${CARDINAL}(?:st|nd|rd|th)?|${ORDINAL_WORD})` : String.raw`(?:the\s+)?\$?\s?${NUM}`;
   const LEAD = String.raw`(?<![\w$.])`;
   // Inclusive ranges: "between A and B <q>", "A to B <q>", "<noun>s A-B", "from the Ath to the Bth <q>".
   r(String.raw`\b(?:between|from)\s+${BARE}${AND}${q.value}`, range);
@@ -106,7 +106,7 @@ function rulesFor(q: Quantity): Rule[] {
   r(String.raw`${LEAD}${BARE}${AND}${q.value}`, range);
   r(String.raw`\b${q.noun}\s+${BARE}${AND}${BARE}${NOT_OTHER_NOUN}`, range);
   // Unions: "2 or 3 bedrooms", "floor 4 or 5".
-  r(String.raw`${LEAD}${BARE}\s*(?:or|\/)\s*${q.value}`, union);
+  r(String.raw`${LEAD}${BARE}\s*-?\s*(?:or|\/)\s*${q.value}`, union);
   r(String.raw`\b${q.noun}\s+${BARE}\s+or\s+${BARE}${NOT_OTHER_NOUN}`, union);
   // "<noun> <cmp> N": "rent above $2,500", "sqft >= 800", "floor of at least 3".
   for (const [op, c] of PREFIX_OPS) r(String.raw`\b${q.noun}\s*(?:of\s+|is\s+|are\s+)?(?:${c})\s*${BARE}${NOT_OTHER_NOUN}`, (n) => bound(op, n, q.integer));
@@ -128,7 +128,8 @@ const FLOOR_EXACT: Rule = {
   re: new RegExp(String.raw`\bon\s+(?:the\s+)?(?:(?:floor|level)\s+${ORD}|${ORD}\s+(?:floor|level))\b`, 'i'),
   apply: (n) => ({ min: n, max: n }),
 };
-const GROUND = /\b(?:on\s+the\s+)?(?:ground|first)\s+floor\b/i;
+// "first" is the ground floor only when no tens word makes it "twenty-first".
+const GROUND = new RegExp(String.raw`\b(?:on\s+the\s+)?(?:ground|(?<!${TENS_WORD}[-\s])first)\s+floor\b`, 'i');
 
 const RULES: Readonly<Record<Field, readonly Rule[]>> = {
   bedrooms: rulesFor(QUANTITIES.bedrooms),
