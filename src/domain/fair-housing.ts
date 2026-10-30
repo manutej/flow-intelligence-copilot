@@ -15,7 +15,7 @@
  * of income, military status, and others.
  */
 
-export type FairHousingAction = 'targeting' | 'exclusion' | 'steering' | 'preference';
+export type FairHousingAction = 'targeting' | 'exclusion' | 'steering' | 'preference' | 'differential';
 
 export interface ProtectedClassRule {
   readonly protectedClass: string;
@@ -38,7 +38,7 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     protectedClass: 'race or color',
     legalBasis: FHA,
     pattern:
-      /\b(race|racial\w*|color(?:ed)?\s+(?:people|tenants|renters|residents|applicants)|people\s+of\s+color|blacks?|whit(?:es?|er|est)|asian|hispanic|latin[oax]s?|african[-\s]american|caucasian|native\s+americans?|indigenous|pacific\s+islanders?|biracial|mixed[-\s]race|ethnic\w*|minorit(?:y|ies)|demographics?)\b/i,
+      /\b(race|racial\w*|color(?:ed)?\s+(?:people|tenants|renters|residents|applicants)|people\s+of\s+color|blacks?|whit(?:es?|er|est)|asian|hispanic|latin[oax]s?|african[-\s]american|caucasian|native\s+americans?|indigenous|pacific\s+islanders?|biracial|mixed[-\s]race|ethnic\w*|minorit(?:y|ies)|demographics?|[\w]+[-\s]skinned|skin\s+(?:colou?r|tone)s?)\b/i,
   },
   {
     protectedClass: 'national origin, ancestry, or language',
@@ -68,7 +68,7 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     protectedClass: 'age',
     legalBasis: `${IHRA} and ${CHICAGO}`,
     pattern:
-      /\b(over\s+\d{2}|under\s+\d{2}|(?:older|younger)\s+than\s+[\w-]+|born\s+(?:before|after|in)\s+\d{4}|mature\s+(?:people|tenants|renters|residents|applicants)|age[sd]?\s+\d{2}|seniors?|elderly|older\s+(?:people|tenants|renters|residents|applicants|adults)|retirees?|young(?:er)?\s+(?:people|tenants|renters|residents|applicants|professionals|adults|crowd)|millennials?|gen[-\s]?z|boomers?)\b/i,
+      /\b((?:over|under)\s+\d{2}(?!\s*(?:lbs?|pounds?|kg|kilos?|sq|sqft|square|feet|ft|%|percent|units?|dollars?|usd|\$|k\b|days?|months?|minutes?))|(?:older|younger)\s+than\s+[\w-]+|born\s+(?:before|after|in)\s+\d{4}|mature\s+(?:people|tenants|renters|residents|applicants)|age[sd]?\s+\d{2}|seniors?|elderly|older\s+(?:people|tenants|renters|residents|applicants|adults)|retirees?|young(?:er)?\s+(?:people|tenants|renters|residents|applicants|professionals|adults|crowd)|millennials?|gen[-\s]?z|boomers?)\b/i,
   },
   {
     protectedClass: 'marital status',
@@ -81,6 +81,14 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     legalBasis: `${CHICAGO} and ${IHRA}`,
     pattern:
       /\b(section[-\s]?(?:8|eight)|(?:housing|rental|public)\s+assistance|on\s+assistance|subsidi[sz]ed|housing\s+choice\s+vouchers?|vouchers?|voucher\s+holders?|hcv|welfare|ssi|ssdi|disability\s+income|source\s+of\s+income)\b/i,
+  },
+  {
+    // Redlining: marketing kept to some neighborhoods and away from others
+    // is the usual proxy for race and national origin.
+    protectedClass: 'race or national origin (neighborhood proxy)',
+    legalBasis: FHA,
+    pattern:
+      /\b(?:campaigns?|ads?|advertis\w*|marketing|mailers?|mailings?|listings?|outreach)\b[^;]{0,60}?\bonly\s+(?:in|to)\b[^;]{0,60}?\b(?:not|never|excluding|except)\b/i,
   },
   {
     protectedClass: 'military or veteran status',
@@ -119,6 +127,13 @@ const ACTION_RULES: ReadonlyArray<{ readonly action: FairHousingAction; readonly
     action: 'exclusion',
     pattern:
       /\b(?:tell|inform|say|claim|pretend|answer)\w*\b.*\b(?:full|unavailable|taken|rented|leased|booked|sold\s+out|no\s+vacanc\w*|no\s+(?:units?|apartments?|openings?|availability|space|room)|none\s+(?:left|available|open)|(?:are|is)\s+none|not\s+available|wait[-\s]?list\w*|waiting\s+list|nothing\s+(?:(?:is|was)\s+)?(?:left|available|open))\b|\b(?:unavailable|full|taken|not\s+available|closed|wait[-\s]?list(?:ed)?|waiting\s+list)\s+(?:for|to)\b/i,
+  },
+  {
+    // Differential treatment: different terms, delay, sabotage or extra
+    // conditions for a group, without any word of exclusion.
+    action: 'differential',
+    pattern:
+      /\b(charg\w*|quot\w*|higher|lower|extra|surcharg\w*|deposits?|co-?signers?|guarantors?|delay\w*|slow\w*|los[et]\w*|misplac\w*|ignor\w*|pay\w*|turn\w*\s+down|told|tell\w*|treat\w*|requir\w*|need\w*|must|should|ought|make\s+(?:them|\w+\s+\w+)|callbacks?|call\w*\s+back|last\s+in\s+line|back\s+of\s+the\s+line|waitlist\w*|stricter|more\s+(?:documents?|paperwork|checks?|screening))\b/i,
   },
   {
     action: 'targeting',
@@ -161,7 +176,7 @@ export interface FairHousingClassification {
 }
 
 const CONFUSABLES: Readonly<Record<string, string>> = {
-  а: 'a', е: 'e', і: 'i', о: 'o', р: 'p', с: 'c', у: 'y', х: 'x', ѕ: 's', ј: 'j',
+  а: 'a', е: 'e', і: 'i', о: 'o', р: 'p', с: 'c', у: 'y', х: 'x', ѕ: 's', ј: 'j', м: 'm', к: 'k', н: 'h', т: 't', в: 'b',
   '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', $: 's',
 };
 
@@ -181,6 +196,7 @@ const HTML_ACCENT_RE = /&([a-z])(?:acute|grave|circ|uml|tilde|ring|cedil|caron|s
 
 function decodeOnce(text: string): string {
   return text
+    .replace(/\\u\{?([0-9a-f]{4,6})\}?/gi, (m, h) => { const c = parseInt(h, 16); return c <= 0x10ffff ? String.fromCodePoint(c) : m; })
     .replace(/&#x([0-9a-f]{1,6});?/gi, (m, h) => { const c = parseInt(h, 16); return c <= 0x10ffff ? String.fromCodePoint(c) : m; })
     .replace(/&#(\d{1,7});?/g, (m, d) => (Number(d) <= 0x10ffff ? String.fromCodePoint(Number(d)) : m))
     .replace(HTML_ACCENT_RE, (_, l) => l)
@@ -203,7 +219,8 @@ function decodeTransport(text: string): string {
 
 export function normalizeForFairHousing(text: string): string {
   const plain = decodeTransport(text);
-  const decoded = (plain.match(/[A-Za-z0-9+/]{16,}={0,2}/g) ?? [])
+  const decoded = (plain.match(/[A-Za-z0-9+/]{8,}={0,2}/g) ?? [])
+    .filter((t) => t.length >= 16 || (t.replace(/=+$/, '').length % 4 === 0 && /[A-Z]/.test(t) && /[a-z0-9]/.test(t.slice(1))))
     .map((t) => Buffer.from(t, 'base64').toString('latin1'))
     .filter((t) => /^[\x20-\x7e]+$/.test(t));
   // Case-fold before stripping marks so dotless ı plus a combining dot
@@ -222,7 +239,7 @@ export function normalizeForFairHousing(text: string): string {
   // A joined copy catches fami-lies, fami_lies and fami.lies.
   const unhyphenated = folded.replace(/(?<=[\p{L}'’])[-_.·]+(?=[\p{L}'’])/gu, '');
   return (unhyphenated === folded ? folded : `${folded} . ${unhyphenated}`)
-    .replace(/(?<=\p{L})[аеіорсухѕј013457@$](?=\p{L})|[аеіорсухѕј](?=\p{L})|(?<=\p{L})[аеіорсухѕј]/gu, (c) => CONFUSABLES[c] ?? c)
+    .replace(/(?<=\p{L})[аеіорсухѕјмкнтв013457@$](?=\p{L})|[аеіорсухѕјмкнтв](?=\p{L})|(?<=\p{L})[аеіорсухѕјмкнтв]/gu, (c) => CONFUSABLES[c] ?? c)
     .replace(/\b(?:[a-z][-.*_ ]){2,}[a-z]\b/g, (m) => m.replace(/[-.*_ ]/g, ''))
     .replace(/_/g, ' ')
     .replace(/\s+/g, ' ')
@@ -232,17 +249,59 @@ export function normalizeForFairHousing(text: string): string {
 /** Inclusive wording clears only its own clause, never the whole request. */
 const CLAUSE_SPLIT_RE = /[.;!?\n,]|\b(?:but|though|although|however|yet)\b/;
 
+/**
+ * Spanish, French and German words for the groups and the exclusions the
+ * rules know, mapped onto the English lexicon (F-044). Matched after
+ * normalisation, so accents are already gone.
+ */
+const TRANSLATIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\b(?:sin|pas\s+d(?:e\b|')|sans|keine?n?|ningun[oa]s?|aucun\w*)\b/g, 'no '],
+  [/\b(?:solo|solamente|seulement|uniquement|nur)\b/g, 'only'],
+  [/\b(?:rechaz\w*|refus\w*|ablehn\w*|abweis\w*|exclu\w*|ausschlie\w*)\b/g, 'reject'],
+  [/\b(?:ninos|ninas|enfants?|kinder[n]?|bebes?)\b/g, 'kids'],
+  [/\b(?:familias?|familles?|familien)\b/g, 'families'],
+  [/\b(?:auslander\w*|extranjer\w*|etrangers?|inmigrantes?|immigres?|einwanderer\w*)\b/g, 'foreigners'],
+  [/\b(?:musulman\w*|muslime\w*)\b/g, 'muslims'],
+  [/\b(?:judios?|juifs?|juden)\b/g, 'jews'],
+  [/\b(?:negros?|noirs?|schwarze\w*)\b/g, 'blacks'],
+  [/\b(?:mujeres|femmes|frauen)\b/g, 'women'],
+  [/\b(?:discapacitad\w*|handicape\w*|behindert\w*)\b/g, 'disabled'],
+];
+
+function translate(text: string): string {
+  const out = TRANSLATIONS.reduce((t, [re, en]) => t.replace(re, en), text);
+  return out === text ? text : `${text} . ${out}`;
+}
+
+/** A statement that describes the building or the task, not people. */
+const DESCRIPTIVE_RE =
+  /\b(?:(?:building|property|it|unit)\s+(?:has|have|includes?|features?|offers?)\b|translat\w*|near(?:by)?\b|close\s+to|next\s+to\s+the\s+\w+\s+(?:church|temple|mosque|synagogue|school))/i;
+
+/** Each word spelled backwards, so "milsuM" names its group too. */
+const reversedWords = (text: string) => text.split(' ').map((w) => [...w].reverse().join('')).join(' ');
+
 export function classifyFairHousingRequest(rawQuestion: string): FairHousingClassification {
-  const text = normalizeForFairHousing(rawQuestion);
+  const text = translate(normalizeForFairHousing(rawQuestion));
   const restricted = RESTRICTION_OVERRIDE_RE.test(text);
   const clauses = text.split(CLAUSE_SPLIT_RE).filter((c) => c.trim());
   const isInclusive = (c: string) => !restricted && INCLUSIVE_RE.test(c);
   const inclusive = clauses.some(isInclusive);
   const question = clauses.filter((c) => !isInclusive(c)).join(' . ');
-  const classes = PROTECTED_CLASS_RULES.filter((r) => r.pattern.test(question));
-  const actions = [
+  const classes = PROTECTED_CLASS_RULES.filter((r) => r.pattern.test(question) || r.pattern.test(reversedWords(question)));
+  const actions: FairHousingAction[] = [
     ...new Set(ACTION_RULES.filter((r) => r.pattern.test(question)).map((r) => r.action)),
   ];
+  // Deny by default: a portfolio question never needs an instruction about a
+  // protected group. A statement or command (not a question) that names one,
+  // and is neither inclusive nor a description of the building, is refused
+  // even when no action word matched.
+  // "family-size units", "family room": the word names a size, not people.
+  const aboutPeople = text.replace(/\bfamil(?:y|ies)[-\s]+(?:size[d]?|room|style|owned|run|plan)\b/g, ' ');
+  const directive = (aboutPeople.match(/[^.?!;\n]+[.?!;\n]?/g) ?? [])
+    .filter((sentence) => !sentence.trim().endsWith('?'))
+    .filter((sentence) => !sentence.split(CLAUSE_SPLIT_RE).some(isInclusive) && !DESCRIPTIVE_RE.test(sentence))
+    .some((sentence) => PROTECTED_CLASS_RULES.some((r) => r.pattern.test(sentence) || r.pattern.test(reversedWords(sentence))));
+  if (directive && actions.length === 0) actions.push('differential');
   return {
     refused: classes.length > 0 && actions.length > 0,
     actions,
