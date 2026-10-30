@@ -13,6 +13,7 @@ import { portfolioStoreToGenericTables, verifySheafConsistency } from '../src/do
 import { FLOW_PORTFOLIO_SCHEMA } from '../src/schema.ts';
 import { classifyFairHousingRequest } from '../src/domain/fair-housing.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
+import { handleMcpHttpRequest } from '../src/mcp/http.ts';
 import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
 
 function mcpStdio(lines: string[]) {
@@ -64,6 +65,8 @@ describe('audit: broken CSV exports exit 10 with a clear message', () => {
     ['empty leases.csv', 'pms/leases.csv', '', /leases\.csv is empty/],
     ['header-only spend.csv', 'ils/spend.csv', 'spend_id,month,property_id,source,amount,currency,status\n', /spend\.csv has a header but no data rows/],
     ['missing units.csv', 'pms/units.csv', null, /units\.csv does not exist/],
+    ['short data row (EVAL F-022)', 'pms/units.csv', 'unit_id,property_id,unit_number,bedrooms,bathrooms,sqft,floor,view,market_rent,status\nU0001,P01,826,1,1,600,8,none,2315,occupied\n\nU0002,P01\n', /units\.csv line 4 has 2 fields; the header has 10/],
+    ['unbalanced quote (EVAL F-022)', 'ils/spend.csv', 'spend_id,month,property_id,source,amount,currency,status\nS0001,2026-04,P01,"Apartments.com,1230,USD,posted\n', /spend\.csv line 2 has 4 fields; the header has 7/],
   ];
   for (const [name, rel, content, message] of cases) {
     it(name, () => {
@@ -256,4 +259,24 @@ describe('audit: the generic sheaf checker does not call an orphan row consisten
     assert.equal(r.isConsistentAfterQuarantine, false);
     assert.ok(r.restrictionResiduals.some((x) => x.detail === 'leases:L99999 references missing units:U9999'));
   });
+});
+
+describe('audit: an invalid request with a detectable id gets that id back (EVAL F-021)', () => {
+  const cases: Array<[string, unknown]> = [
+    ['{"jsonrpc":"2.0","id":7}', 7],
+    ['{"jsonrpc":"2.0","id":8,"method":5}', 8],
+    ['{"jsonrpc":"2.0","id":"a"}', 'a'],
+    ['{"jsonrpc":"2.0","id":{}}', null],
+  ];
+  for (const [line, id] of cases) {
+    it(`stdio and HTTP both answer ${line} with -32600 and id ${JSON.stringify(id)}`, async () => {
+      const stdio = mcpStdio([line]);
+      assert.equal(stdio.replies[0].error?.code, -32600);
+      assert.equal(stdio.replies[0].id, id);
+      const http = await handleMcpHttpRequest({ method: 'POST', headers: {}, body: line });
+      const reply = JSON.parse(http.body) as { id: unknown; error?: { code: number } };
+      assert.equal(reply.error?.code, -32600);
+      assert.equal(reply.id, id);
+    });
+  }
 });

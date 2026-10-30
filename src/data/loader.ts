@@ -69,18 +69,21 @@ export function readCsvRecords(filePath: string): Array<Record<string, string>> 
   const content = fs.readFileSync(filePath, 'utf-8');
   const lines = content
     .split('\n')
-    .map((l) => l.replace(/\r$/, ''))
-    .filter((l) => l.trim().length > 0);
+    .map((text, i) => ({ text: text.replace(/\r$/, ''), lineNo: i + 1 }))
+    .filter((l) => l.text.trim().length > 0);
 
   if (lines.length === 0) {
     return [];
   }
 
-  const headers = parseCsvLine(lines[0]);
+  const headers = parseCsvLine(lines[0].text);
   const rows: Array<Record<string, string>> = [];
 
   for (let i = 1; i < lines.length; i += 1) {
-    const values = parseCsvLine(lines[i]);
+    const values = parseCsvLine(lines[i].text);
+    if (values.length !== headers.length) {
+      throw new DataLoadError(`${filePath} line ${lines[i].lineNo} has ${values.length} fields; the header has ${headers.length}`);
+    }
     const record: Record<string, string> = {};
     for (let h = 0; h < headers.length; h += 1) {
       record[headers[h]] = values[h] ?? '';

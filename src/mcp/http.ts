@@ -63,8 +63,6 @@ async function handleOne(msg: unknown): Promise<JsonRpcResponse | null> {
   }
   const id =
     typeof msg.id === 'string' || typeof msg.id === 'number' ? msg.id : null;
-  // A response or notification from the client needs no reply.
-  if (!('method' in msg)) return null;
   if (msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') {
     return rpcError(id, -32600, 'Invalid Request: jsonrpc must be "2.0" and method a string');
   }

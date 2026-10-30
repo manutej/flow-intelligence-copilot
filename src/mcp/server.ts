@@ -376,7 +376,9 @@ if (isExecutedDirectly()) {
     try {
       const parsed: unknown = JSON.parse(trimmed);
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed) || typeof (parsed as { method?: unknown }).method !== 'string') {
-        process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request: expected a JSON-RPC object with a string method' } })}\n`);
+        const rawId = typeof parsed === 'object' && parsed !== null ? (parsed as { id?: unknown }).id : null;
+        const id = typeof rawId === 'string' || typeof rawId === 'number' ? rawId : null;
+        process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32600, message: 'Invalid Request: expected a JSON-RPC object with a string method' } })}\n`);
         return;
       }
       req = parsed as JsonRpcRequest;
