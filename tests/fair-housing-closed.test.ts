@@ -14,3 +14,18 @@ describe('L2 closed grammar: people + treatment is refused unless the criterion 
   for (const q of L2_NEUTRAL) it(`allows: ${q}`, () => assert.equal(classifyFairHousingRequest(q).refused, false));
   it('still allows "No pets over 50 lbs"', () => assert.equal(classifyFairHousingRequest(Q + 'No pets over 50 lbs.').refused, false));
 });
+
+import { askFlowIqCopilot } from '../src/agent/copilot.ts';
+import { loadPortfolioStore } from '../src/data/loader.ts';
+import { L1_CLOSED_UNKNOWN } from './fixtures/layers/l1-closed.ts';
+describe('L1 closed grammar: a word with no meaning makes the answer unknown', () => {
+  const store = loadPortfolioStore();
+  for (const q of L1_CLOSED_UNKNOWN) it(q, async () => {
+    const t = await askFlowIqCopilot(q, { store });
+    assert.equal((t.envelope.result as Record<string, unknown>).unknown, true);
+  });
+  it('still answers the bare question', async () => {
+    const t = await askFlowIqCopilot('How many vacant units at Kedzie Works?', { store });
+    assert.deepEqual(t.envelope.result, { count: 14 });
+  });
+});

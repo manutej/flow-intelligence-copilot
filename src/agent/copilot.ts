@@ -1,3 +1,4 @@
+import { unknownWords } from '../domain/vocabulary.ts';
 import type { PortfolioPolicyConfig } from '../config/rules.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
 import type {
@@ -192,7 +193,7 @@ export function runDeterministicToolRouter(
   store: PortfolioStore,
   llmFallbackReason: string | null = null,
 ): CopilotTurnResult {
-  const out = executeCompositionalPlan(qRecord, store);
+  const out = closedVocabulary(executeCompositionalPlan(qRecord, store), qRecord, store);
   return {
     ...out,
     modeUsed: 'deterministic',
@@ -200,4 +201,42 @@ export function runDeterministicToolRouter(
     modelUsed: 'flowiq-deterministic-v2.0',
     llmFallbackReason,
   };
+}
+
+/**
+ * L1 closed grammar: an answer stands only if every word of the question has a
+ * meaning. Refusals, unknowns and clarifications pass through untouched.
+ */
+function closedVocabulary(
+  out: ReturnType<typeof executeCompositionalPlan>,
+  qRecord: QuestionRecord,
+  store: PortfolioStore,
+): ReturnType<typeof executeCompositionalPlan> {
+  const r = out.envelope.result as Record<string, unknown>;
+  if (r.unknown === true || r.refused === true || r.clarification_needed === true) return out;
+  const unparsed = unknownWords(qRecord.question, store);
+  const why =
+    unparsed.length > 0
+      ? `FlowIQ has no meaning for ${unparsed.map((w) => `"${w}"`).join(', ')} in this question`
+      : /\bhow\s+many\b/i.test(qRecord.question) && !hasCount(r)
+        ? 'the question asks "how many" but the plan computed no count'
+        : null;
+  if (why === null) return out;
+  const envelope: AnswerEnvelope = {
+    id: qRecord.id,
+    answer: `I don't know — ${why}, so it will not answer a different question in its place.`,
+    result: { unknown: true },
+    citations: ['properties:P01'],
+  };
+  return { ...out, envelope, verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema) };
+}
+
+/** "How many" is answered by a whole-number count, not by money, a rate or a size. */
+function hasCount(result: Record<string, unknown>): boolean {
+  const MEASURE = /usd|percent|rate|sqft|rent|share|mean|avg|average|posterior|delta/i;
+  const walk = (v: unknown, key: string): boolean =>
+    typeof v === 'number'
+      ? Number.isInteger(v) && !MEASURE.test(key)
+      : v !== null && typeof v === 'object' && Object.entries(v).some(([k, x]) => walk(x, Array.isArray(v) ? key : k));
+  return walk(result, '');
 }
