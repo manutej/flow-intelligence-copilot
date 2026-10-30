@@ -164,7 +164,7 @@ export function executeCompositionalPlan(
 
   if (intent.measure === 'unsupported') {
     return unknown(
-      `the unit exports cannot compute the measure asked for in "${question.trim()}".`,
+      `the ${intent.domain} exports cannot compute the measure asked for in "${question.trim()}".`,
     );
   }
 

@@ -404,3 +404,18 @@ describe('audit: the sheaf checker rejects corrupt rows on an in-memory store (E
   };
   for (const [name, st] of Object.entries(cases)) it(`rejects ${name}`, () => assert.equal(isSection(st), false));
 });
+
+describe('audit: a question with an unresolved qualifier or statistic is not answered with a count or total (EVAL F-035, TENACITY)', () => {
+  const store = loadPortfolioStore();
+  for (const q of ['What is the average monthly rent on leases at Fulton Yards?', 'What is the cheapest unit at Kedzie Works?', 'What\'s the priciest apartment at Halsted & Lake?', 'How many units at Kedzie Works have a balcony?', 'How many pet-friendly units at Kedzie Works?', 'How many units at Kedzie Works were renovated?', 'How many units at Kedzie Works are on the top floor?', 'How many units at Kedzie Works face the lake?', 'How many ground-floor units at Kedzie Works?', 'Number of units at Kedzie Works newer than 2010', 'How many units are unavailable at Kedzie Works?', 'How many units at Kedzie Works are taken?', 'Which buildings have accessible units for wheelchair users?']) {
+    it(`unknown: ${q}`, async () => {
+      const turn = await askFlowIqCopilot({ id: 'F035', type: 'adhoc', question: q });
+      assert.equal(turn.envelope.result.unknown, true, JSON.stringify(turn.envelope.result));
+    });
+  }
+  it('still counts vacant units', async () => {
+    const turn = await askFlowIqCopilot({ id: 'F035', type: 'adhoc', question: 'How many vacant units at Kedzie Works?' });
+    assert.equal(turn.envelope.result.count, 14);
+    assert.ok(store.units.length > 0);
+  });
+});

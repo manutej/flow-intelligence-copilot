@@ -34,7 +34,7 @@ export interface PropertyResolutionResult {
  * amenity strings if those canonical strings exist in the loaded PortfolioStore.
  * Every distinct amenity in `properties.csv` is ALSO indexed dynamically from `pool`.
  */
-const AMENITY_SYNONYMS: ReadonlyArray<{
+export const AMENITY_SYNONYMS: ReadonlyArray<{
   readonly canonical: string;
   readonly patterns: readonly RegExp[];
 }> = [

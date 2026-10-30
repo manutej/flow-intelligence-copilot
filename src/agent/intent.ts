@@ -1,3 +1,4 @@
+import { unresolvedUnitWords } from './closed-world.ts';
 import { DATE_WINDOWS, type DateWindowSpec } from '../config/rules.ts';
 import type {
   DecisionDirection,
@@ -647,46 +648,20 @@ export function parseExplicitDateWindow(
   return null;
 }
 
-// The unit tools compute a handful of named measures plus a plain count.
-// A count is only the answer when the question asks to count or list units,
-// and only when every condition in it is one the filters model. Anything
-// else (a share, an extreme, a sum of another column, a threshold on a
-// column with no filter) answers unknown instead of a count of the wrong thing.
+// A unit count answers only a question that asks to count or list units
+// and whose every word a filter, the store or plain structure accounts for
+// (closed-world.ts). Anything else answers unknown, never the total.
 const UNIT_COUNT_CUE_RE =
   /\b(?:how\s+many|number\s+of|count|total|list|which|show|what)\b|\bvacanc(?:y|ies)\b/i;
 const UNIT_NOUN_RE =
   /\b(?:units?|apartments?|apts?|vacanc(?:y|ies)|studios?|flats?|homes|buildings?|properties|(?:one|two|three|four|\d)[-\s]?(?:bed(?:room)?s?|br)\b)/i;
-const UNMODELLED_UNIT_CONDITION_RE = new RegExp(
-  [
-    '\\b(?:average|avg|mean|median|highest|lowest|max(?:imum)?|min(?:imum)?|largest|smallest|biggest)\\b',
-    '\\b(?:percent(?:age)?|fraction|proportion|ratio|share|rate)\\b|%',
-    // a total of a column, not of rows: "total bedrooms", "sum of rent"
-    '\\b(?:total|sum)\\b.*(?<!(?:\\d|one|two|three|four)[-\\s]?)\\b(?:bed|bath)rooms\\b|\\b(?:total|sum)\\b.*\\brents?\\b',
-    '\\b(?:bed|bath)rooms\\s+(?:are\\s+there|in\\s+total|across)',
-    '\\bsquare\\s+f(?:oo|ee)t|\\bsq\\.?\\s*ft\\b',
-    '\\b(?:larger|bigger|smaller|more|less|cheaper|over|under|above|below|exceeding)\\b(?:\\s+than)?\\s+(?:the\\s+)?\\$?\\d',
-  ].join('|'),
-  'i',
-);
-// A word qualifying the counted noun must be a value some filter reads;
-// "accessible units" has no column, so it cannot be counted.
-const COUNTED_NOUN_QUALIFIER_RE = /\bhow\s+many\s+([a-z]+)\s+(?:units?|apartments?)\b/i;
-const KNOWN_UNIT_QUALIFIERS = new Set([
-  'vacant', 'occupied', 'empty', 'available', 'unoccupied', 'open', 'leased', 'rented', 'notice',
-  'total', 'more', 'studio', 'studios', 'one', 'two', 'three', 'four', 'city', 'lake', 'courtyard',
-  'bedroom', 'br', 'of', 'the', 'other', 'additional', 'apartment', 'residential',
-]);
-function hasUnknownQualifier(question: string): boolean {
-  const word = COUNTED_NOUN_QUALIFIER_RE.exec(question)?.[1]?.toLowerCase();
-  return word !== undefined && !KNOWN_UNIT_QUALIFIERS.has(word) && !/\d|bed|br$/.test(word);
-}
 
 /**
  * Pure semantic parser that extracts a structured `ParsedQueryIntent` AST from
  * any natural-language operator question using dynamic column sets from `store`
  * without checking `qRecord.id` or `result_schema`.
  */
-export function parseQueryIntent(
+function parseQueryIntentRaw(
   question: string,
   store: PortfolioStore,
 ): ParsedQueryIntent {
@@ -1149,7 +1124,7 @@ export function parseQueryIntent(
     unitMeasure = 'avg_sqft';
   } else if (/\brent\s+per\s+sq\.?\s*ft\b/i.test(question)) {
     unitMeasure = 'rent_per_sqft';
-  } else if (!UNIT_COUNT_CUE_RE.test(question) || !UNIT_NOUN_RE.test(question) || UNMODELLED_UNIT_CONDITION_RE.test(question) || hasUnknownQualifier(question)) {
+  } else if (!UNIT_COUNT_CUE_RE.test(question) || !UNIT_NOUN_RE.test(question) || unresolvedUnitWords(question, store).length > 0) {
     unitMeasure = 'unsupported';
   }
 
@@ -1176,4 +1151,63 @@ export function parseQueryIntent(
     paidOnly: false,
     decisionIds: [],
   };
+}
+
+/**
+ * The statistic each measure computes. A question that asks for an average,
+ * a median or a share is answered only by a measure that computes that
+ * statistic; otherwise the nearest measure would return a sum or a count
+ * under the wrong name ("average monthly rent" answered with a total).
+ * The Record is exhaustive, so a new measure must declare what it computes.
+ */
+type Statistic = 'count' | 'sum' | 'average' | 'share' | 'lookup';
+const MEASURE_STATISTICS: Readonly<Record<IntentMeasure, readonly Statistic[]>> = {
+  void_and_duplicate_counts: ['count'],
+  decision_lookup: ['lookup'],
+  decision_cohort_rejected: ['lookup'],
+  decision_post_spend_comparison: ['sum'],
+  decision_outcome_learning: ['lookup', 'average', 'share'],
+  reallocation_leases: ['count'],
+  dead_spend_pairs: ['sum'],
+  dead_spend_building: ['sum'],
+  tour_to_lease_rate: ['share'],
+  apply_rate: ['share'],
+  applied_without_tour: ['count'],
+  applied_and_leased: ['count'],
+  cost_per_lead_and_tour: ['average'],
+  cost_per_lead: ['average'],
+  cost_per_tour: ['average'],
+  lead_count: ['count'],
+  spend_h1_vs_q3: ['sum'],
+  spend_total: ['sum'],
+  signed_leases_ranking: ['count'],
+  cost_per_signed_lease: ['average'],
+  ending_and_renewed: ['count'],
+  renewal_rate: ['share'],
+  renewal_rate_class_comparison: ['share'],
+  new_vs_renewal_and_concession: ['count', 'average'],
+  average_concession: ['average'],
+  rent_at_risk: ['sum'],
+  lease_count: ['count'],
+  vacancy_rate: ['share'],
+  occupied_share: ['share'],
+  avg_market_rent_and_sqft: ['average'],
+  avg_market_rent: ['average'],
+  avg_sqft: ['average'],
+  rent_per_sqft: ['average'],
+  unit_count: ['count'],
+  unsupported: [],
+};
+
+const REQUESTED_STATISTIC: ReadonlyArray<readonly [Statistic | 'median', RegExp]> = [
+  ['median', /\bmedian\b/i],
+  ['average', /\b(?:average|avg|mean|typical)\b/i],
+  ['share', /\b(?:percent(?:age)?|share|fraction|proportion)\b|%/i],
+];
+
+export function parseQueryIntent(question: string, store: PortfolioStore): ParsedQueryIntent {
+  const intent = parseQueryIntentRaw(question, store);
+  const produced = MEASURE_STATISTICS[intent.measure];
+  const unmet = REQUESTED_STATISTIC.some(([stat, re]) => re.test(question) && !produced.includes(stat as Statistic));
+  return unmet ? { ...intent, measure: 'unsupported' } : intent;
 }
