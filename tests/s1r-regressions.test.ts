@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { describe, it } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
-import { parseRange } from '../src/domain/comparators.ts';
+import { parseRange, statedValues } from '../src/domain/comparators.ts';
 
 const store = loadPortfolioStore();
 const rows = fs.readFileSync('data/pms/units.csv', 'utf8').trim().split('\n').slice(1).map((l) => {
@@ -116,5 +116,37 @@ describe('F-062: two exact values on one field are not answered as one of them',
   it('2 bedrooms and 3 bedrooms', async () => {
     const r = await ask('How many units that have 2 bedrooms and that have 3 bedrooms are at P02?');
     assert.equal(r.unknown, true, JSON.stringify(r));
+  });
+});
+
+describe('S1R round 2: intervals, noun binding, rent on averages, short aliases, open periods', async () => {
+  const { verifyAnswerEnvelope } = await import('../src/domain/guards.ts');
+  const ranges: Array<[string, Parameters<typeof parseRange>[1], { min?: number; max?: number } | 'contradiction']> = [
+    ['units with 1 to 2 baths', 'bathrooms', { min: 1, max: 2 }],
+    ['2 or 3 bedroom units', 'bedrooms', { min: 2, max: 3 }],
+    ['floors 3-5', 'floor', { min: 3, max: 5 }],
+    ['from the 3rd to the 5th floor', 'floor', { min: 3, max: 5 }],
+    ['$2,200 or more', 'rent', { min: 2200 }],
+    ['4th floor under 700 sq ft', 'sqft', { max: 699 }],
+    ['2 bedrooms and below floor 6', 'floor', { max: 5 }],
+    ['floor 2 or 4', 'floor', 'contradiction'],
+  ];
+  for (const [q, field, want] of ranges) it(`F-074/F-075 ${field}: ${q}`, () => {
+    const r = parseRange(q, field);
+    if (want === 'contradiction') assert.ok(r && r.min !== undefined && r.max !== undefined && r.min > r.max, JSON.stringify(r));
+    else assert.deepEqual(r, want);
+  });
+  for (const [q, field, v] of [['level 4', 'floor', 4], ['4th floor under 700 sq ft', 'floor', 4], ['2 bedrooms and below floor 6', 'bedrooms', 2]] as const)
+    it(`F-075 exact ${field} stays on its noun: ${q}`, () => assert.deepEqual(statedValues(q, field), [v]));
+  it('F-074 a count over a range matches the CSV', async () => {
+    assert.equal((await ask('How many units have 1 to 2 bedrooms at P03?')).count, count('P03', (u) => u.bed >= 1 && u.bed <= 2));
+  });
+  it('F-075 a comparator binds to its own noun', async () => {
+    assert.equal((await ask('How many 3 bedroom units are below floor 4 at P02?')).count, count('P02', (u) => u.bed === 3 && u.floor < 4));
+  });
+  it('F-076 a rent filter on an average is applied', async () => {
+    const s = rows.filter((u) => u.p === 'P04' && u.rent < 2500);
+    const want = Math.round((s.reduce((a, u) => a + u.sqft, 0) / s.length) * 10) / 10;
+    assert.equal((await ask('Average sq ft of units with rent under $2,500 at P04?')).sqft, want);
   });
 });

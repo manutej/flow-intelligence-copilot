@@ -54,7 +54,7 @@ const QUANTITIES: Readonly<Record<Field, Quantity>> = {
   bedrooms: { noun: String.raw`(?:bed(?:room)?s?|brs?|bdrms?|bds?)\b`, value: String.raw`${NUM}[-\s]*(?:bed(?:room)?s?|brs?|bdrms?|bds?)\b`, integer: true },
   bathrooms: { noun: String.raw`(?:bath(?:room)?s?|bas?)\b`, value: String.raw`${NUM}[-\s]*(?:bath(?:room)?s?|bas?)\b`, integer: false },
   sqft: { noun: String.raw`(?:sq\.?\s*ft\.?|sqft|sf|square\s+f(?:ee|oo)t(?:age)?|size)`, value: String.raw`${NUM}\s*(?:sq\.?\s*ft\.?|sqft|sf\b|ft²|ft2\b|square\s+f(?:ee|oo)t)`, integer: true },
-  floor: { noun: String.raw`(?:floors?|stor(?:e)?y|level)\b`, value: String.raw`(?:(?:the\s+)?floors?\s+${ORD}|(?:the\s+)?${ORD}\s+floor)\b`, integer: true },
+  floor: { noun: String.raw`(?:floors?|stor(?:e)?y|level)\b`, value: String.raw`(?:(?:the\s+)?(?:floors?|level)\s+${ORD}|(?:the\s+)?${ORD}\s+(?:floor|level))\b`, integer: true },
   rent: { noun: String.raw`(?:(?:market|asking|monthly|list)\s+)?(?:rents?|price|renting)\b`, value: String.raw`\$\s?${NUM}(?:\s*(?:\/\s*mo(?:nth)?|a\s+month|per\s+month))?|${NUM}\s+dollars\b`, integer: true },
 };
 
@@ -74,26 +74,50 @@ function bound(op: Op, n: number, integer: boolean): IntRange {
   }
 }
 
-/** All rule shapes, generated from the two lexicons. Order: ranges, unions, then single comparators. */
+/** Every field's noun: a number or comparator followed by one belongs to it. */
+const ALL_NOUNS = (): string => (Object.values(QUANTITIES) as Quantity[]).map((x) => x.noun).join('|');
+
+/**
+ * All rule shapes, generated from the two lexicons. Order: ranges and
+ * unions, then comparators bound to a noun, then single comparators.
+ * Binding is to the nearest noun phrase (S1R F-075): a number followed by
+ * some field's noun is that field's value, never another field's bound, and
+ * a trailing comparator ("and below") followed by a noun phrase belongs to
+ * that phrase, not to the value before it.
+ */
 function rulesFor(q: Quantity): Rule[] {
   const rules: Rule[] = [];
   const r = (src: string, apply: Rule['apply']) => rules.push({ re: new RegExp(src, 'i'), apply });
   const range = (a: number, b = a) => ({ min: Math.min(a, b), max: Math.max(a, b) });
-  // Inclusive ranges: "between A and B <q>", "between <noun> A and B", "from A to B <q>", "<noun> between A and B".
+  // A union "A or B" is the interval only when it has no gap; otherwise it
+  // is no interval, and min > max makes the typed-query check refuse it.
+  const union = (a: number, b = a) => (Math.abs(a - b) <= (q.integer ? 1 : 0.5) ? range(a, b) : { min: Math.max(a, b), max: Math.min(a, b) });
+  const NOT_OTHER_NOUN = String.raw`(?![\d,.]*\s*(?:-\s*)?(?:${ALL_NOUNS()}))`;
   const AND = String.raw`\s*(?:and|to|through|thru|-|–)\s*`;
-  const BARE = String.raw`\$?\s?${NUM}`;
+  const ORDS = q.integer ? String.raw`(?:st|nd|rd|th)?` : '';
+  // A number with no noun of its own: "$2,500", "the 3rd".
+  const BARE = String.raw`(?:the\s+)?\$?\s?${NUM}${ORDS}`;
+  const LEAD = String.raw`(?<![\w$.])`;
+  // Inclusive ranges: "between A and B <q>", "A to B <q>", "<noun>s A-B", "from the Ath to the Bth <q>".
   r(String.raw`\b(?:between|from)\s+${BARE}${AND}${q.value}`, range);
   r(String.raw`\b(?:between|from)\s+${q.value}${AND}${q.value}`, range);
-  r(String.raw`\b(?:between|from)\s+(?:the\s+)?${q.noun}\s+${BARE}${AND}${BARE}`, range);
-  r(String.raw`\b${q.noun}\s+(?:of\s+|is\s+|are\s+)?(?:between|from)\s+${BARE}${AND}${BARE}`, range);
-  // "<noun> <cmp> N" first, so the noun is consumed with its comparator:
-  // "rent above $2,500", "sqft >= 800", "floor of at least 3".
-  for (const [op, c] of PREFIX_OPS) r(String.raw`\b${q.noun}\s*(?:of\s+|is\s+|are\s+)?(?:${c})\s*${BARE}`, (n) => bound(op, n, q.integer));
+  r(String.raw`\b(?:between|from)\s+(?:the\s+)?${q.noun}\s+${BARE}${AND}${BARE}${NOT_OTHER_NOUN}`, range);
+  r(String.raw`\b${q.noun}\s+(?:of\s+|is\s+|are\s+)?(?:between|from)\s+${BARE}${AND}${BARE}${NOT_OTHER_NOUN}`, range);
+  r(String.raw`${LEAD}${BARE}${AND}${q.value}`, range);
+  r(String.raw`\b${q.noun}\s+${BARE}${AND}${BARE}${NOT_OTHER_NOUN}`, range);
+  // Unions: "2 or 3 bedrooms", "floor 4 or 5".
+  r(String.raw`${LEAD}${BARE}\s*(?:or|\/)\s*${q.value}`, union);
+  r(String.raw`\b${q.noun}\s+${BARE}\s+or\s+${BARE}${NOT_OTHER_NOUN}`, union);
+  // "<noun> <cmp> N": "rent above $2,500", "sqft >= 800", "floor of at least 3".
+  for (const [op, c] of PREFIX_OPS) r(String.raw`\b${q.noun}\s*(?:of\s+|is\s+|are\s+)?(?:${c})\s*${BARE}${NOT_OTHER_NOUN}`, (n) => bound(op, n, q.integer));
+  // "<noun> of N": "rent of $2,000" is that value exactly.
+  r(String.raw`\b${q.noun}\s+(?:of|is|=|at)\s+${BARE}${NOT_OTHER_NOUN}(?!\s*(?:or|and|to|-)\s)`, (n) => bound('eq', n, q.integer));
   // "<cmp> <value>": "at least 2 bedrooms", "on or above floor 5", "under $2,000".
   for (const [op, c] of PREFIX_OPS) r(String.raw`(?:^|[\s(,])(?:${c})\s*${q.value}`, (n) => bound(op, n, q.integer));
+  const NOT_NOUN_PHRASE = String.raw`(?!\s*(?:the\s+)?(?:[$\d]|${ALL_NOUNS()}))`;
   for (const [op, c] of SUFFIX_OPS) {
-    // "<value> <cmp>": "2 bedrooms or more", "floor 5 or higher", "900 sq ft or larger".
-    r(String.raw`\b${q.value}(?:${c})(?![\w])`, (n) => bound(op, n, q.integer));
+    // "<value> <cmp>": "2 bedrooms or more", "floor 5 or higher", "$2,500 or more".
+    r(String.raw`${LEAD}${q.value}(?:${c})(?![\w])${NOT_NOUN_PHRASE}`, (n) => bound(op, n, q.integer));
     // "N <cmp> <noun>": "2+ bedrooms", "2 or more bedrooms".
     r(String.raw`\b${NUM}(?:${c})[-\s]*${q.noun}`, (n) => bound(op, n, q.integer));
   }
@@ -101,7 +125,7 @@ function rulesFor(q: Quantity): Rule[] {
 }
 
 const FLOOR_EXACT: Rule = {
-  re: new RegExp(String.raw`\bon\s+(?:the\s+)?(?:floor\s+${ORD}|${ORD}\s+floor)\b`, 'i'),
+  re: new RegExp(String.raw`\bon\s+(?:the\s+)?(?:(?:floor|level)\s+${ORD}|${ORD}\s+(?:floor|level))\b`, 'i'),
   apply: (n) => ({ min: n, max: n }),
 };
 const GROUND = /\b(?:on\s+the\s+)?(?:ground|first)\s+floor\b/i;
@@ -167,7 +191,7 @@ export function mentionsQuantity(q: string, field: Field): boolean {
 
 /** Distinct values the question states for a field ("2 bedrooms ... 3 bedrooms" is two). */
 export function statedValues(q: string, field: Field): number[] {
-  return [...new Set([...q.matchAll(new RegExp(QUANTITIES[field].value, 'gi'))].map((m) => toNum(m[1])).filter(Number.isFinite))];
+  return [...new Set([...q.matchAll(new RegExp(QUANTITIES[field].value, 'gi'))].map((m) => toNum(m.slice(1).find((g) => g !== undefined) ?? '')).filter(Number.isFinite))];
 }
 
 export const parseBedroomRange = (q: string) => parseRange(q, 'bedrooms');

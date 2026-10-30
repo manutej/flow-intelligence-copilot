@@ -1217,6 +1217,7 @@ const FIELD_COVERAGE: ReadonlyArray<readonly [Field, (i: ParsedQueryIntent) => b
   ['bathrooms', (i) => i.bathrooms !== undefined || i.bathroomsMin !== undefined || i.bathroomsMax !== undefined],
   ['sqft', (i) => i.sqftMin !== undefined || i.sqftMax !== undefined],
   ['floor', (i) => i.floorMin !== undefined || i.floorMax !== undefined],
+  ['rent', (i) => i.rentMin !== undefined || i.rentMax !== undefined],
 ];
 
 const COVERAGE_RULES: ReadonlyArray<{
