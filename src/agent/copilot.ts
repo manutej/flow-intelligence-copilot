@@ -1,3 +1,6 @@
+import { unresolvedUnitWords } from './closed-world.ts';
+import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
+import { parseQueryIntent } from './intent.ts';
 import { continuesPreviousTurn, refersBackToPeople, type FairHousingSession } from '../domain/fair-housing.ts';
 import { unknownWords } from '../domain/vocabulary.ts';
 import type { PortfolioPolicyConfig } from '../config/rules.ts';
@@ -39,6 +42,8 @@ export interface CopilotTurnResult {
   readonly toolCalls: readonly ToolCallTrace[];
   readonly clarificationNeeded: boolean;
   readonly clarifyingQuestion: string | null;
+  readonly clarifyOptions?: readonly ClarifyOption[];
+  readonly restatement?: string;
   readonly modeUsed: 'deterministic' | 'llm';
   readonly providerUsed?: ModelProviderId;
   readonly modelUsed?: string;
@@ -201,13 +206,24 @@ export function runDeterministicToolRouter(
   llmFallbackReason: string | null = null,
 ): CopilotTurnResult {
   const out = closedVocabulary(executeCompositionalPlan(qRecord, store), qRecord, store);
+  const r = out.envelope.result as Record<string, unknown>;
+  const answered = r.unknown !== true && r.refused !== true && r.clarification_needed !== true;
   return {
     ...out,
+    ...(!answered && out.clarifyOptions === undefined && r.refused !== true ? unitClarify(qRecord.question, store) : {}),
+    ...(answered ? { restatement: restate(parseQueryIntent(qRecord.question, store), qRecord.question, store) } : {}),
     modeUsed: 'deterministic',
     providerUsed: 'deterministic',
     modelUsed: 'flowiq-deterministic-v2.0',
     llmFallbackReason,
   };
+}
+
+/** A unit question left unknown by words no filter binds gets typed readings, not a dead end. */
+function unitClarify(question: string, store: PortfolioStore): { clarifyOptions?: readonly ClarifyOption[] } {
+  if (parseQueryIntent(question, store).domain !== 'units') return {};
+  const unbound = unresolvedUnitWords(question, store).filter((w) => /^\p{L}/u.test(w));
+  return unbound.length > 0 ? { clarifyOptions: clarifyOptions(question, unbound, store) } : {};
 }
 
 /**
@@ -229,6 +245,12 @@ function closedVocabulary(
         ? 'the question asks "how many" but the plan computed no count'
         : null;
   if (why === null) return out;
+  if (unparsed.length > 0) {
+    // Clarify, not a dead end: offer typed readings (result keys unchanged).
+    const { envelope: c, options } = clarifyEnvelope(qRecord.id, qRecord.question, unparsed, store);
+    const envelope: AnswerEnvelope = { ...c, result: { unknown: true } };
+    return { ...out, envelope, clarifyOptions: options, verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema) };
+  }
   const envelope: AnswerEnvelope = {
     id: qRecord.id,
     answer: `I don't know — ${why}, so it will not answer a different question in its place.`,

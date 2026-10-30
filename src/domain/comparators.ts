@@ -127,6 +127,23 @@ export function parseRange(q: string, field: Field): IntRange | undefined {
   return undefined;
 }
 
+/**
+ * True when the question puts a number next to a field's noun ("floors 9 to
+ * 12", "650 sq ft"), i.e. it constrains that field. The coverage gate then
+ * demands the typed query carry the field (S1R-L1-1, F-060).
+ */
+export function mentionsQuantity(q: string, field: Field): boolean {
+  const n = QUANTITIES[field].noun;
+  const num = String.raw`(?<![A-Za-z])(?:\$\s?)?(?:\d[\d,]*(?:\.\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten)\b`;
+  const near = String.raw`[^.?!\d]{0,14}?`;
+  // A number that types itself as another field ("one-bedroom") is not this one's.
+  let rest = q.replace(/\bP\d{2,3}\b/gi, ' ');
+  for (const other of Object.keys(QUANTITIES) as Field[]) {
+    if (other !== field) rest = rest.replace(new RegExp(QUANTITIES[other].value, 'gi'), ' ');
+  }
+  return new RegExp(String.raw`${num}${near}\b${n}|\b${n}${near}${num}`, 'i').test(rest);
+}
+
 export const parseBedroomRange = (q: string) => parseRange(q, 'bedrooms');
 export const parseBathroomRange = (q: string) => parseRange(q, 'bathrooms');
 export function parseSqftBounds(q: string): { sqftMin?: number; sqftMax?: number } {

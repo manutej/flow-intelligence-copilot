@@ -1,3 +1,5 @@
+import { typedQueryErrors } from './typed-query.ts';
+import { mentionsQuantity, type Field } from '../domain/comparators.ts';
 import { unresolvedUnitWords } from './closed-world.ts';
 import { DATE_WINDOWS, type DateWindowSpec } from '../config/rules.ts';
 import type {
@@ -1210,13 +1212,27 @@ const REQUESTED_STATISTIC: ReadonlyArray<readonly [Statistic | 'median', RegExp]
  * was asked and the honest answer is "I don't know" (F-040). Each rule names
  * the words and the field that has to carry them.
  */
+const FIELD_COVERAGE: ReadonlyArray<readonly [Field, (i: ParsedQueryIntent) => boolean]> = [
+  ['bedrooms', (i) => i.bedrooms !== undefined || i.bedroomsMin !== undefined || i.bedroomsMax !== undefined],
+  ['bathrooms', (i) => i.bathrooms !== undefined || i.bathroomsMin !== undefined || i.bathroomsMax !== undefined],
+  ['sqft', (i) => i.sqftMin !== undefined || i.sqftMax !== undefined],
+  ['floor', (i) => i.floorMin !== undefined || i.floorMax !== undefined],
+];
+
 const COVERAGE_RULES: ReadonlyArray<{
-  readonly words: RegExp;
+  readonly words: { test(q: string): boolean };
   readonly covered: (i: ParsedQueryIntent) => boolean;
 }> = [
   // A unit status the parser did not turn into a filter.
   { words: /\b(?:vacant|vacanc\w*|occupied|occupancy|on\s+notice|available|unoccupied|empty)\b/i,
     covered: (i) => i.unitStatus !== undefined || i.domain !== 'units' || /rate|share/.test(i.measure) },
+  // A notice status the parser did not turn into a filter.
+  { words: /(?<!occupied\s+or\s+(?:on\s+)?)\bnotice\b/i, covered: (i) => i.unitStatus === 'notice' || i.domain !== 'units' || /rate|share/.test(i.measure) },
+  // A number on a unit field must land in that field's bounds (F-060).
+  ...FIELD_COVERAGE.map(([f, has]) => ({
+    words: { test: (q: string) => mentionsQuantity(q, f) },
+    covered: (i: ParsedQueryIntent) => i.domain !== 'units' || has(i),
+  })),
   // A view the parser did not turn into a filter.
   { words: /\bviews?\b/i, covered: (i) => i.view !== undefined || i.domain !== 'units' },
   // Lease rent is not market rent.
@@ -1239,5 +1255,6 @@ export function parseQueryIntent(question: string, store: PortfolioStore): Parse
       .map((m) => { const w = m[0].toLowerCase().replace(/\s+/g, ' '); return STATUS_OF[w] ?? w; }),
   );
   const uncovered = statuses.size > 1 || COVERAGE_RULES.some((r) => r.words.test(question) && !r.covered(intent));
-  return unmet || uncovered ? { ...intent, measure: 'unsupported' } : intent;
+  // Only a valid TypedQuery is ever executed (S1R-L1-4).
+  return unmet || uncovered || typedQueryErrors(intent).length > 0 ? { ...intent, measure: 'unsupported' } : intent;
 }

@@ -38,3 +38,35 @@ describe('F-061: comparators are typed rules that compose', () => {
     assert.equal(r.count, count('P06', (u) => u.floor >= 5), JSON.stringify(r));
   });
 });
+
+describe('F-060: every unit measure runs the same coverage gate', () => {
+  const avgSqft = (p: string, f: (u: Row) => boolean) => {
+    const s = rows.filter((u) => u.p === p && f(u));
+    return Math.round((s.reduce((a, u) => a + u.sqft, 0) / s.length) * 10) / 10;
+  };
+  it('a sqft range on an average is applied, not dropped', async () => {
+    const r = await ask('What is the average sq ft of units between 650 and 950 sq ft at P05?');
+    assert.equal(r.sqft, avgSqft('P05', (u) => u.sqft >= 650 && u.sqft <= 950), JSON.stringify(r));
+  });
+  for (const q of [
+    'Average sq ft of units with a move-out notice at P05?',
+    'Average sq ft of units on floors 9 to 12 at P05?',
+  ]) {
+    it(`never the building-wide average: ${q}`, async () => {
+      const r = await ask(q);
+      assert.notEqual(r.sqft, avgSqft('P05', () => true), JSON.stringify(r));
+    });
+  }
+});
+
+describe('F-062: unbound words lead to clarify with 2-4 options, answers carry a restatement', () => {
+  it('offers typed readings', async () => {
+    const t = await askFlowIqCopilot('How many units with a hot tub are at Kedzie Works?', { store });
+    assert.equal((t.envelope.result as Record<string, unknown>).unknown, true);
+    assert.ok(t.clarifyOptions && t.clarifyOptions.length >= 2 && t.clarifyOptions.length <= 4, JSON.stringify(t.clarifyOptions));
+  });
+  it('restates what an answer computed', async () => {
+    const t = await askFlowIqCopilot('How many vacant units are at Kedzie Works?', { store });
+    assert.match(t.restatement ?? '', /^I computed: the number of units, status = vacant, at Kedzie Works \(P06\)\.$/);
+  });
+});

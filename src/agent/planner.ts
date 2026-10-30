@@ -1,3 +1,4 @@
+import type { ClarifyOption } from './clarify.ts';
 import { fmtUsd, plural } from '../domain/format.ts';
 import { roundTo } from '../data/loader.ts';
 import type {
@@ -32,6 +33,10 @@ export interface PlannerTurnOutput {
   readonly toolCalls: readonly ToolCallTrace[];
   readonly clarificationNeeded: boolean;
   readonly clarifyingQuestion: string | null;
+  /** 2-4 typed readings offered when the question has unbound words (S1R-L1-5). */
+  readonly clarifyOptions?: readonly ClarifyOption[];
+  /** What the typed query computed, in plain language (S1R-L1-6). */
+  readonly restatement?: string;
   readonly verification: {
     readonly valid: boolean;
     readonly errors: readonly string[];
