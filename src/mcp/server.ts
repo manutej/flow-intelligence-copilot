@@ -4,6 +4,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { askFlowIqCopilot } from '../agent/copilot.ts';
+import type { FairHousingSession } from '../domain/fair-housing.ts';
 import { type AgentToolName, executeAgentTool } from '../agent/tools.ts';
 import { type PortfolioPolicyConfig, resolvePolicyConfig } from '../config/rules.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
@@ -155,6 +156,9 @@ const RESOURCES = [
   },
 ] as const;
 
+/** One MCP connection is one conversation; initialize starts a new one. */
+const session: FairHousingSession = { refusedEarlier: false };
+
 /**
  * Handles a single JSON-RPC 2.0 MCP request (exported for unit tests and stdio loop).
  * Resolves dataDir relative to `src/data/loader.ts` when `process.cwd()` is outside the repo.
@@ -179,6 +183,7 @@ export async function handleMcpJsonRpcRequest(
 
   switch (req.method) {
     case 'initialize': {
+      session.refusedEarlier = false;
       const requested = req.params?.protocolVersion;
       const clientProtocol =
         typeof requested === 'string' &&
@@ -305,7 +310,7 @@ export async function handleMcpJsonRpcRequest(
         const askStore = Object.keys(assumptions).length > 0 ? loadPortfolioStore(undefined, assumptions) : store;
         // Deterministic planner only: no provider option is passed, so no
         // model is called and no key is needed.
-        const turn = await askFlowIqCopilot(question, { store: askStore });
+        const turn = await askFlowIqCopilot(question, { store: askStore, session });
         // "I don't know", a refusal, or a clarifying question is a normal
         // answer, so it comes back as tool text, never as an error.
         const structured = {

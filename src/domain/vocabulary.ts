@@ -41,6 +41,8 @@ const FIXED = new Set(
   'where which who whole whose wide window with works would x yardi yards you',
   'your zero zillow',
   'sq ft homes least dead running name data',
+  // Conversational filler that carries no meaning.
+  'ok okay fine thanks thank sure great hi hello',
   // Paraphrases of the supported questions (blind-redteam paraphrase set).
   'add additional adjust along already also amb amenity answer apr associated',
   'aug available averaged avg awaiting away because bed beds began best',

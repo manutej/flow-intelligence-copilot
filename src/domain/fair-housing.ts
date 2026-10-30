@@ -353,3 +353,19 @@ export function classifyFairHousingRequest(rawQuestion: string): FairHousingClas
     inclusive,
   };
 }
+
+/**
+ * A session remembers that it refused a request. A later turn that points
+ * back at people ("them", "the people I mentioned") is refused too, so a
+ * refused request cannot be split across turns.
+ */
+export interface FairHousingSession {
+  refusedEarlier: boolean;
+}
+
+const ANAPHOR_RE =
+  /\b(?:them|they|their|(?:those|these|such|the\s+same)\s+(?:people|persons|folks|famil(?:y|ies)|tenants|renters|applicants|prospects|households|ones|groups?|kinds?|types?|crowd)|(?:the|those)\s+(?:people|folks|ones|group|famil(?:y|ies)|applicants|tenants)\s+(?:i|we|you)\s+(?:mentioned|said|described|named|meant|talked\s+about)|(?:that|this)\s+(?:group|crowd|kind|type)|(?:the\s+)?(?:people|folks|group)\s+(?:above|from\s+before|earlier))\b/i;
+
+export function refersBackToPeople(question: string): boolean {
+  return ANAPHOR_RE.test(normalizeForFairHousing(question));
+}

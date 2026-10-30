@@ -1,3 +1,4 @@
+import { refersBackToPeople, type FairHousingSession } from '../domain/fair-housing.ts';
 import { unknownWords } from '../domain/vocabulary.ts';
 import type { PortfolioPolicyConfig } from '../config/rules.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
@@ -29,6 +30,8 @@ export interface CopilotRunOptions {
   readonly harness?: Partial<ModelHarnessConfig>;
   readonly store?: PortfolioStore;
   readonly policy?: Partial<PortfolioPolicyConfig>;
+  /** Carries a refusal to later turns of the same conversation. */
+  readonly session?: FairHousingSession;
 }
 
 export interface CopilotTurnResult {
@@ -73,7 +76,8 @@ export async function askFlowIqCopilot(
   const question = qRecord.question;
   const toolCalls: ToolCallTrace[] = [];
 
-  const fhCheck = checkFairHousingGuard(question, store);
+  const fhCheck = sessionRefusal(options.session, question) ?? checkFairHousingGuard(question, store);
+  if (fhCheck.refused && options.session) options.session.refusedEarlier = true;
   if (fhCheck.refused) {
     const envelope: AnswerEnvelope = {
       id: qRecord.id,
@@ -239,4 +243,14 @@ function hasCount(result: Record<string, unknown>): boolean {
       ? Number.isInteger(v) && !MEASURE.test(key)
       : v !== null && typeof v === 'object' && Object.entries(v).some(([k, x]) => walk(x, Array.isArray(v) ? key : k));
   return walk(result, '');
+}
+
+function sessionRefusal(session: FairHousingSession | undefined, question: string) {
+  if (!session?.refusedEarlier || !refersBackToPeople(question)) return null;
+  return {
+    refused: true,
+    reason:
+      'Refused: earlier in this conversation I refused a request to treat a group of people differently, and this refers back to those people. I can answer the same question without them, for example "How many studios are vacant at Kedzie Works?".',
+    citations: [] as never[],
+  };
 }

@@ -75,7 +75,7 @@ export function checkFairHousingGuard(
     refused: true,
     protectedClass: classLabels,
     legalBasis: legalBases,
-    reason: `Refused: this asks for ${classification.actions.join(' and ')} based on ${classLabels}${propContext}. That would violate the ${legalBases}, which ${prohibitVerb} discriminatory advertising, steering, and exclusion in housing. I can help with the same task without that criterion, for example a listing that welcomes all applicants.`,
+    reason: `Refused: this asks for ${classification.actions.join(' and ')} based on ${classLabels || 'who the people are'}${propContext}. That would violate the ${legalBases}, which ${prohibitVerb} discriminatory advertising, steering, and exclusion in housing. I can help with the same task without that criterion, for example a listing that welcomes all applicants.`,
     citations,
   };
 }
