@@ -1,5 +1,6 @@
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import { resolvePropertiesFromText } from '../domain/resolver.ts';
+import { unboundNegators } from './closed-world.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 
 /**
@@ -58,6 +59,9 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** 2-4 typed readings of a question whose words `unbound` no field carries. */
 export function clarifyOptions(question: string, unbound: readonly string[], store: PortfolioStore): ClarifyOption[] {
   const options: ClarifyOption[] = [];
+  // Dropping a negator inverts the question ("not vacant" -> "vacant"), so
+  // no reading is offered; the turn is an honest "I don't know".
+  if (unboundNegators(unbound.join(' ')).length > 0) return [];
   const quoted = unbound.map((w) => `"${w}"`).join(', ');
   let stripped = question;
   for (const w of unbound) stripped = stripped.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escape(w)}(?![\\p{L}\\p{N}])`, 'giu'), ' ');

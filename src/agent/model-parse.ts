@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { DATE_WINDOWS, type DateWindowSpec } from '../config/rules.ts';
 import type { PortfolioStore } from '../data/schema.ts';
 import { unknownWords } from '../domain/vocabulary.ts';
+import { unboundNegators } from './closed-world.ts';
 import { parseExplicitDateWindow, parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 import { RunStore, normalizeQuestion, runKey, sha256 } from './run-store.ts';
 import { AGGREGATION_SET, DOMAIN_SET, MEASURES, typedQueryErrors } from './typed-query.ts';
@@ -112,7 +113,7 @@ export function toIntent(obj: unknown): ParsedQueryIntent | string {
  * unbound, so the turn clarifies instead of answering.
  */
 export function coverage(question: string, intent: ParsedQueryIntent, det: ParsedQueryIntent, store: PortfolioStore) {
-  const unbound = [...unknownWords(question, store)];
+  const unbound = [...unknownWords(question, store), ...(intent.domain === 'units' ? unboundNegators(question) : [])];
   const fields_bound: string[] = [];
   for (const k of FILTERS) {
     const m = (intent as unknown as Record<string, unknown>)[k], d = (det as unknown as Record<string, unknown>)[k];

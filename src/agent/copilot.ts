@@ -1,4 +1,4 @@
-import { unresolvedUnitWords } from './closed-world.ts';
+import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
 import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
 import { parseQueryIntent } from './intent.ts';
 import { continuesPreviousTurn, refersBackToPeople, type FairHousingSession } from '../domain/fair-housing.ts';
@@ -297,7 +297,11 @@ export function runDeterministicToolRouter(
  */
 function wellFormedOptions(options: readonly ClarifyOption[], qRecord: QuestionRecord, store: PortfolioStore): ClarifyOption[] {
   const seen = new Set<string>();
+  // A reading keeps the measure the question asks for (S2-CL): a count in
+  // place of an average is a different question.
+  const asked = parseQueryIntent(qRecord.question, store).measure;
   return options.filter((o) => {
+    if (asked !== 'unsupported' && o.query && o.query.measure !== asked) return false;
     const q = o.question.trim();
     if (q.length === 0 || o.label.trim().length === 0 || seen.has(q.toLowerCase()) || q === qRecord.question.trim()) return false;
     seen.add(q.toLowerCase());
@@ -352,7 +356,8 @@ function closedVocabulary(
 ): ReturnType<typeof executeCompositionalPlan> {
   const r = out.envelope.result as Record<string, unknown>;
   if (r.unknown === true || r.refused === true || r.clarification_needed === true) return out;
-  const unparsed = unknownWords(withoutMetaInstructions(qRecord.question), store);
+  const asked = withoutMetaInstructions(qRecord.question);
+  const unparsed = [...unknownWords(asked, store), ...(out.envelope.query && (out.envelope.query.intent as { domain?: string }).domain === 'units' ? unboundNegators(asked) : [])];
   const why =
     unparsed.length > 0
       ? `FlowIQ has no meaning for ${unparsed.map((w) => `"${w}"`).join(', ')} in this question`

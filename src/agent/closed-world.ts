@@ -89,3 +89,15 @@ export function unresolvedUnitWords(question: string, store: PortfolioStore): st
   const symbols = asking.match(/[%$<>=≥≤#*+]/g) ?? [];
   return [...new Set([...tokens(asking).filter((w) => !isKnown(w)), ...symbols])];
 }
+
+/**
+ * S2: the TypedQuery has no negated field (no "status != vacant", no "not
+ * on floor 3"), so a negator in a unit question can never be bound by any
+ * field. It is unbound on every path, average and rate as much as count,
+ * except the view-none forms the view filter does read.
+ */
+const NEGATOR_RE = /\b(?:not|non|excluding|exclude|except|without|other\s+than|besides|neither|nor)\b|n['’]t\b/gi;
+const VIEW_NONE_RE = /\b(?:with\s+no|without\s+(?:a\s+)?|no[-\s])views?\b/gi;
+export function unboundNegators(question: string): string[] {
+  return [...new Set(question.replace(VIEW_NONE_RE, ' ').match(NEGATOR_RE) ?? [])].map((w) => w.toLowerCase());
+}
