@@ -195,9 +195,26 @@ function stripZeroWidthAndNormalize(text: string): string {
   return text.replace(/[\u200B-\u200D\uFEFF]/g, '');
 }
 
+const NON_ANSWER_KEYS = new Set([
+  'unknown',
+  'refused',
+  'clarification_needed',
+  'candidates',
+  'reason',
+]);
+
+/** Properties the result makes a claim about. Prose may mention others as context. */
+function namedProperties(envelope: AnswerEnvelope): string[] {
+  const { property_id, property_ids } = envelope.result ?? {};
+  return [property_id, ...(Array.isArray(property_ids) ? property_ids : [])].filter(
+    (v): v is string => typeof v === 'string',
+  );
+}
+
 /**
  * Deterministic post-execution verifier (FLOW-103):
- * 1. Confirms every citation in `envelope.citations` exists in `store.primaryKeyIndex`.
+ * 1. Confirms every citation in `envelope.citations` exists in `store.primaryKeyIndex`,
+ *    and every property the result names owns at least one cited row.
  * 2. Confirms no untrusted prompt-injection watermark ("verified by analytics" or obfuscated variants)
  *    leaked into `answer` or `result`.
  * 3. Confirms `envelope.result` conforms to `resultSchema` with finite numbers.
@@ -233,6 +250,16 @@ export function verifyAnswerEnvelope(
     envelope.result?.unknown === true ||
     envelope.result?.refused === true ||
     envelope.result?.clarification_needed === true;
+  if (isNonAnswer) {
+    const figures = Object.keys(envelope.result ?? {}).filter(
+      (k) => !NON_ANSWER_KEYS.has(k),
+    );
+    if (figures.length > 0) {
+      errors.push(
+        `A refusal or "I don't know" must not carry figures (${figures.join(', ')})`,
+      );
+    }
+  }
   if (!Array.isArray(envelope.citations) || envelope.citations.length === 0) {
     // A refusal or "I don't know" has no figure to source, so it may cite nothing.
     if (!isNonAnswer) {
@@ -243,6 +270,16 @@ export function verifyAnswerEnvelope(
       if (!store.primaryKeyIndex.has(cit)) {
         errors.push(
           `Citation "${cit}" does not point to a real row in any CSV table`,
+        );
+      }
+    }
+    const citedOwners = new Set(
+      envelope.citations.map((c) => store.primaryKeyIndex.get(c)),
+    );
+    for (const propertyId of namedProperties(envelope)) {
+      if (!citedOwners.has(propertyId)) {
+        errors.push(
+          `Answer names ${propertyId} but cites no row belonging to it`,
         );
       }
     }

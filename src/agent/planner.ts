@@ -1242,7 +1242,7 @@ export function executeCompositionalPlan(
       {
         property_ids: ids,
       },
-      unitSummary.citations.slice(0, 8),
+      nonZeroProps.flatMap((p) => p.citations.slice(0, 2)),
     );
   }
   if (asksHowManyBuildings) {
@@ -1253,7 +1253,7 @@ export function executeCompositionalPlan(
         count: ids.length,
         property_ids: ids,
       },
-      unitSummary.citations.slice(0, 8),
+      nonZeroProps.flatMap((p) => p.citations.slice(0, 2)),
     );
   }
   if (asksTotalAndOccupied) {
@@ -1274,7 +1274,7 @@ export function executeCompositionalPlan(
         total_units: totalUnits,
         occupied_units: occupiedUnits,
       },
-      unitSummary.citations.slice(0, 8),
+      nonZeroProps.flatMap((p) => p.citations.slice(0, 2)),
     );
   }
   if ('property_ids' in schema && !('count' in schema)) {
@@ -1284,7 +1284,7 @@ export function executeCompositionalPlan(
       {
         property_ids: ids,
       },
-      unitSummary.citations.slice(0, 8),
+      nonZeroProps.flatMap((p) => p.citations.slice(0, 2)),
     );
   }
   if (

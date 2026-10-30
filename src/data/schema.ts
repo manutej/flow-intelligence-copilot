@@ -175,7 +175,8 @@ export interface PortfolioStore {
   readonly organicSources: readonly string[];
   readonly signedLeases: readonly SignedLeaseAttribution[];
   readonly decisions: readonly DecisionRecord[];
-  readonly primaryKeyIndex: ReadonlySet<CitationId>;
+  /** Every row's citation id, mapped to the property that owns the row. */
+  readonly primaryKeyIndex: ReadonlyMap<CitationId, string>;
 }
 
 export interface QuestionRecord {

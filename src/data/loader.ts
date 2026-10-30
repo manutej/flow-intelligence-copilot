@@ -253,7 +253,7 @@ export function loadPortfolioStore(
   const rawSpend = readRequiredCsv(dataDir, 'ils/spend.csv');
   const rawDecisions = readRequiredCsv(dataDir, 'ops/decisions.csv');
 
-  const primaryKeyIndex = new Set<CitationId>();
+  const primaryKeyIndex = new Map<CitationId, string>();
 
   // 1. Load Units first so we can verify actual operating buildings (KIT_README rule: >= 1 unit in units.csv)
   const unitCountsByProperty = new Map<string, number>();
@@ -262,7 +262,7 @@ export function loadPortfolioStore(
     const unitId = r.unit_id;
     const propertyId = r.property_id;
     const citationId = `units:${unitId}` as const;
-    primaryKeyIndex.add(citationId);
+    primaryKeyIndex.set(citationId, propertyId);
     unitCountsByProperty.set(
       propertyId,
       (unitCountsByProperty.get(propertyId) ?? 0) + 1,
@@ -288,7 +288,7 @@ export function loadPortfolioStore(
   const properties: PropertyRecord[] = rawProperties.map((r) => {
     const propertyId = r.property_id;
     const citationId = `properties:${propertyId}` as const;
-    primaryKeyIndex.add(citationId);
+    primaryKeyIndex.set(citationId, propertyId);
 
     const rawAliases = r.aka
       ? r.aka
@@ -389,8 +389,8 @@ export function loadPortfolioStore(
   const leases: LeaseRecord[] = rawLeases.map((r) => {
     const leaseId = r.lease_id;
     const citationId = `leases:${leaseId}` as const;
-    primaryKeyIndex.add(citationId);
     const propertyId = unitToProperty.get(r.unit_id) ?? '';
+    primaryKeyIndex.set(citationId, propertyId);
     const record: LeaseRecord = {
       citationId,
       leaseId,
@@ -447,7 +447,7 @@ export function loadPortfolioStore(
   const leads: SanitizedLeadRecord[] = rawLeads.map((r) => {
     const leadId = r.lead_id;
     const citationId = `leads:${leadId}` as const;
-    primaryKeyIndex.add(citationId);
+    primaryKeyIndex.set(citationId, r.property_id);
 
     const leaseId = r.lease_id ? r.lease_id.trim() : null;
     const duplicateOfLeadId = duplicateLeadToEarliest.get(leadId) ?? null;
@@ -544,7 +544,7 @@ export function loadPortfolioStore(
   const spend: SpendRecord[] = rawSpend.map((r) => {
     const spendId = r.spend_id;
     const citationId = `spend:${spendId}` as const;
-    primaryKeyIndex.add(citationId);
+    primaryKeyIndex.set(citationId, r.property_id);
 
     const rawAmount = Number.parseFloat(r.amount);
     const currency = r.currency as SpendCurrency;
@@ -595,7 +595,7 @@ export function loadPortfolioStore(
   const decisions: DecisionRecord[] = rawDecisions.map((r) => {
     const decisionId = r.decision_id;
     const citationId = `decisions:${decisionId}` as const;
-    primaryKeyIndex.add(citationId);
+    primaryKeyIndex.set(citationId, r.property_id);
 
     return {
       citationId,

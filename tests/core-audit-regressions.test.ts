@@ -9,6 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
+import { loadPortfolioStore } from '../src/data/loader.ts';
+import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
 
 function mcpStdio(lines: string[]) {
   const r = spawnSync('node', ['--no-warnings', 'src/mcp/server.ts'], {
@@ -110,4 +112,37 @@ describe('audit: an unrecognised measure is not reported as a unit count', () =>
       assert.equal('count' in r.result, false);
     });
   }
+});
+
+describe('audit: the verifier rejects citations that do not support the claim', () => {
+  const store = loadPortfolioStore();
+  const schema = { property_id: 'string', count: 'int' };
+  const verify = (result: Record<string, unknown>, citations: string[]) =>
+    verifyAnswerEnvelope(
+      { id: 'D01', answer: 'Marlowe Residences (P02) has 999 vacant units.', result, citations: citations as never },
+      store,
+      schema,
+    ).valid;
+
+  it('rejects a P02 figure that cites only P01 rows (TENACITY f1)', () => {
+    assert.equal(verify({ property_id: 'P02', count: 999 }, ['properties:P01', 'units:U0001']), false);
+  });
+  it('rejects a refusal that also carries figures (TENACITY f1)', () => {
+    assert.equal(verify({ property_id: 'P02', count: 999, refused: true }, []), false);
+  });
+  it('accepts the same figure when a P02 row is cited', () => {
+    assert.equal(verify({ property_id: 'P02', count: 7 }, ['properties:P02', 'units:U0152']), true);
+  });
+  it('cites every building a list answer names, not the first eight', async () => {
+    const turn = await askFlowIqCopilot({
+      id: 'AUDIT',
+      type: 'adhoc',
+      question: 'Which operating buildings have vacant units?',
+      result_schema: { property_ids: 'list of property_id' },
+    });
+    const ids = turn.envelope.result.property_ids as string[];
+    assert.ok(ids.length >= 1);
+    for (const id of ids) assert.ok(turn.envelope.citations.includes(`properties:${id}` as never), id);
+    assert.equal(turn.verification.valid, true);
+  });
 });
