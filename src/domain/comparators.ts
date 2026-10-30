@@ -114,17 +114,38 @@ const RULES: Readonly<Record<Field, readonly Rule[]>> = {
   rent: rulesFor(QUANTITIES.rent),
 };
 
-/** The range a question puts on one field, or undefined when none is stated. */
+/**
+ * The range a question puts on one field, or undefined when none is stated.
+ * Every comparator on the field composes: each match is consumed and the
+ * ranges intersect, so "above 700 sq ft and 900 sq ft or less" is 701..900.
+ * A contradiction ("2 bedrooms and 3 bedrooms") yields min > max, which the
+ * typed-query check rejects rather than answering one half.
+ */
 export function parseRange(q: string, field: Field): IntRange | undefined {
-  for (const { re, apply } of RULES[field]) {
-    const m = q.match(re);
-    if (!m) continue;
-    const nums = m.slice(1).filter((g) => g !== undefined).map(toNum);
-    if (nums.some((n) => !Number.isFinite(n))) continue;
-    return apply(nums[0], nums[1]);
+  let rest = q;
+  let out: { min?: number; max?: number } | undefined;
+  const meet = (r: IntRange) => {
+    out = {
+      ...(r.min !== undefined || out?.min !== undefined ? { min: Math.max(r.min ?? -Infinity, out?.min ?? -Infinity) } : {}),
+      ...(r.max !== undefined || out?.max !== undefined ? { max: Math.min(r.max ?? Infinity, out?.max ?? Infinity) } : {}),
+    };
+  };
+  for (let guard = 0; guard < 8; guard++) {
+    let hit = false;
+    for (const { re, apply } of RULES[field]) {
+      const m = rest.match(re);
+      if (!m) continue;
+      const nums = m.slice(1).filter((g) => g !== undefined).map(toNum);
+      if (nums.some((n) => !Number.isFinite(n))) continue;
+      meet(apply(nums[0], nums[1]));
+      rest = rest.slice(0, m.index) + ' '.repeat(m[0].length) + rest.slice((m.index ?? 0) + m[0].length);
+      hit = true;
+      break;
+    }
+    if (!hit) break;
   }
-  if (field === 'floor' && GROUND.test(q) && !/\bfirst\s+floor\s+(?:or|and)\b/i.test(q)) return { min: 1, max: 1 };
-  return undefined;
+  if (out === undefined && field === 'floor' && GROUND.test(q) && !/\bfirst\s+floor\s+(?:or|and)\b/i.test(q)) return { min: 1, max: 1 };
+  return out as IntRange | undefined;
 }
 
 /**
@@ -142,6 +163,11 @@ export function mentionsQuantity(q: string, field: Field): boolean {
     if (other !== field) rest = rest.replace(new RegExp(QUANTITIES[other].value, 'gi'), ' ');
   }
   return new RegExp(String.raw`${num}${near}\b${n}|\b${n}${near}${num}`, 'i').test(rest);
+}
+
+/** Distinct values the question states for a field ("2 bedrooms ... 3 bedrooms" is two). */
+export function statedValues(q: string, field: Field): number[] {
+  return [...new Set([...q.matchAll(new RegExp(QUANTITIES[field].value, 'gi'))].map((m) => toNum(m[1])).filter(Number.isFinite))];
 }
 
 export const parseBedroomRange = (q: string) => parseRange(q, 'bedrooms');

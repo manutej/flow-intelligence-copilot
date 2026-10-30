@@ -1,5 +1,5 @@
 import { typedQueryErrors } from './typed-query.ts';
-import { mentionsQuantity, type Field } from '../domain/comparators.ts';
+import { mentionsQuantity, statedValues, type Field } from '../domain/comparators.ts';
 import { unresolvedUnitWords } from './closed-world.ts';
 import { DATE_WINDOWS, type DateWindowSpec } from '../config/rules.ts';
 import type {
@@ -1254,7 +1254,9 @@ export function parseQueryIntent(question: string, store: PortfolioStore): Parse
     [...question.replace(/\boccupied\s+or\s+(?:on\s+)?notice\b/gi, 'occupied').matchAll(STATUS_WORD_RE)]
       .map((m) => { const w = m[0].toLowerCase().replace(/\s+/g, ' '); return STATUS_OF[w] ?? w; }),
   );
-  const uncovered = statuses.size > 1 || COVERAGE_RULES.some((r) => r.words.test(question) && !r.covered(intent));
+  // One exact value per field: two different ones cannot both hold.
+  const conflicting = (['bedrooms', 'bathrooms'] as const).some((f) => intent[f] !== undefined && statedValues(question, f).length > 1);
+  const uncovered = statuses.size > 1 || conflicting || COVERAGE_RULES.some((r) => r.words.test(question) && !r.covered(intent));
   // Only a valid TypedQuery is ever executed (S1R-L1-4).
   return unmet || uncovered || typedQueryErrors(intent).length > 0 ? { ...intent, measure: 'unsupported' } : intent;
 }

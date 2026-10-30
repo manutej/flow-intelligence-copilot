@@ -31,6 +31,8 @@ describe('F-061: comparators are typed rules that compose', () => {
     ['rent of at most $2,000', 'rent', { max: 2000 }],
     ['3 bedrooms or more', 'bedrooms', { min: 3 }],
     ['no more than 2 baths', 'bathrooms', { max: 2 }],
+    ['larger than 700 sq ft and 900 sq ft or less', 'sqft', { min: 701, max: 900 }],
+    ['on floor 3 or above and below floor 8', 'floor', { min: 3, max: 7 }],
   ];
   for (const [q, field, want] of cases) it(`${q} -> ${JSON.stringify(want)}`, () => assert.deepEqual(parseRange(q, field), want));
   it('"on or above floor N" counts floor N itself', async () => {
@@ -108,4 +110,11 @@ describe('F-069: the loader refuses unbounded spend and case-folded duplicate id
   it('1e9 spend is refused', () => assert.match(withRow('ils/spend.csv', 'S9997,2026-08,P01,Zillow,1e9,USD,posted') ?? '', /S9997 has amount 1e9/));
   it('spend over the row ceiling is refused', () => assert.match(withRow('ils/spend.csv', 'S9996,2026-08,P01,Zillow,1000000000,USD,posted') ?? '', /S9996 has amount/));
   it('a lowercase duplicate unit id is refused', () => assert.match(withRow('pms/units.csv', 'u0001,P01,826,1,1,600,8,none,2315,occupied') ?? '', /repeats unit_id u0001/));
+});
+
+describe('F-062: two exact values on one field are not answered as one of them', () => {
+  it('2 bedrooms and 3 bedrooms', async () => {
+    const r = await ask('How many units that have 2 bedrooms and that have 3 bedrooms are at P02?');
+    assert.equal(r.unknown, true, JSON.stringify(r));
+  });
 });
