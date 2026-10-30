@@ -33,6 +33,10 @@ export interface RunRecord {
   readonly latency_ms?: number;
   readonly verdict?: 'correct' | 'wrong' | 'unknown';
   readonly correction?: unknown;
+  /** Run-level fields, written by scripts/s2-live.ts for export-runs. */
+  readonly run_id?: string;
+  readonly qid?: string;
+  readonly outcome?: 'answered' | 'clarified' | 'dead_end' | 'wrong';
 }
 
 export const normalizeQuestion = (q: string): string => q.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
