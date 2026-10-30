@@ -115,6 +115,14 @@ const ACTION_RULES: ReadonlyArray<{ readonly action: FairHousingAction; readonly
       /\b(steer\w*|best\s+(?:building|property|place|fit|unit)s?\s+for|(?:building|property|unit)s?\s+(?:best\s+)?suited\s+for|suited\s+for|ideal\s+for|right\s+(?:building|fit)\s+for|recommend\s+(?:a\s+|the\s+)?(?:building|property)\s+for|where\s+should\s+(?:a|an|the)?\s*\w+.*\b(?:live|go)|which\s+(?:building|property)\s+(?:do|would|should|will)\s+.*\b(?:prefer|like|fit|suit)|put\s+(?:them|those|these)\s+in|demographic\s+fit|rank\w*\s+.*\b(?:fewest|most|least))\b/i,
   },
   {
+    // Steering by withholding: stop, avoid or never showing, marketing,
+    // offering or leasing to a group; keeping a group out of a building;
+    // showing a building only to a group; moving a group elsewhere.
+    action: 'steering',
+    pattern:
+      /\b((?:stop|stopped|quit|cease|halt|avoid|end)\s+(?:show|market|advertis|offer|rent|leas|tour|promot|send)\w*|(?:don'?t|do\s+not|never|shouldn'?t|should\s+not|not)\s+(?:be\s+)?(?:show|shown|market|advertis|offer|rent|leas|tour|promot|send)\w*|keep\s+(?:\w+[-\s]+){0,5}?(?:out|away)\b|show\w*\s+(?:\w+\s+){0,4}?only\s+(?:to|for)|(?:move|put|place|relocat\w*|send|assign)\s+(?:\w+[-\s]+){0,6}?(?:to|in|into)\s+(?:\w+\s+){0,4}?(?:instead\s+of|rather\s+than|not\s+(?:in|at|to)\b|away\s+from))/i,
+  },
+  {
     action: 'preference',
     pattern:
       /\b(prefer\w*|prioritiz\w*|favou?r\w*|ideal\s+(?:tenant|resident|renter|applicant)s?|perfect\s+for|great\s+for\s+(?:young|single|married|christian|families)|looking\s+for\s+(?:young|mature|christian|single|married)|write\s+(?:a\s+|an\s+)?(?:listing|ad|post)\b.*\b(?:for|to|that)\b)\b/i,

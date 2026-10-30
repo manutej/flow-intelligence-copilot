@@ -84,7 +84,7 @@ npm run flow-106  # P09 onboarding check
 ```
 
 - **Rule ablation:** one engine on `questions/dev.jsonl` with rules switched off (3/10), data rules only (8/10), and all rules (10/10).
-- **Probes (6), red-team questions (25) and the Fair Housing set (40 cases, 25 refuse and 15 allow):** written alongside the code, so they are regression checks, not accuracy estimates.
+- **Probes (6), red-team questions (25) and the Fair Housing set (54 cases, 34 refuse and 20 allow):** written alongside the code, so they are regression checks, not accuracy estimates.
 - **Held-out set:** `questions/heldout.jsonl`, 16 questions written after the engine, with answers computed by a separate script from the CSVs. Currently 15/16; the miss is "average square footage", which the parser reads as a unit count.
 - **600-question bank:** a snapshot of this engine's own past outputs. It catches drift, not errors.
 
