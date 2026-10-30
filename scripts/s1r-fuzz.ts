@@ -1,13 +1,14 @@
 /**
  * S1R seeded fuzz (S1R-G5, U1-U3). Seed chosen once before any run and never
- * used to tune: SEED=7311. Truth is computed from data/pms/units.csv here,
+ * used to tune. Round 1 used 7311; round 2 uses 4826 (fixed before its run).
+ * Exits 1 when any answer is wrong or an unbound filter is answered (F-084). Truth is computed from data/pms/units.csv here,
  * without FlowIQ code. Usage: node --no-warnings scripts/s1r-fuzz.ts [N]
  */
 import fs from 'node:fs';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
 
-const SEED = 7311;
+const SEED = Number(process.env.SEED ?? 4826);
 const N = Number(process.argv[2] ?? 2000);
 let s = SEED >>> 0;
 const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
@@ -78,3 +79,4 @@ for (let i = 0; i < N; i++) {
 const pct = (x: number) => Math.round((x / N) * 1000) / 10;
 console.log(JSON.stringify({ seed: SEED, questions: N, answered, wrong, wrongPctOfAnswered: Math.round((wrong / Math.max(1, answered)) * 1000) / 10, unknown, unboundAnswered,
   U1_answeredFirstTry: pct(answered - wrong), U2_answeredAfterOneClarify: pct(answered - wrong + clarifyRescued), U3_deadEndRate: pct(deadEnds) }));
+if (wrong > 0 || unboundAnswered > 0) process.exitCode = 1;
