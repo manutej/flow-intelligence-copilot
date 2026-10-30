@@ -59,7 +59,7 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
   },
   {
     protectedClass: 'disability',
-    legalBasis: `${FHA} § 3604(f)`,
+    legalBasis: `${FHA}(f)`,
     pattern:
       /\b(disab(?:ility|ilities|led)|handicap\w*|wheelchairs?|service\s+(?:animals?|dogs?)|emotional\s+support\s+animals?|esas?|blind|deaf|mental(?:ly)?\s+ill\w*|mental\s+health|hiv|aids\s+patients?|recovering\s+addicts?)\b/i,
   },
