@@ -1,3 +1,4 @@
+import { claimSchemaErrors, unexplainedNumbers } from './claim.ts';
 import type {
   AnswerEnvelope,
   CitationId,
@@ -214,8 +215,8 @@ function namedProperties(envelope: AnswerEnvelope): string[] {
 // Tables that can hold the rows a figure is computed from.
 const MONEY_TABLES = new Set(['spend', 'leases', 'decisions', 'units']);
 const UNIT_STATUS_WORDS: ReadonlyArray<[RegExp, string]> = [
-  [/\bvacan(?:t|cy|cies)\b/i, 'vacant'],
-  [/\boccupied\b/i, 'occupied'],
+  [/\b(?:vacan(?:t|cy|cies)|empty|available|unoccupied|unleased|open|free)\b/i, 'vacant'],
+  [/\b(?:occupied|taken|leased|rented|filled|in\s+use)\b/i, 'occupied'],
   [/\bon[-\s]notice\b/i, 'notice'],
 ];
 
@@ -244,6 +245,23 @@ function tableSizes(store: PortfolioStore): Map<string, Map<string, number>> {
 function figureErrors(envelope: AnswerEnvelope, store: PortfolioStore): string[] {
   const errors: string[] = [];
   const result = envelope.result ?? {};
+  errors.push(...claimSchemaErrors(result, store));
+  for (const n of unexplainedNumbers(envelope, store)) {
+    errors.push(`The answer states ${n}, which no checked value explains`);
+  }
+  // A cited unit belongs to a property the answer names, by ID or by name.
+  const text = envelope.answer ?? '';
+  const mentioned = new Set([
+    ...namedProperties(envelope),
+    ...store.properties.filter((p) => text.includes(p.propertyId) || text.includes(p.name)).map((p) => p.propertyId),
+  ]);
+  if (mentioned.size > 0) {
+    for (const u of store.units) {
+      if (envelope.citations.includes(u.citationId) && !mentioned.has(u.propertyId)) {
+        errors.push(`${u.citationId} belongs to ${u.propertyId}, which the answer does not name`);
+      }
+    }
+  }
   const stated = (envelope.answer ?? '').replace(/(\d),(?=\d{3})/g, '$1').match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
   for (const [key, value] of Object.entries(result)) {
     if (typeof value !== 'number' || !Number.isFinite(value)) continue;
