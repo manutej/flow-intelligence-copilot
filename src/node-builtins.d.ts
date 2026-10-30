@@ -52,6 +52,9 @@ declare module "node:fs" {
   export function chmodSync(path: string, mode: number): void;
   export function copyFileSync(src: string, dest: string): void;
   export function realpathSync(path: string): string;
+  export function mkdtempSync(prefix: string): string;
+  export function cpSync(src: string, dest: string, options?: { recursive?: boolean }): void;
+  export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
   const fsDefault: {
     readFileSync: typeof readFileSync;
     writeFileSync: typeof writeFileSync;
@@ -61,6 +64,9 @@ declare module "node:fs" {
     chmodSync: typeof chmodSync;
     copyFileSync: typeof copyFileSync;
     realpathSync: typeof realpathSync;
+    mkdtempSync: typeof mkdtempSync;
+    cpSync: typeof cpSync;
+    rmSync: typeof rmSync;
   };
   export default fsDefault;
 }
@@ -233,12 +239,14 @@ declare module "node:assert/strict" {
   ): void;
   export function ok(value: unknown, message?: string): asserts value;
   export function match(value: string, pattern: RegExp, message?: string): void;
+  export function doesNotMatch(value: string, pattern: RegExp, message?: string): void;
   export function throws(fn: () => unknown, error?: unknown, message?: string): void;
   const assertDefault: {
     equal: typeof equal;
     deepEqual: typeof deepEqual;
     ok: typeof ok;
     match: typeof match;
+    doesNotMatch: typeof doesNotMatch;
     throws: typeof throws;
   };
   export default assertDefault;

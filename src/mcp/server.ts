@@ -374,7 +374,12 @@ if (isExecutedDirectly()) {
     }
     let req: JsonRpcRequest;
     try {
-      req = JSON.parse(trimmed) as JsonRpcRequest;
+      const parsed: unknown = JSON.parse(trimmed);
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed) || typeof (parsed as { method?: unknown }).method !== 'string') {
+        process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request: expected a JSON-RPC object with a string method' } })}\n`);
+        return;
+      }
+      req = parsed as JsonRpcRequest;
     } catch (err) {
       // Only an unparseable line has no id to echo back.
       const errResp: JsonRpcResponse = {
@@ -396,7 +401,7 @@ if (isExecutedDirectly()) {
     } catch (err) {
       const errResp: JsonRpcResponse = {
         jsonrpc: '2.0',
-        id: req.id ?? null,
+        id: req?.id ?? null,
         error: {
           code: -32603,
           message: err instanceof Error ? err.message : 'Internal error',

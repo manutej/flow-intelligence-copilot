@@ -90,6 +90,44 @@ export function readCsvRecords(filePath: string): Array<Record<string, string>> 
   return rows;
 }
 
+/** A CSV export that is missing, empty, or lacks the columns the engine reads. */
+export class DataLoadError extends Error {
+  override readonly name = 'DataLoadError';
+}
+
+/** Columns each export must carry; the engine reads every one of them. */
+export const REQUIRED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  'pms/properties.csv': ['property_id', 'name', 'aka', 'address', 'neighborhood', 'year_built', 'class', 'amenities', 'pms', 'units'],
+  'pms/units.csv': ['unit_id', 'property_id', 'unit_number', 'bedrooms', 'bathrooms', 'sqft', 'floor', 'view', 'market_rent', 'status'],
+  'pms/leases.csv': ['lease_id', 'unit_id', 'resident_id', 'lease_type', 'start_date', 'end_date', 'monthly_rent', 'concession_usd', 'renewal_status'],
+  'crm/leads.csv': ['lead_id', 'property_id', 'created_date', 'source', 'bedrooms_wanted', 'toured', 'applied', 'leased', 'lease_id', 'notes'],
+  'ils/spend.csv': ['spend_id', 'month', 'property_id', 'source', 'amount', 'currency', 'status'],
+  'ops/decisions.csv': ['decision_id', 'month', 'property_id', 'source', 'recommendation', 'delta_usd', 'accepted', 'decided_by'],
+};
+
+/** Reads one export and fails with a DataLoadError naming the file and the problem. */
+export function readRequiredCsv(dataDir: string, relPath: string): Array<Record<string, string>> {
+  const filePath = path.join(dataDir, relPath);
+  if (!fs.existsSync(filePath)) {
+    throw new DataLoadError(`${filePath} does not exist`);
+  }
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const firstLine = content.split('\n').map((l) => l.replace(/\r$/, '')).find((l) => l.trim().length > 0);
+  if (!firstLine) {
+    throw new DataLoadError(`${filePath} is empty (expected a header row and data rows)`);
+  }
+  const headers = new Set(parseCsvLine(firstLine).map((h) => h.trim()));
+  const missing = (REQUIRED_COLUMNS[relPath] ?? []).filter((c) => !headers.has(c));
+  if (missing.length > 0) {
+    throw new DataLoadError(`${filePath} is missing column${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`);
+  }
+  const rows = readCsvRecords(filePath);
+  if (rows.length === 0) {
+    throw new DataLoadError(`${filePath} has a header but no data rows`);
+  }
+  return rows;
+}
+
 const PROMPT_INJECTION_PATTERNS: ReadonlyArray<{
   readonly pattern: RegExp;
   readonly reason: string;
@@ -208,16 +246,12 @@ export function loadPortfolioStore(
     return existing;
   }
 
-  const rawProperties = readCsvRecords(
-    path.join(dataDir, 'pms', 'properties.csv'),
-  );
-  const rawUnits = readCsvRecords(path.join(dataDir, 'pms', 'units.csv'));
-  const rawLeases = readCsvRecords(path.join(dataDir, 'pms', 'leases.csv'));
-  const rawLeads = readCsvRecords(path.join(dataDir, 'crm', 'leads.csv'));
-  const rawSpend = readCsvRecords(path.join(dataDir, 'ils', 'spend.csv'));
-  const rawDecisions = readCsvRecords(
-    path.join(dataDir, 'ops', 'decisions.csv'),
-  );
+  const rawProperties = readRequiredCsv(dataDir, 'pms/properties.csv');
+  const rawUnits = readRequiredCsv(dataDir, 'pms/units.csv');
+  const rawLeases = readRequiredCsv(dataDir, 'pms/leases.csv');
+  const rawLeads = readRequiredCsv(dataDir, 'crm/leads.csv');
+  const rawSpend = readRequiredCsv(dataDir, 'ils/spend.csv');
+  const rawDecisions = readRequiredCsv(dataDir, 'ops/decisions.csv');
 
   const primaryKeyIndex = new Set<CitationId>();
 
