@@ -81,3 +81,16 @@ for (const [k, q] of L2_UNSEEN) {
 }
 console.log(`L2 unseen     precision ${(100 * utp / Math.max(1, utp + ufp)).toFixed(1)}% recall ${(100 * utp / Math.max(1, utp + ufn)).toFixed(1)}% (tp ${utp} fp ${ufp} fn ${ufn})`);
 if (verbose) for (const m of unseenMiss) console.log('  L2u ' + m);
+
+// L1 on probes written after the coverage rules, never tuned against.
+const { L1_UNSEEN } = await import('../tests/fixtures/layers/l1-unseen.ts');
+let u1 = 0, u1Wrong = 0;
+for (const c of L1_UNSEEN) {
+  const t = await askFlowIqCopilot(c.q, { store });
+  const r = t.envelope.result as Record<string, unknown>;
+  const n = r.unknown ? undefined : claimedNumber(r);
+  const want = c.oracle?.(store);
+  const ok = n === undefined ? c.oracle === null || c.unknownOk === true : want !== undefined && Math.abs(n - want) <= 0.051;
+  if (ok) u1++; else { if (n !== undefined) u1Wrong++; if (verbose) console.log(`  L1u ${JSON.stringify(c.q)} -> ${n ?? 'unknown'} want ${want ?? 'unknown'}`); }
+}
+console.log(`L1 unseen     accuracy ${(100 * u1 / L1_UNSEEN.length).toFixed(1)}% (${u1}/${L1_UNSEEN.length}), wrong numbers ${u1Wrong}`);

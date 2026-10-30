@@ -246,7 +246,7 @@ export function parseUnitViewFilter(
   store?: PortfolioStore,
 ): string | undefined {
   if (
-    /\b(view\s*[=:]\s*['"`]?none['"`]?|with\s+view\s+['"`]?none['"`]?|no[-\s]view\s+units?|units?\s+with\s+no\s+view)\b/i.test(
+    /\b(view\s*[=:]\s*['"`]?none['"`]?|with\s+view\s+['"`]?none['"`]?|no[-\s]view\s+units?|units?\s+with\s+no\s+view|(?:have|has|with)\s+no\s+views?|without\s+(?:a\s+)?views?)\b/i.test(
       question,
     )
   ) {
@@ -297,7 +297,7 @@ export function parseUnitViewFilter(
 
 export function parseUnitStatusFilter(question: string): UnitStatus | undefined {
   if (
-    /\b(vacant|vacanc(?:y|ies)|unoccupied|empty|open\s+(?:units?|apartments?|studios?|1br|2br)|available\s+(?:units?|apartments?|studios?)|status\s*=\s*['"`]?vacant['"`]?)\b/i.test(
+    /\b(vacant|vacanc(?:y|ies)|unoccupied|empty|open\s+(?:units?|apartments?|studios?|1br|2br)|available\s+(?:units?|apartments?|studios?)|(?:are|is)\s+(?:currently\s+|now\s+)?available|status\s*=\s*['"`]?vacant['"`]?)\b/i.test(
       question,
     ) &&
     !/\bvacancy\s+rate\b/i.test(question)
@@ -315,7 +315,7 @@ export function parseUnitStatusFilter(question: string): UnitStatus | undefined 
     return 'notice';
   }
   if (
-    /\b(occupied\s+units?|status\s*=\s*['"`]?occupied['"`]?)\b/i.test(
+    /\b(occupied\s+(?:units?|apartments?|homes?|studios?|residences?)|(?:are|is)\s+(?:currently\s+|now\s+)?occupied|status\s*=\s*['"`]?occupied['"`]?)\b/i.test(
       question,
     ) &&
     !/\b(share\s+of|percentage\s+of|occupancy\s+rate)\b/i.test(question)
@@ -1205,9 +1205,40 @@ const REQUESTED_STATISTIC: ReadonlyArray<readonly [Statistic | 'median', RegExp]
   ['share', /\b(?:percent(?:age)?|share|fraction|proportion)\b|%/i],
 ];
 
+/**
+ * Closed-grammar coverage (L1): a word the question uses to narrow the
+ * answer must land in a typed field, or the typed query does not mean what
+ * was asked and the honest answer is "I don't know" (F-040). Each rule names
+ * the words and the field that has to carry them.
+ */
+const COVERAGE_RULES: ReadonlyArray<{
+  readonly words: RegExp;
+  readonly covered: (i: ParsedQueryIntent) => boolean;
+}> = [
+  // A unit status the parser did not turn into a filter.
+  { words: /\b(?:vacant|vacanc\w*|occupied|occupancy|on\s+notice|available|unoccupied|empty)\b/i,
+    covered: (i) => i.unitStatus !== undefined || i.domain !== 'units' || /rate|share/.test(i.measure) },
+  // A view the parser did not turn into a filter.
+  { words: /\bviews?\b/i, covered: (i) => i.view !== undefined || i.domain !== 'units' },
+  // Lease rent is not market rent.
+  { words: /\b(?:lease|leased|monthly)\s+rents?\b|\brent\s+on\s+leases\b/i,
+    covered: (i) => !/market_rent|rent_per_sqft/.test(i.measure) },
+];
+
+// The typed query holds one status, so two statuses (joined by "or" or
+// "and") cannot be expressed. The policy's own "occupied or notice" is the
+// one exception, since that is how occupancy is defined.
+const STATUS_WORD_RE = /\b(?:vacant|unoccupied|empty|available|occupied|on\s+notice)\b/gi;
+const STATUS_OF: Readonly<Record<string, string>> = { unoccupied: 'vacant', empty: 'vacant', available: 'vacant', 'on notice': 'notice' };
+
 export function parseQueryIntent(question: string, store: PortfolioStore): ParsedQueryIntent {
   const intent = parseQueryIntentRaw(question, store);
   const produced = MEASURE_STATISTICS[intent.measure];
   const unmet = REQUESTED_STATISTIC.some(([stat, re]) => re.test(question) && !produced.includes(stat as Statistic));
-  return unmet ? { ...intent, measure: 'unsupported' } : intent;
+  const statuses = new Set(
+    [...question.replace(/\boccupied\s+or\s+(?:on\s+)?notice\b/gi, 'occupied').matchAll(STATUS_WORD_RE)]
+      .map((m) => { const w = m[0].toLowerCase().replace(/\s+/g, ' '); return STATUS_OF[w] ?? w; }),
+  );
+  const uncovered = statuses.size > 1 || COVERAGE_RULES.some((r) => r.words.test(question) && !r.covered(intent));
+  return unmet || uncovered ? { ...intent, measure: 'unsupported' } : intent;
 }
