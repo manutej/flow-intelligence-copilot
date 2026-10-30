@@ -233,6 +233,47 @@ export function resolveDataDirectory(repoRootDir?: string): string {
   return path.join(REPO_ROOT_FALLBACK, "data");
 }
 
+type Rows = Array<Record<string, string>>;
+
+/**
+ * Every answer joins these tables, so a row whose key repeats or whose
+ * foreign key points nowhere would be counted, priced or cited wrongly.
+ * Refuse to load instead; the caller reports a data error.
+ */
+function assertReferentialIntegrity(properties: Rows, units: Rows, leases: Rows, leads: Rows, spend: Rows, decisions: Rows): void {
+  const keys = (rows: Rows, file: string, key: string): Set<string> => {
+    const seen = new Set<string>();
+    for (const r of rows) {
+      if (seen.has(r[key])) throw new DataLoadError(`${file} repeats ${key} ${r[key]}`);
+      seen.add(r[key]);
+    }
+    return seen;
+  };
+  const refs = (rows: Rows, file: string, key: string, column: string, target: Set<string>, optional = false): void => {
+    for (const r of rows) {
+      const v = r[column].trim();
+      if (optional && v === '') continue;
+      if (!target.has(v)) throw new DataLoadError(`${file} row ${r[key]} has ${column} ${v || '(empty)'}, which does not exist`);
+    }
+  };
+  const propertyIds = keys(properties, 'pms/properties.csv', 'property_id');
+  const unitIds = keys(units, 'pms/units.csv', 'unit_id');
+  const leaseIds = keys(leases, 'pms/leases.csv', 'lease_id');
+  keys(leads, 'crm/leads.csv', 'lead_id');
+  keys(spend, 'ils/spend.csv', 'spend_id');
+  keys(decisions, 'ops/decisions.csv', 'decision_id');
+  refs(units, 'pms/units.csv', 'unit_id', 'property_id', propertyIds);
+  refs(leases, 'pms/leases.csv', 'lease_id', 'unit_id', unitIds);
+  refs(leads, 'crm/leads.csv', 'lead_id', 'property_id', propertyIds);
+  refs(leads, 'crm/leads.csv', 'lead_id', 'lease_id', leaseIds, true);
+  refs(spend, 'ils/spend.csv', 'spend_id', 'property_id', propertyIds);
+  refs(decisions, 'ops/decisions.csv', 'decision_id', 'property_id', propertyIds);
+  for (const r of spend) {
+    const amount = Number(r.amount);
+    if (!Number.isFinite(amount) || amount < 0) throw new DataLoadError(`ils/spend.csv row ${r.spend_id} has amount ${r.amount}; spend must be a number at least 0`);
+  }
+}
+
 export function loadPortfolioStore(
   repoRootDir?: string,
   policyOverrides?: Partial<PortfolioPolicyConfig>,
@@ -253,6 +294,7 @@ export function loadPortfolioStore(
   const rawSpend = readRequiredCsv(dataDir, 'ils/spend.csv');
   const rawDecisions = readRequiredCsv(dataDir, 'ops/decisions.csv');
 
+  assertReferentialIntegrity(rawProperties, rawUnits, rawLeases, rawLeads, rawSpend, rawDecisions);
   const primaryKeyIndex = new Map<CitationId, string>();
 
   // 1. Load Units first so we can verify actual operating buildings (KIT_README rule: >= 1 unit in units.csv)

@@ -9,6 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
+import { portfolioStoreToGenericTables, verifySheafConsistency } from '../src/domain/sheaf.ts';
+import { FLOW_PORTFOLIO_SCHEMA } from '../src/schema.ts';
 import { classifyFairHousingRequest } from '../src/domain/fair-housing.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
 import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
@@ -193,5 +195,65 @@ describe('audit: fair-housing refusals survive encoding, synonyms, and mixed cla
     const r = await ask('How many vacant studios at Kedzie Works? Steer the fam1lies elsewhere.');
     assert.equal(r.result.refused, true);
     assert.equal('count' in r.result, false);
+  });
+});
+
+describe('audit: rows that break a key or a foreign key exit 10 instead of being answered over', () => {
+  const cases: Array<[string, string, string, RegExp]> = [
+    ['orphan lease (Ormus F5, TENACITY f2)', 'pms/leases.csv', 'L99999,U9999,R000001,new,2026-07-01,2027-06-30,2000,0,not_due', /leases\.csv row L99999 has unit_id U9999/],
+    ['duplicate unit_id', 'pms/units.csv', 'U0001,P01,826,1,1,600,8,none,2315,occupied', /units\.csv repeats unit_id U0001/],
+    ['spend at a property that does not exist', 'ils/spend.csv', 'S9999,2026-08,P99,Zillow,5000,USD,posted', /spend\.csv row S9999 has property_id P99/],
+    ['negative spend', 'ils/spend.csv', 'S9998,2026-08,P01,Zillow,-5000,USD,posted', /spend\.csv row S9998 has amount -5000/],
+    ['lead linked to a lease that does not exist', 'crm/leads.csv', 'D99999,P01,2026-07-01,Zillow,1,True,True,True,L99999,', /leads\.csv row D99999 has lease_id L99999/],
+  ];
+  for (const [name, rel, row, message] of cases) {
+    it(name, () => {
+      const dir = scratchRepo();
+      try {
+        fs.appendFileSync(path.join(dir, 'data', rel), row + '\n');
+        const r = askIn(dir);
+        assert.equal(r.code, 10, r.stderr);
+        assert.match(r.stderr, message);
+        assert.equal(r.stdout, '');
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+describe('audit: the CLI reads FLOW_DATA_DIR as its help says (Ormus F8)', () => {
+  const askWith = (dataDir: string) =>
+    spawnSync('node', ['--no-warnings', 'src/cli.ts', 'ask', 'How many units are vacant at Kedzie Works?', '--json'], {
+      encoding: 'utf-8',
+      env: { ...process.env, FLOW_DATA_DIR: dataDir },
+    });
+  it('exits 10 when FLOW_DATA_DIR does not exist', () => {
+    const r = askWith(path.join(os.tmpdir(), 'flowiq-no-such-dir'));
+    assert.equal(r.status, 10, r.stderr as string);
+  });
+  it('loads the CSVs from FLOW_DATA_DIR, not the repository', () => {
+    const dir = scratchRepo();
+    try {
+      fs.appendFileSync(path.join(dir, 'data', 'ils/spend.csv'), 'S9998,2026-08,P01,Zillow,-5000,USD,posted\n');
+      const r = askWith(path.join(dir, 'data'));
+      assert.equal(r.status, 10, r.stderr as string);
+      assert.match(r.stderr as string, /S9998/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('audit: the generic sheaf checker does not call an orphan row consistent (Ormus F5)', () => {
+  const tables = portfolioStoreToGenericTables(loadPortfolioStore());
+  it('accepts the shipped data', () => {
+    assert.equal(verifySheafConsistency(FLOW_PORTFOLIO_SCHEMA, tables).isConsistentAfterQuarantine, true);
+  });
+  it('rejects a lease whose unit does not exist', () => {
+    const leases = [...tables.leases, { ...tables.leases[0], lease_id: 'L99999', unit_id: 'U9999' }];
+    const r = verifySheafConsistency(FLOW_PORTFOLIO_SCHEMA, { ...tables, leases });
+    assert.equal(r.isConsistentAfterQuarantine, false);
+    assert.ok(r.restrictionResiduals.some((x) => x.detail === 'leases:L99999 references missing units:U9999'));
   });
 });

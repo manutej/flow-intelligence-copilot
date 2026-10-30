@@ -87,7 +87,7 @@ class NotFoundError extends Error {}
 
 function loadStore(ctx: Ctx, overrides?: Partial<PortfolioPolicyConfig>): PortfolioStore {
   try {
-    return loadPortfolioStore(ctx.repoRoot, overrides);
+    return loadPortfolioStore(process.env.FLOW_DATA_DIR || ctx.repoRoot, overrides);
   } catch (err) {
     process.stderr.write(
       `flowiq: could not load the CSV exports: ${err instanceof Error ? err.message : String(err)}\n` +

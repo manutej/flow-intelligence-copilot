@@ -624,6 +624,7 @@ export function verifySheafConsistency(
   // 2. Evaluate 1-cell Restriction Maps rho_{v->e} in a single O(N) hash-join pass
   const restrictionResiduals: GenericRestrictionResidual[] = [];
   let maxCoboundaryNorm = 0;
+  let danglingReferenceCount = 0;
 
   for (const r of schema.restrictions) {
     const sourceRows = tables[r.sourceStalk] ?? [];
@@ -631,6 +632,27 @@ export function verifySheafConsistency(
       schema.stalks.find((s) => s.name === r.sourceStalk)?.primaryKey ?? 'id';
     const targetActive = activeIndexByStalk.get(r.targetStalk) ?? new Map();
     const targetAll = allIndexByStalk.get(r.targetStalk) ?? new Map();
+
+    // A key that names no row at all is never consistent, whatever the restriction kind.
+    for (const row of sourceRows) {
+      const fk = String(row[r.foreignKey] ?? '');
+      if (!fk || targetAll.has(fk)) continue;
+      danglingReferenceCount += 1;
+      if (r.kind === 'referential_support') continue; // reported below with the quarantined parents
+      const sPk = String(row[sourcePkField] ?? '');
+      restrictionResiduals.push({
+        restrictionId: r.id,
+        kind: r.kind,
+        sourceStalk: r.sourceStalk,
+        targetStalk: r.targetStalk,
+        primaryKey: sPk,
+        foreignKey: fk,
+        residualNorm: 1,
+        detail: `${r.sourceStalk}:${sPk} references missing ${r.targetStalk}:${fk}`,
+        citations: [`${r.sourceStalk}:${sPk}`],
+      });
+      maxCoboundaryNorm = Math.max(maxCoboundaryNorm, 1);
+    }
 
     if (r.kind === 'referential_support') {
       for (const [tPk, tRow] of targetAll.entries()) {
@@ -803,7 +825,7 @@ export function verifySheafConsistency(
     quarantinedRecords,
     restrictionResiduals,
     maxCoboundaryNorm,
-    isConsistentAfterQuarantine: restrictionResiduals.every(
+    isConsistentAfterQuarantine: danglingReferenceCount === 0 && restrictionResiduals.every(
       (res) => res.kind !== 'temporal_monotonicity' || res.residualNorm < 1,
     ),
   };

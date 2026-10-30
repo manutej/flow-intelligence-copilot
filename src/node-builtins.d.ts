@@ -55,6 +55,7 @@ declare module "node:fs" {
   export function mkdtempSync(prefix: string): string;
   export function cpSync(src: string, dest: string, options?: { recursive?: boolean }): void;
   export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
+  export function appendFileSync(path: string, data: string): void;
   const fsDefault: {
     readFileSync: typeof readFileSync;
     writeFileSync: typeof writeFileSync;
@@ -67,6 +68,7 @@ declare module "node:fs" {
     mkdtempSync: typeof mkdtempSync;
     cpSync: typeof cpSync;
     rmSync: typeof rmSync;
+    appendFileSync: typeof appendFileSync;
   };
   export default fsDefault;
 }
