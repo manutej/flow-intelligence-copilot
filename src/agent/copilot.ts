@@ -131,8 +131,11 @@ export async function askFlowIqCopilot(
 
   // L2 model layer: decomposed sub-questions that can only add a refusal to
   // the deterministic check above. Off unless FLOWIQ_FRAME_MODEL is set.
-  if (frameModelConfig()) {
+  const frameCfg = frameModelConfig();
+  let frameFallback: string | null = null;
+  if (frameCfg) {
     const frame = await classifyFrame(question);
+    frameFallback = frame.fallbackReason;
     if (frame.refuse) {
       const envelope: AnswerEnvelope = {
         id: qRecord.id,
@@ -145,9 +148,9 @@ export async function askFlowIqCopilot(
         toolCalls,
         clarificationNeeded: false,
         clarifyingQuestion: null,
-        modeUsed: 'deterministic',
-        providerUsed: 'deterministic',
-        modelUsed: 'flowiq-deterministic-v2.0',
+        modeUsed: 'llm',
+        providerUsed: 'openrouter',
+        modelUsed: frameCfg.model,
         llmFallbackReason: null,
         verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
       };
@@ -166,7 +169,7 @@ export async function askFlowIqCopilot(
       return runDeterministicToolRouter(
         qRecord,
         store,
-        'No external LLM provider configured (set OLLAMA_HOST, LOCAL_LLM_BASE_URL, OPENROUTER_API_KEY, XAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY); used local compositional planner',
+        [frameFallback, 'No external LLM provider configured (set OLLAMA_HOST, LOCAL_LLM_BASE_URL, OPENROUTER_API_KEY, XAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY); used local compositional planner'].filter(Boolean).join('. '),
       );
     }
 
@@ -184,12 +187,12 @@ export async function askFlowIqCopilot(
         harnessRes.providerUsed === 'deterministic' ? 'deterministic' : 'llm',
       providerUsed: harnessRes.providerUsed,
       modelUsed: harnessRes.modelUsed,
-      llmFallbackReason: harnessRes.fallbackReason,
+      llmFallbackReason: harnessRes.fallbackReason ?? frameFallback,
       verification: harnessRes.verification,
     };
   }
 
-  return runDeterministicToolRouter(qRecord, store, null);
+  return runDeterministicToolRouter(qRecord, store, frameFallback);
 }
 
 export function runDeterministicToolRouter(

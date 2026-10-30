@@ -67,10 +67,23 @@ export function parseFrameAnswers(raw: unknown): FrameAnswers | null {
 /** The operad's composition: a fixed rule over the typed answers. */
 export const composeFrame = (a: FrameAnswers): boolean => a.group !== 'none' && a.treatment;
 
+/**
+ * After a 429 the model is not called again until OpenRouter's Retry-After
+ * (or 60 s) has passed, so a rate limit never turns into a retry storm.
+ */
+let pausedUntil = 0;
+
 export async function classifyFrame(question: string, timeoutMs = 8000): Promise<FrameVerdict> {
   const cfg = frameModelConfig();
-  const off = (why: string): FrameVerdict => ({ refuse: false, answers: null, fallbackReason: why });
-  if (!cfg) return off('frame model not configured');
+  const off = (why: string): FrameVerdict => {
+    const fallbackReason = `${why}; L2 ran on the deterministic grammar only`;
+    if (cfg) console.error(`[flowiq] frame model fallback: ${fallbackReason}`);
+    return { refuse: false, answers: null, fallbackReason };
+  };
+  if (!cfg) return { refuse: false, answers: null, fallbackReason: null };
+  if (Date.now() < pausedUntil) {
+    return off(`frame model rate-limited (HTTP 429), not called again until ${new Date(pausedUntil).toISOString()}`);
+  }
   try {
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -83,6 +96,11 @@ export async function classifyFrame(question: string, timeoutMs = 8000): Promise
         messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: question }],
       }),
     });
+    if (res.status === 429) {
+      const wait = Number(res.headers.get('retry-after')) || 60;
+      pausedUntil = Date.now() + wait * 1000;
+      return off(`frame model rate-limited by OpenRouter (HTTP 429), not retried for ${wait} s`);
+    }
     if (!res.ok) return off(`frame model HTTP ${res.status}`);
     const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const text = body.choices?.[0]?.message?.content ?? '';

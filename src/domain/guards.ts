@@ -67,7 +67,10 @@ export function checkFairHousingGuard(
       : '';
 
   const classLabels = matchedRules.map((r) => r.protectedClass).join(' and ');
-  const legalBasisList = [...new Set(matchedRules.map((r) => r.legalBasis))];
+  // A refusal by the closed grammar may name no lexicon class; it still rests on both acts.
+  const legalBasisList = matchedRules.length > 0
+    ? [...new Set(matchedRules.map((r) => r.legalBasis))]
+    : ['Fair Housing Act', 'Illinois Human Rights Act'];
   const legalBases = legalBasisList.join(' and ');
   const prohibitVerb = legalBasisList.length === 1 ? 'prohibits' : 'prohibit';
 

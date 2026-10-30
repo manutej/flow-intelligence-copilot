@@ -320,6 +320,7 @@ export async function handleMcpJsonRpcRequest(
           result: turn.envelope.result,
           citations: turn.envelope.citations,
           clarificationNeeded: turn.clarificationNeeded,
+          fallbackReason: turn.llmFallbackReason,
           toolCalls: turn.toolCalls.map((tc) => ({
             toolName: tc.toolName,
             args: tc.args,

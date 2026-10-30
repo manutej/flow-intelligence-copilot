@@ -115,3 +115,15 @@ for (const [k, q] of L2_CLOSED_UNSEEN) {
   else if (refused) { cfp++; if (verbose) console.log(`  L2c false ${q}`); }
 }
 console.log(`L2 closed-unseen precision ${(100 * ctp / Math.max(1, ctp + cfp)).toFixed(1)}% recall ${(100 * ctp / Math.max(1, ctp + cfn)).toFixed(1)}% (tp ${ctp} fp ${cfp} fn ${cfn})`);
+
+// The L2 model layer, when configured: say how often it fell back, and why.
+if (process.env.FLOWIQ_FRAME_MODEL) {
+  const reasons = new Map<string, number>();
+  for (const [, q] of L2_CLOSED_UNSEEN) {
+    const t = await askFlowIqCopilot(q, { store });
+    const why = t.llmFallbackReason?.match(/frame model [^;]*/)?.[0].replace(/ until \S+| for \d+ s/, '');
+    if (why) reasons.set(why, (reasons.get(why) ?? 0) + 1);
+  }
+  const n = [...reasons.values()].reduce((a, b) => a + b, 0);
+  console.log(`L2 model      fallbacks ${n}/${L2_CLOSED_UNSEEN.length}${n ? ` (${[...reasons].map(([r, c]) => `${c}x ${r}`).join('; ')})` : ''}`);
+}
