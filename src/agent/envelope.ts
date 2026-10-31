@@ -1,4 +1,10 @@
-import { createHash, createHmac, randomBytes } from 'node:crypto';
+import * as nodeCrypto from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
+
+// The pinned @types/node predates createHmac's export; it exists at runtime.
+const { createHmac } = nodeCrypto as unknown as {
+  createHmac(alg: string, key: unknown): { update(data: string): { digest(enc: 'hex'): string } };
+};
 import type { AnswerEnvelope, AnswerProof, PortfolioStore, TypedQuery } from '../data/schema.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 import { executeCompositionalPlan } from './planner.ts';
