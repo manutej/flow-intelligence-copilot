@@ -42,14 +42,32 @@ test('L2: zero-width, accents, CJK, Cyrillic, any-case roman, currency signs and
 // TENACITY VERDICT-GENUI-7672cd4 M2: the server's own specs must pass the detector.
 test('M2: intent ids are not text, and whole numeric tokens from the question (with $ % #) echo in titles', async () => {
   for (const q of ['What was H1 spend versus Q3 spend for Facebook Ads at class B buildings?',
-    'At The Clarendon (P04) with prior beta0=$1800, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD']) {
+    'At The Clarendon (P04) with prior beta0=$3250, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD']) {
     const a = await askPanel(q, store);
     assert.deepEqual(a.errors, [], q); assert.notEqual(a.spec.state, 'error_data', q);
   }
+  // the question states the policy prior ($3250), so it still charts; a different prior now
+  // clarifies (59be53f HIGH), which is why this used $1800 before
   // the echo is the whole token only: a bare figure the question wrote with $ is still a figure
-  const q = 'At The Clarendon (P04) with prior beta0=$1800, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD';
+  const q = 'At The Clarendon (P04) with prior beta0=$3250, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD';
   const a = await askPanel(q, store);
   const t = (title: string) => { const s = structuredClone(a.spec) as any; s.title = title; return specErrors(s, a.evidence, store); };
-  assert.deepEqual(t('Prior $1800, ranked #1'), []);
-  for (const bad of ['Prior 1800 leases', 'Prior $18000', 'Prior $1800.5', 'Prior 1800%', '#2 channel']) assert.ok(t(bad).length > 0, `accepted: ${bad}`);
+  assert.deepEqual(t('Prior $3250, ranked #1'), []);
+  for (const bad of ['Prior 3250 leases', 'Prior $32500', 'Prior $3250.5', 'Prior 3250%', '#2 channel']) assert.ok(t(bad).length > 0, `accepted: ${bad}`);
+});
+
+// TENACITY VERDICT-GENUI-59be53f HIGH: a prior the user states is not applied by the learner
+// (it always uses the policy beta0), so the panel must not chart policy-prior numbers under it.
+test('HIGH: a stated prior that differs from the policy beta0 gives a clarify, never a chart', async () => {
+  const policy = store.policy.priorSpendUsdBeta0;
+  const base = (pr: string) => `At The Clarendon (P04) with ${pr}, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?`;
+  for (const pr of ['prior beta0=$1800', 'prior beta0=$2026', 'a prior of 1800 dollars', 'beta0 of $1.8k', 'β0 = 1,800 USD']) {
+    const a = await askPanel(base(pr), store);
+    assert.equal(a.spec.template, 'clarify_card', pr); assert.deepEqual(a.errors, [], pr);
+    assert.match(JSON.stringify(a.spec.props), new RegExp(`\\$${policy}`), pr);
+  }
+  const same = await askPanel(base(`prior beta0=$${policy}`), store);
+  assert.notEqual(same.spec.template, 'clarify_card');
+  const plain = await askPanel('At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?', store);
+  assert.notEqual(plain.spec.template, 'clarify_card');
 });

@@ -274,6 +274,20 @@ export function intentGate(turn: CopilotTurnResult, core: string, store: Portfol
   return { ...clarify('clarify', turn, turn.envelope.proof.template_id, core), insight: 'The parsed reading differs from the question text', title: 'Which did you mean?' };
 }
 
+/**
+ * A spend prior the user states in the question (TENACITY 59be53f HIGH). The learner always uses
+ * the policy beta0, so a different stated prior is not applied and the numbers would not match it.
+ * "beta0"/"β0" take any number; a bare "prior" needs a money marker so "prior 3 months" is not one.
+ */
+const PRIOR_BETA = /(?:\bbeta[_ ]?0|β0)\s*(?:=|of|is|at|:)?\s*(?:usd\s*)?\$?\s*(\d[\d,]*(?:\.\d+)?)\s*(k\b)?/iu;
+const PRIOR_MONEY = /\bprior(?:\s+spend)?\s*(?:=|of|is|at|:)?\s*(?:(?:usd\s*)?\$\s*(\d[\d,]*(?:\.\d+)?)\s*(k\b)?|(\d[\d,]*(?:\.\d+)?)\s*(k\b)?\s*(?:dollars|usd)\b)/i;
+export function statedPrior(q: string): number | null {
+  const m = q.normalize('NFKC').match(PRIOR_BETA) ?? q.normalize('NFKC').match(PRIOR_MONEY);
+  if (!m) return null;
+  const n = m[1] ?? m[3], k = m[2] ?? m[4];
+  return Number(n.replace(/,/g, '')) * (k ? 1000 : 1);
+}
+
 /** Full path: S2 parse (model if configured, deterministic otherwise) -> picker -> validated spec. */
 export async function askPanel(input: string, store: PortfolioStore, parse: ParseConfig | null = null): Promise<Panel> {
   // multi-turn input "a → b → c" runs every turn in one fair-housing session; the last turn is charted
@@ -284,6 +298,11 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   const question = turns[turns.length - 1];
   const gate = intentGate(turn, coreQuestion(question), store);
   if (gate) return { question: input, spec: gate, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
+  const prior = statedPrior(coreQuestion(question)), policyPrior = store.policy.priorSpendUsdBeta0;
+  if (prior !== null && prior !== policyPrior) {
+    const t = { ...turn, clarifyingQuestion: `This analysis uses the policy prior beta0 = $${policyPrior}. A prior stated in the question is not applied, so nothing is charted. Ask again without the prior, or change beta0 in the policy.`, clarifyOptions: [] };
+    return { question: input, spec: { ...clarify('unknown', t as CopilotTurnResult, turn.envelope.proof?.template_id ?? 'guard', question), insight: 'Stated prior is not applied', title: 'This prior is not supported' }, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
+  }
   const { spec, evidence } = pick({ question, turn, store });
   const errors = specErrors(spec, evidence, store);
   // a spec that fails fidelity is never rendered as a chart
