@@ -22,7 +22,7 @@ import { droppedBreakdownOf, scalarLeftoverOf, parseQueryIntent, sourceModeOf, U
 import {
   dataCoverage,
   describeCoverage,
-  findUnknownBuildingReference,
+  findUnresolvedPlace,
   findUntrackedChannel,
   hasUnitSignal,
   UNKNOWN_HINT,
@@ -147,7 +147,7 @@ export function executeCompositionalPlan(
   const isFreeSource = (src: string): boolean =>
     store.organicSources.includes(src) && !store.paidSources.includes(src);
 
-  const unknownBuilding = findUnknownBuildingReference(question, store);
+  const unknownBuilding = findUnresolvedPlace(question, store);
   if (unknownBuilding) {
     return unknown(
       `no building called "${unknownBuilding}" is in data/pms/properties.csv (known buildings: ${store.properties.map((p) => `${p.propertyId} ${p.name}`).join(', ')}).`,
@@ -652,7 +652,7 @@ export function executeCompositionalPlan(
         .sort((a, b) => b.applyRatePercent - a.applyRatePercent);
       const top = ranked[0];
       return finalize(
-        `In ${mkt.windowLabel}, paid source apply rates (applied / deduplicated leads) ranked: ${ranked.map((s) => `${s.source} ${s.applyRatePercent.toFixed(1)}% (${s.appliedCount}/${s.leadsCreatedCount})`).join(', ')}.`,
+        `${matchedPropIds && matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)} in` : 'In'} ${mkt.windowLabel}, paid source apply rates (applied / deduplicated leads) ranked: ${ranked.map((s) => `${s.source} ${s.applyRatePercent.toFixed(1)}% (${s.appliedCount}/${s.leadsCreatedCount})`).join(', ')}.`,
         {
           source: top.source,
           percent: top.applyRatePercent,
@@ -934,13 +934,17 @@ export function executeCompositionalPlan(
         rows.flatMap((r) => r.citations.slice(0, 2)).slice(0, 12),
       );
     }
-    // Ranked.
+    // Ranked. One key for the sort and the tie test, so they cannot disagree.
+    const cpslKey = (r: (typeof cpslRows)[number]): number =>
+      r.exactCostPerSignedLeaseUsd ?? r.costPerSignedLeaseUsd ?? Number.NaN;
+    const zeroNote =
+      isSingleBuilding && zeroLeasePaid.length > 0
+        ? ` (Note: ${zeroLeasePaid.join(', ')} signed 0 leases and therefore has no defined cost per signed lease; any untrusted CRM free-text notes claiming otherwise are quarantined.)`
+        : '';
     const eligible = cpslRows
       .filter((r) => r.isPaidSource && r.signedLeasesInPeriod > 0 && r.costPerSignedLeaseUsd !== null)
       .sort((a, b) =>
-        (wantHighest
-          ? (b.exactCostPerSignedLeaseUsd ?? 0) - (a.exactCostPerSignedLeaseUsd ?? 0)
-          : (a.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY) - (b.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY)) || a.source.localeCompare(b.source),
+        (wantHighest ? cpslKey(b) - cpslKey(a) : cpslKey(a) - cpslKey(b)) || a.source.localeCompare(b.source),
       );
     const best = eligible[0];
     if (!best) {
@@ -952,19 +956,15 @@ export function executeCompositionalPlan(
         isSingleBuilding ? propRes?.citations ?? [] : mkt.citations.slice(0, 8),
       );
     }
-    const tiedCpsl = tiedAtTop(eligible, (r) => r.exactCostPerSignedLeaseUsd ?? r.costPerSignedLeaseUsd!);
+    const tiedCpsl = tiedAtTop(eligible, cpslKey);
     if (tiedCpsl.length > 1) {
       return finalize(
-        `${isSingleBuilding ? `At ${buildingLabel(matchedPropIds)}` : scope} in ${mkt.windowLabel}, ${listNames(tiedCpsl.map((r) => r.source))} tied for the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${tiedCpsl.map((r) => `${r.source} ${fmtUsd(r.spendUsd)} spend / ${plural(r.signedLeasesInPeriod, 'signed lease')}`).join(', ')}).`,
+        `${isSingleBuilding ? `At ${buildingLabel(matchedPropIds)}` : scope} in ${mkt.windowLabel}, ${listNames(tiedCpsl.map((r) => r.source))} tied for the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${tiedCpsl.map((r) => `${r.source} ${fmtUsd(r.spendUsd)} spend / ${plural(r.signedLeasesInPeriod, 'signed lease')}`).join(', ')}).${zeroNote}`,
         { source: best.source, tied_sources: tiedCpsl.map((r) => r.source), usd: best.costPerSignedLeaseUsd! },
         tiedCpsl.flatMap((r) => r.citations.slice(0, 4)).slice(0, 12),
       );
     }
     if (isSingleBuilding) {
-      const zeroNote =
-        zeroLeasePaid.length > 0
-          ? ` (Note: ${zeroLeasePaid.join(', ')} signed 0 leases and therefore has no defined cost per signed lease; any untrusted CRM free-text notes claiming otherwise are quarantined.)`
-          : '';
       return finalize(
         `At ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${fmtUsd(best.spendUsd)} spend across ${plural(best.signedLeasesInPeriod, 'signed lease')}).${zeroNote}`,
         { source: best.source, usd: best.costPerSignedLeaseUsd! },
@@ -1042,8 +1042,18 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'renewal_rate') {
+      // The rate is renewed / (renewed + pending + notice given); leases not
+      // yet due are outside it. Say that denominator, and the window applied.
+      const decided = leaseSummary.renewedCount + leaseSummary.pendingCount + leaseSummary.noticeGivenCount;
+      const scopeLabel = intent.leaseEndWindow
+        ? `ending in ${intent.leaseEndWindow.label}`
+        : 'on file (all end dates)';
+      const where = matchedPropIds && matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)}, f` : 'F';
+      if (decided === 0) {
+        return unknown(`no lease ${scopeLabel}${matchedPropIds && matchedPropIds.length === 1 ? ` at ${buildingLabel(matchedPropIds)}` : ''} has a renewal outcome (renewed, pending or notice given) in data/pms/leases.csv, so there is no renewal rate for it.`, leaseSummary.citations.slice(0, 4));
+      }
       return finalize(
-        `For the ${plural(leaseSummary.totalMatchingLeases, 'matching lease')} ending in ${intent.dateWindow.label}, ${leaseSummary.renewedCount} have renewed, giving a renewal rate of ${leaseSummary.renewalRatePercent.toFixed(1)}%.`,
+        `${where}or the ${plural(leaseSummary.totalMatchingLeases, 'matching lease')} ${scopeLabel}, ${leaseSummary.renewedCount} of the ${decided} with a renewal outcome have renewed (${leaseSummary.pendingCount} pending, ${leaseSummary.noticeGivenCount} notice given; ${leaseSummary.notDueCount} not yet due are excluded), giving a renewal rate of ${leaseSummary.renewalRatePercent.toFixed(1)}%.`,
         {
           percent: leaseSummary.renewalRatePercent,
           renewed: leaseSummary.renewedCount,
@@ -1227,6 +1237,20 @@ export function executeCompositionalPlan(
     intent.view !== undefined ||
     intent.unitStatusIn !== undefined;
 
+  // A unit filter no unit in scope meets (4-bedroom where none exist) has no
+  // rate and no ranking: 0 of 0 is not 0.0%, and a tie at 0 is not a winner.
+  // A count of zero is a true count and stays.
+  if (hasUnitSubsetFilter && (!/count/.test(intent.measure) || intent.aggregation === 'argmax' || intent.aggregation === 'argmin') && (intent.unitStatus !== undefined || intent.unitStatusIn !== undefined || unitSummary.totalFilteredUnits === 0)) {
+    const subset = (executeAgentTool(store, 'query_units_and_occupancy', {
+      propertyIds: matchedPropIds, buildingClass: intent.buildingClass, bedrooms: intent.bedrooms, bathrooms: intent.bathrooms,
+      bedroomsMin: intent.bedroomsMin, bedroomsMax: intent.bedroomsMax, bathroomsMin: intent.bathroomsMin, bathroomsMax: intent.bathroomsMax,
+      rentMin: intent.rentMin, rentMax: intent.rentMax, sqftMin: intent.sqftMin, sqftMax: intent.sqftMax, floorMin: intent.floorMin, floorMax: intent.floorMax, view: intent.view,
+    }).rawOutput as UnitQuerySummary);
+    if (subset.totalFilteredUnits === 0) {
+      return unknown(`no unit at ${matchedPropIds && matchedPropIds.length > 0 ? buildingName(matchedPropIds) : 'any operating building'} matches the unit filter in "${question.trim()}" (data/pms/units.csv), so there is no figure to give for it.`, propRes?.citations ?? []);
+    }
+  }
+
   if (intent.measure === 'vacancy_rate') {
     if (intent.aggregation === 'argmax' || intent.aggregation === 'argmin') {
       const wantMax = intent.aggregation === 'argmax';
@@ -1311,7 +1335,7 @@ export function executeCompositionalPlan(
       : unitSummary.portfolioTotalUnits;
 
     return finalize(
-      `Across the matching units and operating buildings, the occupied share is ${share.toFixed(1)}% (${num} of ${plural(den, 'unit')}).`,
+      `${matchedPropIds && matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)}, across the matching units` : 'Across the matching units and operating buildings'}, the occupied share is ${share.toFixed(1)}% (${num} of ${plural(den, 'unit')}).`,
       {
         percent: share,
       },

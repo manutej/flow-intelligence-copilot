@@ -1,5 +1,6 @@
 import type { DateWindowSpec } from '../config/rules.ts';
 import type { PortfolioStore } from '../data/schema.ts';
+import { isDataWord } from '../domain/vocabulary.ts';
 
 /**
  * Recognition checks that run before the planner commits to an answer.
@@ -55,6 +56,47 @@ export function findUnknownBuildingReference(
     const words = phrase.toLowerCase().split(/\s+/);
     if (words.every((w) => knownWords.has(w))) continue;
     return phrase;
+  }
+  return null;
+}
+
+const LOCATIVE_RE =
+  /\b(?:[Aa]t|[Ff]or|[Dd]oes|[Ii]n|[Oo]f|[Ff]rom|[Tt]o|[Aa]bout)\s+(?:[Tt]he\s+)?((?:[A-Z][\w&'.-]*\s+)*[A-Z][\w&'.-]*)/g;
+
+/**
+ * The planner's last check before it scopes a figure: a capitalised place
+ * the question names that resolves to no building. Wider than
+ * findUnknownBuildingReference, which also gates the clarifier's readings:
+ * it reads title case ("At The Clarendon Annex In Q3"), "at <Name>" without
+ * a building suffix ("at Printer Row"), and name words from two different
+ * buildings ("Clarendon Annex"). Any of these would otherwise fall back to
+ * one building or the whole portfolio.
+ */
+export function findUnresolvedPlace(question: string, store: PortfolioStore): string | null {
+  const plain = findUnknownBuildingReference(question, store);
+  if (plain) return plain;
+  if (/\bP\d{2,3}\b/.test(question)) return null;
+  const known = knownLabels(store);
+  const knownWords = new Set([...known].flatMap((label) => label.split(/\s+/)));
+  for (const m of question.matchAll(LOCATIVE_RE)) {
+    const phrase = m[1]
+      .split(/[?.,!;:](?:\s|$)/)[0]
+      .replace(/[?.,!;:]+$/, '')
+      .replace(/['’]s$/i, '')
+      .split(/\s+(?:in|for|at|of|from|to|about|on|during|by|with|over|and|or|vs\.?|versus)\b/i)[0];
+    if (!phrase || known.has(phrase.toLowerCase())) continue;
+    const words = phrase.toLowerCase().split(/\s+/);
+    const owners = words
+      .filter((w) => w !== 'the')
+      .map((w) => store.properties.filter((p) => [p.name, ...p.aka].some((n) => n.toLowerCase().split(/\s+/).includes(w))))
+      .filter((o) => o.length > 0);
+    if (owners.length > 1 && !owners[0].some((p) => owners.every((o) => o.includes(p)))) return phrase;
+    if (BUILDING_SUFFIX_RE.test(phrase)) {
+      if (words.every((w) => knownWords.has(w))) continue;
+      return phrase;
+    }
+    if (!/^at\b/i.test(m[0])) continue;
+    if (words.some((w) => w.length > 1 && !knownWords.has(w) && !isDataWord(store, w))) return phrase;
   }
   return null;
 }
