@@ -40,7 +40,8 @@ export interface PropertyRecord {
   readonly propertyId: string;
   readonly name: string;
   readonly aka: readonly string[];
-  readonly decodedEasterEggUrls: readonly string[];
+  /** Alias values withheld because they are not display names; never decoded or shown. */
+  readonly withheldAliasCount: number;
   readonly address: string;
   readonly neighborhood: string;
   readonly yearBuilt: number;

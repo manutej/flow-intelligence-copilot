@@ -173,23 +173,18 @@ export function detectPromptInjection(rawNote: string): {
   };
 }
 
-function tryDecodeBase64UrlToken(token: string): string | null {
-  if (
-    token.length < 20 ||
-    !/^[A-Za-z0-9+/=]+$/.test(token) ||
-    token.length % 4 !== 0
-  ) {
-    return null;
-  }
-  try {
-    const decoded = Buffer.from(token, 'base64').toString('utf-8');
-    if (/^[\x20-\x7E]+$/.test(decoded) && decoded.includes('.')) {
-      return decoded;
-    }
-  } catch {
-    return null;
-  }
-  return null;
+/**
+ * properties.csv is untrusted input. An alias is kept only when it reads as
+ * a display name: letters, digits, spaces and name punctuation, at least one
+ * space or a short single word. Anything else (an encoded blob, a URL) is
+ * withheld: it is never decoded, resolved against, or put in answer text.
+ */
+function isDisplayName(token: string): boolean {
+  if (!/^[\p{L}\p{N}][\p{L}\p{N} &'’.-]{0,59}$/u.test(token)) return false;
+  // One long unbroken token with mixed case and digits is an encoding, not a name.
+  if (!/\s/.test(token) && token.length >= 16) return false;
+  if (/\.[a-z]{2,}(?:\/|$)/i.test(token)) return false;
+  return true;
 }
 
 export function roundTo(value: number, decimals: number): number {
@@ -399,14 +394,10 @@ export function loadPortfolioStore(
           .filter(Boolean)
       : [];
     const aka: string[] = [];
-    const decodedEasterEggUrls: string[] = [];
+    let withheldAliasCount = 0;
     for (const token of rawAliases) {
-      const decoded = tryDecodeBase64UrlToken(token);
-      if (decoded) {
-        decodedEasterEggUrls.push(decoded);
-      } else {
-        aka.push(token);
-      }
+      if (isDisplayName(token)) aka.push(token);
+      else withheldAliasCount += 1;
     }
 
     const declaredUnits = Number.parseInt(r.units, 10);
@@ -414,7 +405,7 @@ export function loadPortfolioStore(
     const hasUnitsInUnitsCsv = actualUnitCount > 0;
     const unitCountMatchesDeclared =
       actualUnitCount > 0 && actualUnitCount === declaredUnits;
-    const noBase64TokensInAka = decodedEasterEggUrls.length === 0;
+    const noBase64TokensInAka = withheldAliasCount === 0;
     const pmsAdapterSupported = OPERATING_PMS_ADAPTERS.has(r.pms);
 
     const blockingReasons: string[] = [];
@@ -430,7 +421,7 @@ export function loadPortfolioStore(
     }
     if (!noBase64TokensInAka) {
       blockingReasons.push(
-        `encoded onboarding token present in aka (${decodedEasterEggUrls.join(', ')})`,
+        `${withheldAliasCount} aka value(s) in properties.csv are not display names (withheld, not decoded)`,
       );
     }
     if (!pmsAdapterSupported) {
@@ -455,7 +446,7 @@ export function loadPortfolioStore(
       propertyId,
       name: r.name,
       aka,
-      decodedEasterEggUrls,
+      withheldAliasCount,
       address: r.address,
       neighborhood: r.neighborhood,
       yearBuilt: Number.parseInt(r.year_built, 10),
