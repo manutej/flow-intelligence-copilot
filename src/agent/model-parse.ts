@@ -7,6 +7,7 @@ import { unknownWords } from '../domain/vocabulary.ts';
 import { unboundNegators } from './closed-world.ts';
 import { parseExplicitDateWindow, parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 import { RunStore, normalizeQuestion, runKey, sha256 } from './run-store.ts';
+import { hashOf } from './envelope.ts';
 import { AGGREGATION_SET, DOMAIN_SET, MEASURES, typedQueryErrors } from './typed-query.ts';
 
 /**
@@ -108,18 +109,21 @@ export function toIntent(obj: unknown): ParsedQueryIntent | string {
 }
 
 /**
- * Coverage: every content word has a meaning FlowIQ reads, and every filter
- * the lexicon binds in the question is the same in the model's query, and
- * the model sets no filter the question does not state. Anything else is
- * unbound, so the turn clarifies instead of answering.
+ * Coverage: every content word has a meaning FlowIQ reads, and the model's
+ * TypedQuery equals the lexicon reading in every field: domain, measure,
+ * aggregation, period, scope, sources and every filter. The model never
+ * picks the computation on its own; any field that differs, is dropped or
+ * is unstated is unbound, so the turn clarifies instead of answering.
  */
 export function coverage(question: string, intent: ParsedQueryIntent, det: ParsedQueryIntent, store: PortfolioStore) {
   const unbound = [...unknownWords(question, store), ...(intent.domain === 'units' ? unboundNegators(question) : [])];
   const fields_bound: string[] = [];
-  for (const k of FILTERS) {
-    const m = (intent as unknown as Record<string, unknown>)[k], d = (det as unknown as Record<string, unknown>)[k];
+  const m0 = intent as unknown as Record<string, unknown>, d0 = det as unknown as Record<string, unknown>;
+  const keys = [...new Set([...Object.keys(d0), ...Object.keys(m0)])].sort();
+  for (const k of keys) {
+    const m = m0[k], d = d0[k];
     if (m === undefined && d === undefined) continue;
-    if (JSON.stringify(m) === JSON.stringify(d)) fields_bound.push(k);
+    if (hashOf(m ?? null) === hashOf(d ?? null)) fields_bound.push(k);
     else unbound.push(`${k}:${m === undefined ? 'dropped' : d === undefined ? 'unstated' : 'differs'}`);
   }
   return { ok: unbound.length === 0, unbound, fields_bound };
