@@ -1628,13 +1628,19 @@ const MEASURE_NOUNS: ReadonlyArray<readonly [string, RegExp]> = [
   ['area', /\b(?:sq\.?\s*ft|sqft|square\s+(?:foot|feet))\b/gi],
 ];
 /**
- * Two measures joined by a coordinator ("vacancy and renewal rate", "unit
- * count & vacancy", "leads plus tours") ask for two figures. Returns the
- * kind the plan's measure does not name, if any: a plan that computed one
- * measure has answered only half of such a question.
+ * Two neighbouring measure phrases with only a short link between them ask
+ * for two figures, whatever the link ("and", "&", a comma, "along with",
+ * "and also"). Returns the phrase the plan's measure does not name, if any:
+ * a plan that computed one measure has answered only half of such a question.
  */
 /** Words that open a restrictive clause: what follows filters, it is not a figure. */
 const FILTER_CLAUSE_RE = /\b(?:with|that|which|who|whose|where|excluding|without|not|except)\b/iu;
+
+/** Closed-class words that make the text between two measure words a predicate or clause, not a link. */
+const NON_LINK_WORD_RE = /^(?:is|are|was|were|be|been|being|am|has|have|had|do|does|did|will|would|can|could|should|that|which|who|whose|where|when|while|because|if|than|for|of|per|by|among|from|on|in|at|across|over|during|to|into|between|under|above|below|within|without|how|what)$/iu;
+
+/** A noun phrase opened by a preposition modifies the measure; it is not a second figure. */
+const PREPOSITION_OBJECT_RE = /\b(?:for|of|per|by|among|from|on|in|across|over|during|to|into|between|than|under|over|above|below|within|exclud\w*|without|except|minus)\s+(?:(?:the|all|each|every|any|our|its|their|those|these)\s+)?(?:[\p{L}\p{N}-]+\s+){0,2}$/iu;
 
 /** True when every mention of `word` sits in a restrictive clause, so it filters rather than asks for a figure. */
 export function onlyInFilterClause(question: string, word: string): boolean {
@@ -1651,27 +1657,48 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
   const labels = [...store.paidSources, ...store.organicSources, ...store.properties.flatMap((p) => [p.name, ...p.aka])].filter((l) => l.trim().length >= 2).sort((a, b) => b.length - a.length);
   for (const l of labels) question = question.replace(new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeRegExp(l)}(?![\p{L}\p{N}])`, 'giu'), (m) => '_'.repeat(m.length));
   const kinds: ReadonlyArray<readonly [string, RegExp]> = [...MEASURE_NOUNS, ['unit', /\b(?:units?|doors?)\b/gi]];
+  // A bedroom or unit-type phrase, and a unit status set aside, filter the population.
+  question = question.replace(BEDROOM_PHRASE_RE, (m) => '_'.repeat(m.length)).replace(UNIT_STATUS_EXCLUSION_RE, (m) => '_'.repeat(m.length));
   const hits: { kind: string; start: number; end: number; text: string }[] = [];
   for (const [kind, re] of kinds) for (const m of question.matchAll(new RegExp(re.source, 'gi'))) hits.push({ kind, start: m.index!, end: m.index! + m[0].length, text: m[0] });
   hits.sort((a, b) => a.start - b.start);
   const named = measure.replace(/_/g, ' ');
   const covers = (kind: string) => kinds.some(([k, re]) => k === kind && new RegExp(re.source, 'i').test(named)) || (MEASURE_CONSUMES[measure as IntentMeasure] ?? []).includes(kind);
-  for (let i = 0; i < hits.length; i++) {
-    for (let j = i + 1; j < hits.length; j++) {
-      const a = hits[i], b = hits[j];
-      if (b.start < a.end) continue;
-      // Only adjacent mentions coordinate: "occupied and vacant units" joins two states of one noun.
-      if (hits.some((h, k) => k !== i && k !== j && h.start >= a.end && h.end <= b.start)) break;
-      if (a.kind === b.kind) continue;
-      const between = question.slice(a.end, b.start);
-      if (!/^\s*(?:[\p{L}-]+\s+){0,2}?(?:and|&|plus|as\s+well\s+as)\s+(?:[\p{L}-]+\s+){0,2}?$/iu.test(between)) continue;
-      // A conjunct opened by a restrictive word ("with rent under $X", "that are
-      // occupied") is a filter on the one measure, not a second figure.
-      const before = question.slice(Math.max(0, a.start - 24), a.start);
-      if (FILTER_CLAUSE_RE.test(between.replace(/^.*?(?:and|&|plus|as\s+well\s+as)/i, '')) || new RegExp(`${FILTER_CLAUSE_RE.source}(?:\\s+[\\p{L}\\p{N}$.,-]+){0,3}\\s*$`, 'iu').test(before)) continue;
-      // "move-ins and leases" of one funnel stage pair are still two figures; only a measure that names both covers them.
-      for (const h of [a, b]) if (!covers(h.kind)) return h.text;
-    }
+  // Any measure noun the question asks for, whatever joins it ("and", a
+  // comma, "along with", "and also"), is a figure, unless it is governed:
+  // it sits in a restrictive clause ("with rent under $X", "that are
+  // occupied") or is the object of a preposition ("rate for leases ending").
+  const governed = (h: { start: number }) => {
+    const before = question.slice(Math.max(0, h.start - 32), h.start);
+    // The tail of a hyphenated compound ("zero-lease spend") modifies the noun after it.
+    if (/[\p{L}\p{N}]-$/u.test(before)) return true;
+    if (/\b(?:along|together)\s+with\s+(?:the\s+)?$/iu.test(before)) return false;
+    return new RegExp(`${FILTER_CLAUSE_RE.source}(?:\\s+[\\p{L}\\p{N}$.,-]+){0,3}\\s*$`, 'iu').test(before) || PREPOSITION_OBJECT_RE.test(before);
+  };
+  // Measure words with nothing but a space or hyphen between them form one
+  // noun phrase ("vacant units", "leases renewed"): one figure, covered when
+  // the measure names any word in it.
+  const phrases: { kinds: Set<string>; start: number; end: number; text: string }[] = [];
+  for (const h of hits) {
+    const last = phrases[phrases.length - 1];
+    if (last && h.start >= last.end && /^[\s-]*$/.test(question.slice(last.end, h.start))) { last.kinds.add(h.kind); last.text = question.slice(last.start, h.end); last.end = h.end; }
+    else if (!last || h.start >= last.end) phrases.push({ kinds: new Set([h.kind]), start: h.start, end: h.end, text: h.text });
+  }
+  const asked = phrases.filter((p) => !governed(p));
+  // Two neighbouring measure phrases coordinate when only a short link joins
+  // them: punctuation or up to four words, none of them a verb, relative or
+  // preposition ("vacancy and renewal rate", "renewal rate along with
+  // vacancy", "vacancy rate, renewal rate"). A predicate or clause between
+  // them ("units are vacant", "leases that toured") describes one figure.
+  for (let i = 0; i + 1 < asked.length; i++) {
+    const a = asked[i], b = asked[i + 1];
+    if (hits.some((h) => h.start >= a.end && h.end <= b.start)) continue;
+    if ([...a.kinds].sort().join('+') === [...b.kinds].sort().join('+')) continue;
+    // A sentence end or a colon (a topic label: "Zillow leads: tour-to-lease") is not a link.
+    if (/[.?!:]/.test(question.slice(a.end, b.start).replace(/\d\.\d/g, ''))) continue;
+    const words = question.slice(a.end, b.start).match(/[\p{L}\p{N}_$]+/gu) ?? [];
+    if (words.length > 4 || words.some((w) => /_/.test(w) || NON_LINK_WORD_RE.test(w))) continue;
+    for (const p of [a, b]) if (![...p.kinds].some(covers)) return p.text;
   }
   return null;
 }
