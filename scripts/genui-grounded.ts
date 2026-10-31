@@ -7,6 +7,9 @@
  * accepting either definition variant (defA or defB) within the fact's tolerance plus the
  * display rounding. A clarify card is an IDK. A fact whose measure has no template is counted
  * as not asked, never as correct.
+ * Probes (also from fact fields only): a currency filter ("billed in CAD") and two measures in
+ * one question must be an IDK, the "in USD" control must equal the fact, and a "by source" /
+ * "by building" question must chart one bar per group, each equal to that group's own fact.
  * Usage: node --no-warnings scripts/genui-grounded.ts [facts.jsonl] [--tsv out.tsv] [--json]
  */
 import fs from 'node:fs';
@@ -108,6 +111,53 @@ export function grade(h: Headline, f: Fact): 'correct' | 'wrong' | 'idk' | 'no_h
   return variants.some((x) => typeof x === 'number' && Math.abs(h.v - x) <= tol) ? 'correct' : 'wrong';
 }
 
+export interface Probe { family: string; question: string; expect: 'idk' | Fact | Fact[]; by?: 'source' | 'building' }
+const BY_NOUN: Record<string, (by: string, A: string, P: string) => string> = {
+  spend_usd: (by, A, P) => `What was total marketing spend by ${by}${A}${P}?`,
+  cost_per_lead: (by, A, P) => `What was the cost per lead by ${by}${A}${P}?`,
+  leads: (by, A, P) => `How many leads by ${by}${A}${P}?`,
+};
+const keyOf = (f: Fact) => Object.keys(f.filters).sort().join(',');
+/** Currency, two-measure and by-X probes built from the facts' own fields. */
+export function probesFor(facts: readonly Fact[]): Probe[] {
+  const out: Probe[] = [];
+  for (const f of facts) {
+    if (f.measure !== 'spend_usd' || keyOf(f) !== '') continue;
+    out.push({ family: 'currency_cad', question: `What was total marketing spend billed in CAD${at(f)}${when(f.period)}?`, expect: 'idk' });
+    out.push({ family: 'currency_usd_control', question: `What was total marketing spend in USD${at(f)}${when(f.period)}?`, expect: f });
+  }
+  const plain = facts.filter((f) => keyOf(f) === '');
+  const find = (m: string, scope: string, period?: string) => plain.find((f) => f.measure === m && f.scope === scope && (period === undefined || f.period === period));
+  for (const f of plain) {
+    if (f.measure === 'occupancy_rate' && find('renewal_rate', f.scope)) out.push({ family: 'two_measure', question: `What is the occupancy and renewal rate${at(f)}?`, expect: 'idk' });
+    if (f.measure === 'cost_per_lead' && find('spend_usd', f.scope, f.period)) out.push({ family: 'two_measure', question: `What was the cost per lead and total marketing spend${at(f)}${when(f.period)}?`, expect: 'idk' });
+  }
+  const groups = new Map<string, Fact[]>();
+  for (const f of facts) {
+    if (!BY_NOUN[f.measure]) continue;
+    const k = keyOf(f) === 'source' ? `source|${f.measure}|${f.scope}|${f.period}` : keyOf(f) === '' && f.scope !== 'portfolio' ? `building|${f.measure}|${f.period}` : null;
+    if (k) groups.set(k, [...(groups.get(k) ?? []), f]);
+  }
+  for (const [k, g] of groups) {
+    if (g.length < 2) continue;
+    const by = k.startsWith('source') ? 'source' : 'building';
+    out.push({ family: `by_${by}`, by, question: BY_NOUN[g[0].measure](by, by === 'source' ? at(g[0]) : '', when(g[0].period)), expect: g });
+  }
+  return out;
+}
+/** A probe's grade: an IDK probe is correct only as a clarify card; a by-X probe needs every group's bar to equal its fact. */
+export function gradeProbe(spec: ChartSpec, p: Probe): 'correct' | 'wrong' | 'idk' | 'no_headline' {
+  if (p.expect === 'idk') return spec.template === 'clarify_card' ? 'correct' : 'wrong';
+  if (!Array.isArray(p.expect)) return grade(headline(spec, p.expect), p.expect);
+  if (spec.template === 'clarify_card') return 'idk';
+  if (spec.template !== 'sorted_bar') return 'no_headline';
+  const bars = new Map(spec.props.items.map((x) => [x.label.toLowerCase(), x.value.v]));
+  return p.expect.every((f) => {
+    const label = String(p.by === 'source' ? f.filters.source : f.scope_name).toLowerCase();
+    return bars.has(label) && grade({ kind: 'number', v: bars.get(label)! }, f) === 'correct';
+  }) ? 'correct' : 'wrong';
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const store = loadPortfolioStore();
   const facts: Fact[] = fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
@@ -124,11 +174,19 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     tally[g]++; byMeasure[fam][g]++;
     rows.push([f.fact_id, f.measure, q, p.spec.template, h.kind === 'number' ? h.v : h.kind === 'entity' ? h.name : h.kind, JSON.stringify(f.value_variants ?? f.value), g].join('\t'));
   }
+  const probeTally: Record<string, Record<string, number>> = {};
+  for (const p of probesFor(facts)) {
+    const panel = await askPanel(p.question, store);
+    const g = gradeProbe(panel.spec, p);
+    (probeTally[p.family] ??= { correct: 0, wrong: 0, idk: 0, no_headline: 0 })[g]++;
+    rows.push(['probe', p.family, p.question, panel.spec.template, '', Array.isArray(p.expect) ? p.expect.map((f) => f.fact_id).join(',') : p.expect === 'idk' ? 'idk' : p.expect.fact_id, g].join('\t'));
+  }
   if (tsvAt) fs.writeFileSync(tsvAt, rows.join('\n') + '\n');
   const asked = tally.correct + tally.wrong + tally.idk + tally.no_headline;
-  if (args.includes('--json')) console.log(JSON.stringify({ file, tally, byMeasure }, null, 2));
+  if (args.includes('--json')) console.log(JSON.stringify({ file, tally, byMeasure, probeTally }, null, 2));
   else {
     console.log(`${file}: ${facts.length} facts, ${asked} asked: correct ${tally.correct}, wrong ${tally.wrong}, IDK ${tally.idk}, no headline ${tally.no_headline}; not asked (no template) ${tally.not_asked}`);
     for (const [m, t] of Object.entries(byMeasure).sort()) console.log(`  ${m}: correct ${t.correct}, wrong ${t.wrong}, IDK ${t.idk}, no headline ${t.no_headline}${t.not_asked ? `, not asked ${t.not_asked}` : ''}`);
+    for (const [m, t] of Object.entries(probeTally).sort()) console.log(`  probe ${m}: correct ${t.correct}, wrong ${t.wrong}, IDK ${t.idk}, no headline ${t.no_headline}`);
   }
 }
