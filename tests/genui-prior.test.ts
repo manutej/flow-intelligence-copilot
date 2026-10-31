@@ -39,3 +39,15 @@ test('HIGH: a title echoes a question number only if the computation used it (no
   assert.deepEqual(t('Prior $3250, ranked #1'), []);
   for (const bad of ['Prior $1800', 'ranked #2', 'a1800 prior']) assert.ok(t(bad).length > 0, bad);
 });
+test('LOW residuals: clarify ids, guard source, glued echoes', async () => {
+  const a = await askPanel(base('with prior beta0=$3250'), store);
+  const t = (title: string) => { const s = structuredClone(a.spec) as any; s.title = title; return specErrors(s, a.evidence, store); };
+  for (const bad of ['Prior $3250-k', 'Prior $3250_k', 'Prior a$3250']) assert.ok(t(bad).length > 0, bad);
+  const g = structuredClone(a.spec) as any; g.source = 'guard';
+  assert.ok(specErrors(g, a.evidence, store).some((e) => e.includes('spec.source')));
+  const c = await askPanel(base('with prior beta0=$1800'), store);
+  assert.equal(c.spec.template, 'clarify_card');
+  assert.deepEqual(specErrors(c.spec, c.evidence, store), []);
+  const w = structuredClone(c.spec) as any; w.intent = 'leasing.vacancy.count';
+  assert.ok(specErrors(w, c.evidence, store).some((e) => e.includes('spec.intent')));
+});

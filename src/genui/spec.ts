@@ -1,5 +1,6 @@
-import { hashOf } from '../agent/envelope.ts';
+import { hashOf, templateId } from '../agent/envelope.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from '../agent/intent.ts';
+import { coreQuestion } from './picker.ts';
 import { identifierTokens, statedNumbers, usedInputs } from './inputs.ts';
 import { executeCompositionalPlan } from '../agent/planner.ts';
 import { verifyAnswerEnvelope } from '../domain/guards.ts';
@@ -93,12 +94,11 @@ const NUMBER_WORDS = new RegExp(NUMBER_WORD_SRC, 'i');
 export const UNITS: readonly Unit[] = ['count', '$', '%', 'sqft', 'leases'];
 /** Digits the user typed (e.g. "3-bedroom") may be echoed in a title or subtitle; nowhere else. */
 const ECHO_KEYS = new Set(['title', 'subtitle']);
-/** Whole numeric tokens as the user typed them, with a $ or # prefix and a % suffix kept attached. */
 const escRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Remove each echoed token where it stands whole: not inside a longer number or word ("$1800k"), same prefix and suffix. */
 const stripEcho = (t: string, echo: ReadonlySet<string>) => {
   const toks = [...echo].filter((x) => /\p{N}/u.test(x)).sort((a, b) => b.length - a.length);
-  for (const k of toks) t = t.replace(new RegExp(`(?<![\\p{N}.,$#])${escRe(k)}(?![\\p{L}\\p{N}%]|[.,]\\p{N})`, 'gu'), ' ');
+  for (const k of toks) t = t.replace(new RegExp(`(?<![\\p{L}\\p{N}_.,$#])${escRe(k)}(?![\\p{L}\\p{N}_%]|[.,]\\p{N}|[-\\s]?(?:k|m|mm|bn|thousand|million|billion)(?!\\p{L}))`, 'gu'), ' ');
   return t;
 };
 const carriesFigure = (raw: string, echo: ReadonlySet<string> = new Set()) => {
@@ -115,6 +115,9 @@ const LAYOUT_NUM = /\.props\.limit$/;
 // unit is checked against the closed UNITS list instead; the rest are bound by panelErrors' full re-pick
 const TEXT_EXEMPT = new Set(['answer', 'options', 'restatement', 'question', 'citations']);
 /** Template ids such as "marketing.spend_h1_vs_q3.value", or "guard" for guard cards. */
+/** A clarify card names the template its own question parses to (or a guard id). */
+const clarifyId = (spec: ChartSpec, store?: PortfolioStore): string | undefined =>
+  spec.template === 'clarify_card' && store ? templateId(parseQueryIntent(coreQuestion(spec.props.question), store)) : undefined;
 const ID_SHAPE = /^(?:guard|[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,3})$/;
 
 /** Why a spec fails the closed-template and number-fidelity rules; empty when it passes. */
@@ -151,6 +154,8 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
       if (typeof x !== 'string' || !ID_SHAPE.test(x)) errs.push(`${path}: not an id: ${JSON.stringify(x)}`);
       else if (path === 'spec.intent' && main && x !== main.template_id) errs.push(`${path}: ${x} is not the main item's id ${main.template_id}`);
       else if (path === 'spec.source' && x !== spec.intent && x !== 'guard') errs.push(`${path}: source must be the intent id or guard`);
+      else if (path === 'spec.source' && x === 'guard' && spec.template !== 'clarify_card') errs.push(`${path}: guard is the source of clarify cards only`);
+      else if (path === 'spec.intent' && spec.template === 'clarify_card' && !/^guard(?:\.|$)/.test(x) && store && x !== clarifyId(spec, store)) errs.push(`${path}: ${x} is not the clarified question's template id`);
       return;
     }
     if (typeof x === 'string') { if (!exempt && carriesFigure(x, ECHO_KEYS.has(path.split('.').pop()!) ? echo : undefined)) errs.push(`${path}: text carries a figure: ${JSON.stringify(x)}`); return; }
