@@ -17,7 +17,7 @@ const store = loadPortfolioStore();
 const Q03 = 'At Fulton Yards, which listing source had the lowest cost per signed lease in Q3 2026, and what was it?';
 const KPI = 'How many vacant units are at Fulton Yards?';
 const REC = fs.readFileSync('tests/fixtures/genui-templates-extra.jsonl', 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((l) => l.expected_template === 'recommendation_card').text;
-const panelErrors = (pickerMod as any).panelErrors as ((q: string, s: unknown, e: unknown, st: unknown) => Promise<string[]>) | undefined;
+const panelErrors = (pickerMod as any).panelErrors as ((q: string, s: unknown, st: unknown) => Promise<string[]>) | undefined;
 
 test('N1: a breakdown item forged consistently (recipe, result, hash, spec) is rejected', async () => {
   const a = await askPanel(Q03, store);
@@ -32,8 +32,8 @@ test('N1: a breakdown item forged consistently (recipe, result, hash, spec) is r
   const ref = `"ref":"items.${sub.key}.result.${k}"`;
   const spec = JSON.parse(JSON.stringify(a.spec).replaceAll(`"v":${sub.result[k]},${ref}`, `"v":${(env.result as any)[k]},${ref}`));
   assert.ok(panelErrors, 'panelErrors exists');
-  assert.ok((await panelErrors!(Q03, spec, ev, store)).length > 0);
-  assert.deepEqual(await panelErrors!(Q03, a.spec, a.evidence, store), []);
+  assert.ok((await panelErrors!(Q03, spec, store)).length > 0);
+  assert.deepEqual(await panelErrors!(Q03, a.spec, store), []);
 });
 
 test('N3: numbers in words, year-shaped counts and figures in unit are rejected; real periods pass', async () => {
@@ -83,4 +83,13 @@ test('N2: a forged panel cannot be saved or drafted; N8: drafts are idempotent a
     assert.equal(d2.id, d1.id);
     assert.equal(d1.cites[0].value, p.spec.props.impacts[0].value.v);
   } finally { srv.close(); }
+});
+
+test('panelErrors takes no caller evidence and checks specs against fresh evidence only', async () => {
+  assert.equal(panelErrors!.length, 3);
+  const a = await askPanel(Q03, store);
+  assert.deepEqual(await panelErrors!(Q03, a.spec, store), []);
+  const s = structuredClone(a.spec) as any; s.insight = 'Only 3 units are vacant here';
+  const errs = await panelErrors!(Q03, s, store);
+  assert.ok(errs.some((e) => !/differs/.test(e)), 'structural text rule runs, not only the spec diff');
 });

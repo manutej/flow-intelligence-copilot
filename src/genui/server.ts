@@ -70,7 +70,7 @@ export function createServer() {
       if (url.pathname === '/api/panels' && req.method === 'POST') {
         const p = await body(req); if (typeof p?.id !== 'string' || !p?.spec || typeof p?.question !== 'string') return send(res, 400, { error: 'panel required' });
         // never trust a client-written spec: re-pick on the server and require the identical spec
-        const errs = await panelErrors(p.question, p.spec, undefined, store);
+        const errs = await panelErrors(p.question, p.spec, store);
         if (errs.length) return send(res, 422, { error: 'panel does not match the verified spec for its question', detail: errs });
         const keep = { id: p.id, created_at: p.created_at, question: p.question, spec: p.spec, parse_path: p.parse_path, model_down: !!p.model_down, model_note: p.model_note ?? null };
         const all = readJson<any[]>(PANELS, []).filter((x) => x.id !== p.id); all.unshift(keep); writeJson(PANELS, all.slice(0, 200)); return send(res, 200, { ok: true, count: Math.min(all.length, 200) });
@@ -84,7 +84,7 @@ export function createServer() {
         const all = readJson<DraftAction[]>(ACTIONS, []);
         const panel = readJson<any[]>(PANELS, []).find((x) => x.id === a.panel_id);
         if (!panel || panel.spec?.template !== 'recommendation_card') return send(res, 400, { error: 'a draft comes only from a saved recommendation panel' });
-        if ((await panelErrors(panel.question, panel.spec, undefined, store)).length) return send(res, 422, { error: 'saved panel no longer matches the verified spec' });
+        if ((await panelErrors(panel.question, panel.spec, store)).length) return send(res, 422, { error: 'saved panel no longer matches the verified spec' });
         const id = draftId(panel.spec);
         const sha = specSha(panel.spec);
         const existing = all.find((x) => x.id === id);
@@ -109,7 +109,7 @@ export function createServer() {
         if (!d) return send(res, 404, { error: 'no such draft' });
         // re-validate on every state change: the source panel must still exist and match a fresh re-pick
         const src = readJson<any[]>(PANELS, []).find((x) => x.id === d.panel_id);
-        if (!src || specSha(src.spec) !== d.spec_sha256 || (await panelErrors(src.question, src.spec, undefined, store)).length)
+        if (!src || specSha(src.spec) !== d.spec_sha256 || (await panelErrors(src.question, src.spec, store)).length)
           return send(res, 409, { error: 'source panel no longer matches the verified spec; nothing changed', state: d.state });
         if (it.kind === 'set_state' && (it.to === 'approved' || it.to === 'rejected') && (d.state === 'draft' || d.state === 'pending_approval')) { d.prev_state = d.state; d.state = it.to; }
         else if (it.kind === 'undo' && d.prev_state) { d.state = d.prev_state; delete d.prev_state; }

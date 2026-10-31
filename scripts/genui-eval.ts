@@ -1,4 +1,3 @@
-import { hashOf } from '../src/agent/envelope.ts';
 /**
  * GenUI eval: chart-choice accuracy against the labelled templates and number
  * fidelity (every number in every spec traces exactly to a verified result).
@@ -8,8 +7,8 @@ import { hashOf } from '../src/agent/envelope.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { askPanel } from '../src/genui/picker.ts';
-import { countNums, specErrors } from '../src/genui/spec.ts';
+import { askPanel, panelErrors } from '../src/genui/picker.ts';
+import { countNums } from '../src/genui/spec.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -31,19 +30,17 @@ for (const f of sets) {
     if (countNums(p.spec) > 0) {
       forged++;
       const f2 = JSON.parse(s.replace(/"v":(-?[\d.]+)/, (_, n) => `"v":${Number(n) + 1}`));
-      if (specErrors(f2, p.evidence, store).length) caught++;
-      // TENACITY G1 repro: scale one value x10 in BOTH spec and evidence, then rehash the evidence
+      if ((await panelErrors(r.text, f2, store)).length) caught++;
+      // TENACITY G1 repro: scale one value x10. The server check (panelErrors) ignores caller
+      // evidence, so a resealed evidence block cannot help; only the spec is submitted.
       const m = s.match(/"v":(-?[\d.]+),"ref":"([^"]+)"/);
       if (m && Number(m[1]) !== 0) {
         resealed++;
-        const [, key, , ...pth] = m[2].split('.');
-        const ev = structuredClone(p.evidence) as any; const it = ev.items.find((i: any) => i.key === key);
-        let o = it.result; for (const q of pth.slice(0, -1)) o = o[q]; o[pth.at(-1)!] = Number(m[1]) * 10; it.result_hash = hashOf(it.result);
-        if (specErrors(JSON.parse(s.replace(m[0], `"v":${Number(m[1]) * 10},"ref":"${m[2]}"`)), ev, store).length) resealCaught++;
+        if ((await panelErrors(r.text, JSON.parse(s.replace(m[0], `"v":${Number(m[1]) * 10},"ref":"${m[2]}"`)), store)).length) resealCaught++;
       }
       // TENACITY G2 repro: a plain integer in chart text
       textForged++; const t2 = JSON.parse(s); t2.insight = 'Only 3 units are vacant here';
-      if (specErrors(t2, p.evidence, store).length) textCaught++;
+      if ((await panelErrors(r.text, t2, store)).length) textCaught++;
     }
   }
   out[f] = { questions: rows.length, chart_choice_correct: right, accuracy: +(right / rows.length).toFixed(4), traced_numbers: nums, fidelity_errors: bad, forged_specs: forged, forged_rejected: caught, resealed_x10: resealed, resealed_x10_rejected: resealCaught, integer_text: textForged, integer_text_rejected: textCaught, by_template: byT, misses: miss };

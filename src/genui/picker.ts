@@ -294,15 +294,16 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
 /**
  * Full re-check of a panel: the structural and recompute rules in specErrors,
  * then the picker is run again on the question (deterministic parse) and the
- * whole spec and every evidence recipe must be identical. This binds each
+ * whole spec must be identical. The caller's evidence is not an input. This binds each
  * breakdown item to the item the picker would build for that question, so a
  * consistent forgery (recipe, result, hash and spec swapped together) fails.
  */
-export async function panelErrors(question: string, spec: unknown, evidence: Evidence | undefined, store: PortfolioStore): Promise<string[]> {
+export async function panelErrors(question: string, spec: unknown, store: PortfolioStore): Promise<string[]> {
   if (typeof question !== 'string' || !spec || typeof spec !== 'object') return ['panel needs a question and a spec'];
   const fresh = await askPanel(question, store, null);
-  const errs = evidence ? specErrors(spec as ChartSpec, evidence, store) : [];
+  // evidence is never taken from the caller: the fresh evidence is the only evidence, and both
+  // the fresh spec and the submitted spec must pass the structural and recompute rules against it
+  const errs = [...specErrors(fresh.spec, fresh.evidence, store).map((e) => `fresh spec: ${e}`), ...specErrors(spec as ChartSpec, fresh.evidence, store)];
   if (canon(spec) !== canon(fresh.spec)) errs.push('spec differs from the spec the picker builds for this question');
-  if (evidence && canon(evidence) !== canon(fresh.evidence)) errs.push('evidence differs from the evidence the picker builds for this question');
   return errs;
 }
