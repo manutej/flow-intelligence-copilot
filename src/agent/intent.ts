@@ -650,6 +650,14 @@ export const UNIT_NOUN_RE =
 
 /** Words that ask for a per-item mean rather than a sum. */
 const AVERAGE_WORD_RE = /\b(?:average|avg|mean|typical|per\s+lease|per[-\s]lease)\b/i;
+/** A renewal-outcome word that modifies "renewal" ("pending renewal") rather than naming a lease type. */
+const RENEWAL_STATUS_PHRASE_RE = /\b(?:pending|undecided|renewed|not[-\s]due|notice[-\s]given)\s+renewals?\b/gi;
+/** The renewal outcome a lease count is restricted to, from the outcome's own word. */
+function countedRenewalStatus(question: string): RenewalStatus | undefined {
+  if (/\bnot[-\s_]?due\b/i.test(question)) return 'not_due';
+  if (/\brenewed\b/i.test(question)) return 'renewed';
+  return undefined;
+}
 
 /**
  * Pure semantic parser that extracts a structured `ParsedQueryIntent` AST from
@@ -1014,7 +1022,7 @@ function parseQueryIntentRaw(
     const leaseType: LeaseType | undefined =
       /\bnew[-\s]leases?\b/i.test(question) && !isNewVsRenewal
         ? 'new'
-        : /\brenewal\s+leases?\b/i.test(question) && !isNewVsRenewal
+        : /\brenewal\s+leases?\b/i.test(question.replace(RENEWAL_STATUS_PHRASE_RE, ' ')) && !isNewVsRenewal
           ? 'renewal'
           : undefined;
 
@@ -1078,6 +1086,10 @@ function parseQueryIntentRaw(
     } else if (isRentAtRiskOrLeaseRent) {
       measure = 'rent_at_risk';
     }
+
+    // A lease count names its renewal outcome ("leases marked renewed",
+    // "not-due leases"); the count is over that outcome only.
+    if (measure === 'lease_count' && !renewalStatus) renewalStatus = countedRenewalStatus(question);
 
     return {
       domain: 'leases',
