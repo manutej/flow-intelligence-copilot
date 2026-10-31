@@ -1,4 +1,8 @@
 import { hashOf } from '../agent/envelope.ts';
+import { parseQueryIntent, type ParsedQueryIntent } from '../agent/intent.ts';
+import { executeCompositionalPlan } from '../agent/planner.ts';
+import { verifyAnswerEnvelope } from '../domain/guards.ts';
+import type { PortfolioStore } from '../data/schema.ts';
 
 /**
  * GenUI ChartSpec: a closed set of templates. The picker fills a spec from
@@ -20,6 +24,8 @@ export interface EvidenceItem {
   readonly result: Readonly<Record<string, unknown>>;
   readonly result_hash: string;
   readonly citations: readonly string[];
+  /** How to recompute this item: the validator re-runs it and compares every value. */
+  readonly recipe: { readonly question: string; readonly intent: ParsedQueryIntent };
 }
 export interface Evidence { readonly items: readonly EvidenceItem[] }
 
@@ -53,22 +59,37 @@ export function resolveRef(ev: Evidence, ref: string): unknown {
 }
 
 const isNum = (x: unknown): x is Num => !!x && typeof x === 'object' && 'v' in x && 'ref' in x && Object.keys(x).length === 2;
-const FIGURE_IN_TEXT = /[$%]|\d[\d,]*\.\d|\d{1,3}(,\d{3})+/;
+const FIGURE_IN_TEXT = /[$%]|\d/;
+/** Labels that contain digits but are not figures: years, ISO dates, quarters, halves, property and draft ids. */
+const LABEL_TOKENS = /\b\d{4}-\d{2}(-\d{2})?\b|\b(19|20)\d{2}\b|\b[QH][1-4]\b|\bP\d{2}\b|\bD-\d{4}\b/g;
+/** Digits the user typed (e.g. "3-bedroom") may be echoed in a title or subtitle; nowhere else. */
+const ECHO_KEYS = new Set(['title', 'subtitle']);
+const carriesFigure = (t: string, echo: ReadonlySet<string> = new Set()) =>
+  FIGURE_IN_TEXT.test(t.replace(LABEL_TOKENS, '').replace(/\d+/g, (d) => (echo.has(d) ? '' : d)));
 /** Free-text fields that may carry figures because they are the verified answer bytes or reviewed option text. */
 /** Layout settings, not data: the only bare numbers allowed. */
 const LAYOUT_NUM = /\.props\.limit$/;
 const TEXT_EXEMPT = new Set(['answer', 'options', 'restatement', 'question', 'unit', 'citations']);
 
 /** Why a spec fails the closed-template and number-fidelity rules; empty when it passes. */
-export function specErrors(spec: ChartSpec, ev: Evidence): string[] {
+export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore): string[] {
   const errs: string[] = [];
+  if (!store) errs.push('no store: evidence cannot be recomputed, so nothing is trusted');
+  else errs.push(...recomputeErrors(ev, store));
+  // the answer text is exempt from the figure rule only because it must be the verified answer bytes
+  if (spec.answer !== undefined && store) {
+    const main = ev.items.find((i) => i.key === 'main');
+    const fresh = main && runRecipe(main, store);
+    if (!fresh || fresh.answer !== spec.answer) errs.push('spec.answer: not the recomputed answer text');
+  }
   if (!TEMPLATES.includes(spec.template)) errs.push(`template ${String(spec.template)} is not in the closed set`);
   for (const it of ev.items) if (hashOf(it.result) !== it.result_hash) errs.push(`evidence ${it.key}: result hash mismatch`);
   let nums = 0;
+  const echo = new Set(ev.items.find((i) => i.key === 'main')?.recipe?.question.match(/\d+/g) ?? []);
   const walk = (x: unknown, path: string, exempt: boolean): void => {
     if (typeof x === 'number' && LAYOUT_NUM.test(path) && Number.isInteger(x)) return;
     if (typeof x === 'number') { errs.push(`${path}: bare number ${x} has no ref`); return; }
-    if (typeof x === 'string') { if (!exempt && FIGURE_IN_TEXT.test(x)) errs.push(`${path}: text carries a figure: ${JSON.stringify(x)}`); return; }
+    if (typeof x === 'string') { if (!exempt && carriesFigure(x, ECHO_KEYS.has(path.split('.').pop()!) ? echo : undefined)) errs.push(`${path}: text carries a figure: ${JSON.stringify(x)}`); return; }
     if (isNum(x)) {
       nums++;
       const got = resolveRef(ev, x.ref);
@@ -80,6 +101,32 @@ export function specErrors(spec: ChartSpec, ev: Evidence): string[] {
   };
   walk(spec, 'spec', false);
   if (spec.template !== 'clarify_card' && nums === 0) errs.push('a chart spec must carry at least one traced number');
+  return errs;
+}
+
+const sortKeys = (x: unknown): unknown => Array.isArray(x) ? x.map(sortKeys) : x && typeof x === 'object'
+  ? Object.fromEntries(Object.entries(x).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, sortKeys(v)])) : x;
+function runRecipe(it: EvidenceItem, store: PortfolioStore) {
+  if (!it.recipe?.intent) return null;
+  const out = executeCompositionalPlan({ id: it.key, type: 'adhoc', question: it.recipe.question } as never, store, { intent: it.recipe.intent });
+  return out.envelope.proof && verifyAnswerEnvelope(out.envelope, store).valid ? out.envelope : null;
+}
+
+/**
+ * Re-executes every evidence item from its recipe through compute() and checks
+ * the stored result is byte-identical. A rehashed tamper fails here, because the
+ * hash is compared to the fresh result, not to the stored one.
+ */
+export function recomputeErrors(ev: Evidence, store: PortfolioStore): string[] {
+  const errs: string[] = [];
+  for (const it of ev.items) {
+    if (it.key === 'main' && it.recipe && JSON.stringify(sortKeys(it.recipe.intent)) !== JSON.stringify(sortKeys(parseQueryIntent(it.recipe.question, store))))
+      errs.push('evidence main: recipe intent is not the lexicon reading of its question');
+    const fresh = runRecipe(it, store);
+    if (!fresh) { errs.push(`evidence ${it.key}: recipe does not recompute to a verified answer`); continue; }
+    const h = hashOf(fresh.result);
+    if (h !== it.result_hash || hashOf(it.result) !== h) errs.push(`evidence ${it.key}: stored result differs from recomputed result`);
+  }
   return errs;
 }
 

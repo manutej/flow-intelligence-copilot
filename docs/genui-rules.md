@@ -6,8 +6,9 @@
 
 1. `coreQuestion()` cuts the presentation cues below out of the question, so S2's closed vocabulary only sees the data question.
 2. S2 parses and answers (`askFlowIqCopilot`, deterministic mode, model parse when configured). Multi-turn input split on `→` runs in one session.
-3. `pick()` applies the first matching rule and runs any extra verified sub-queries (per building, per source, per month, prior period).
-4. `askPanel()` validates. The server saves and reloads panels from `GENUI_STORE`.
+3. `intentGate()` sends the question to Clarify unless the S2 intent equals the lexicon reading in every field.
+4. `pick()` applies the first matching rule and runs any extra verified sub-queries (per building, per source, per month, prior period).
+5. `askPanel()` validates by recomputing every evidence item from its recipe. The server saves and reloads panels from `GENUI_STORE`.
 
 ## Rule table (first match wins)
 

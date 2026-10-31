@@ -1,5 +1,5 @@
 import { askFlowIqCopilot, type CopilotTurnResult } from '../agent/copilot.ts';
-import type { ParsedQueryIntent } from '../agent/intent.ts';
+import { parseQueryIntent, type ParsedQueryIntent } from '../agent/intent.ts';
 import { executeCompositionalPlan } from '../agent/planner.ts';
 import type { FairHousingSession } from '../domain/fair-housing.ts';
 import { hashOf } from '../agent/envelope.ts';
@@ -71,8 +71,8 @@ export function coreQuestion(q: string): string {
   return s ? s[0].toUpperCase() + s.slice(1) : q;
 }
 
-function itemFrom(key: string, label: string, env: AnswerEnvelope): EvidenceItem {
-  return { key, label, template_id: env.proof?.template_id ?? 'guard', result: env.result, result_hash: hashOf(env.result), citations: env.citations };
+function itemFrom(key: string, label: string, env: AnswerEnvelope, question: string, intent: ParsedQueryIntent): EvidenceItem {
+  return { key, label, template_id: env.proof?.template_id ?? 'guard', result: env.result, result_hash: hashOf(env.result), citations: env.citations, recipe: { question, intent } };
 }
 const num = (it: EvidenceItem, k: string): Num => ({ v: it.result[k] as number, ref: `items.${it.key}.result.${k}` });
 
@@ -82,7 +82,7 @@ function sub(store: PortfolioStore, question: string, intent: ParsedQueryIntent,
   const env = out.envelope;
   if (out.clarificationNeeded || (env.result as Record<string, unknown>).unknown || !env.proof) return null;
   if (!verifyAnswerEnvelope(env, store).valid) return null;
-  return itemFrom(key, label, env);
+  return itemFrom(key, label, env, question, intent);
 }
 
 function byBuilding(store: PortfolioStore, q: string, intent: ParsedQueryIntent, k: string): EvidenceItem[] {
@@ -137,7 +137,7 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
   if (env.proof && !turn.verification.valid) return { spec: clarify('unknown', turn, tid, asked, 'error_data'), evidence: { items: [] } };
   if (res.unknown || !intent || !env.proof) return { spec: clarify('unknown', turn, tid, asked), evidence: { items: [] } };
 
-  const main = itemFrom('main', 'answer', env);
+  const main = itemFrom('main', 'answer', env, core, intent);
   const items: EvidenceItem[] = [main];
   const m = intent.measure; const ag = intent.aggregation;
   const numKeys = Object.keys(res).filter((x) => typeof res[x] === 'number');
@@ -229,8 +229,9 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
   if (SCATTER.test(question) || m === 'avg_market_rent_and_sqft') {
     const names = store.operatingProperties.map((p) => p.name);
     const pts = store.operatingProperties.map((p) => {
-      const rent = sub(store, `What is the average market rent at ${p.name}?`, undefined as never, `${p.propertyId}_rent`, p.name);
-      const size = sub(store, `What is the average square footage at ${p.name}?`, undefined as never, `${p.propertyId}_sqft`, p.name);
+      const rq = `What is the average market rent at ${p.name}?`, sq = `What is the average square footage at ${p.name}?`;
+      const rent = sub(store, rq, parseQueryIntent(rq, store), `${p.propertyId}_rent`, p.name);
+      const size = sub(store, sq, parseQueryIntent(sq, store), `${p.propertyId}_sqft`, p.name);
       if (!rent || !size || typeof rent.result.usd !== 'number' || typeof size.result.sqft !== 'number') return null;
       items.push(rent, size); return { label: p.name, x: num(size, 'sqft'), y: num(rent, 'usd') };
     }).filter((x): x is NonNullable<typeof x> => !!x);
@@ -259,6 +260,20 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
   return done({ ...base, template: 'kpi', props: { value: num(main, k), unit, secondary: secondary.length ? secondary : undefined, good_direction: gd } });
 }
 
+const canon = (x: unknown): string => JSON.stringify(x, (_k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, y]) => y !== undefined).sort(([a], [b]) => a.localeCompare(b))) : v);
+/**
+ * Full-intent coverage: the picker charts only an intent that equals, field by
+ * field, the deterministic lexicon reading of the same question. A model parse
+ * that changes the measure, window, scope or any other field goes to Clarify,
+ * so the model can never choose which number is shown (S2 F2).
+ */
+export function intentGate(turn: CopilotTurnResult, core: string, store: PortfolioStore): ChartSpec | null {
+  const intent = intentOf(turn);
+  if (!intent || !turn.envelope.proof) return null;
+  if (canon(intent) === canon(parseQueryIntent(core, store))) return null;
+  return { ...clarify('clarify', turn, turn.envelope.proof.template_id, core), insight: 'The parsed reading differs from the question text', title: 'Which did you mean?' };
+}
+
 /** Full path: S2 parse (model if configured, deterministic otherwise) -> picker -> validated spec. */
 export async function askPanel(input: string, store: PortfolioStore, parse: ParseConfig | null = null): Promise<Panel> {
   // multi-turn input "a → b → c" runs every turn in one fair-housing session; the last turn is charted
@@ -267,8 +282,10 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   let turn!: CopilotTurnResult;
   for (const t of turns) turn = await askFlowIqCopilot(coreQuestion(t), { mode: 'deterministic', store, parse, session });
   const question = turns[turns.length - 1];
+  const gate = intentGate(turn, coreQuestion(question), store);
+  if (gate) return { question: input, spec: gate, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
   const { spec, evidence } = pick({ question, turn, store });
-  const errors = specErrors(spec, evidence);
+  const errors = specErrors(spec, evidence, store);
   // a spec that fails fidelity is never rendered as a chart
   const shown: ChartSpec = errors.length ? { ...clarify('unknown', turn, spec.intent, question, 'error_data') } : spec;
   return { question: input, spec: shown, evidence, errors, parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };

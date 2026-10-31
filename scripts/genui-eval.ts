@@ -1,3 +1,4 @@
+import { hashOf } from '../src/agent/envelope.ts';
 /**
  * GenUI eval: chart-choice accuracy against the labelled templates and number
  * fidelity (every number in every spec traces exactly to a verified result).
@@ -18,7 +19,7 @@ const out: Record<string, unknown> = {};
 let fail = false;
 for (const f of sets) {
   const rows = fs.readFileSync(path.join(ROOT, 'tests/fixtures', f), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
-  let right = 0, nums = 0, bad = 0, forged = 0, caught = 0; const miss: string[] = [];
+  let right = 0, nums = 0, bad = 0, forged = 0, caught = 0, resealed = 0, resealCaught = 0, textForged = 0, textCaught = 0; const miss: string[] = [];
   const byT: Record<string, [number, number]> = {};
   for (const r of rows) {
     const p = await askPanel(r.text, store);
@@ -30,15 +31,27 @@ for (const f of sets) {
     if (countNums(p.spec) > 0) {
       forged++;
       const f2 = JSON.parse(s.replace(/"v":(-?[\d.]+)/, (_, n) => `"v":${Number(n) + 1}`));
-      if (specErrors(f2, p.evidence).length) caught++;
+      if (specErrors(f2, p.evidence, store).length) caught++;
+      // TENACITY G1 repro: scale one value x10 in BOTH spec and evidence, then rehash the evidence
+      const m = s.match(/"v":(-?[\d.]+),"ref":"([^"]+)"/);
+      if (m && Number(m[1]) !== 0) {
+        resealed++;
+        const [, key, , ...pth] = m[2].split('.');
+        const ev = structuredClone(p.evidence) as any; const it = ev.items.find((i: any) => i.key === key);
+        let o = it.result; for (const q of pth.slice(0, -1)) o = o[q]; o[pth.at(-1)!] = Number(m[1]) * 10; it.result_hash = hashOf(it.result);
+        if (specErrors(JSON.parse(s.replace(m[0], `"v":${Number(m[1]) * 10},"ref":"${m[2]}"`)), ev, store).length) resealCaught++;
+      }
+      // TENACITY G2 repro: a plain integer in chart text
+      textForged++; const t2 = JSON.parse(s); t2.insight = 'Only 3 units are vacant here';
+      if (specErrors(t2, p.evidence, store).length) textCaught++;
     }
   }
-  out[f] = { questions: rows.length, chart_choice_correct: right, accuracy: +(right / rows.length).toFixed(4), traced_numbers: nums, fidelity_errors: bad, forged_specs: forged, forged_rejected: caught, by_template: byT, misses: miss };
-  if (bad || caught !== forged) fail = true;
+  out[f] = { questions: rows.length, chart_choice_correct: right, accuracy: +(right / rows.length).toFixed(4), traced_numbers: nums, fidelity_errors: bad, forged_specs: forged, forged_rejected: caught, resealed_x10: resealed, resealed_x10_rejected: resealCaught, integer_text: textForged, integer_text_rejected: textCaught, by_template: byT, misses: miss };
+  if (bad || caught !== forged || resealCaught !== resealed || textCaught !== textForged) fail = true;
 }
 if (process.argv.includes('--json')) console.log(JSON.stringify(out, null, 2));
 else for (const [f, r] of Object.entries(out) as [string, any][]) {
-  console.log(`${f}: chart choice ${r.chart_choice_correct}/${r.questions} (${(r.accuracy * 100).toFixed(1)}%), numbers traced ${r.traced_numbers} with ${r.fidelity_errors} fidelity errors, forged ${r.forged_rejected}/${r.forged_specs} rejected`);
+  console.log(`${f}: chart choice ${r.chart_choice_correct}/${r.questions} (${(r.accuracy * 100).toFixed(1)}%), numbers traced ${r.traced_numbers} with ${r.fidelity_errors} fidelity errors, forged ${r.forged_rejected}/${r.forged_specs}, resealed x10 ${r.resealed_x10_rejected}/${r.resealed_x10}, integer text ${r.integer_text_rejected}/${r.integer_text} rejected`);
   for (const m of r.misses) console.log(`  miss ${m}`);
 }
 process.exit(fail ? 1 : 0);

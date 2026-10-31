@@ -5,7 +5,9 @@ This is the final contract between the picker and the renderer (`ui/genui/index.
 ## Rules for every spec
 
 - `Num = { v: number, ref: "items.<key>.result.<field>" }`. Every figure is a Num that resolves into evidence, and every evidence item is a verified S2 result with its `result_hash`. The only bare number allowed is `ranked_table.props.limit`, which is layout only.
-- Text fields hold no figures (`$`, `%`, decimals or thousands separators). Exempt fields: `answer`, `options`, `restatement`, `question`, `unit` and `citations`.
+- Evidence is never trusted as stored. Every item carries a `recipe {question, intent}`, and `specErrors(spec, evidence, store)` re-runs each recipe through compute and `verifyAnswerEnvelope`. The stored result must be byte-identical to the fresh one, so a tamper that is rehashed still fails. The main recipe's intent must equal the lexicon reading of its question. `spec.answer` must equal the recomputed answer text. Without a store, the validator rejects everything.
+- Text fields hold no digits. The only exceptions are labels: years, ISO months and dates, Q1–Q4, H1–H2, P01-style property ids and D-0001-style draft ids. A title or subtitle may also repeat a number the user typed (for example "3-bedroom"). Exempt fields: `answer` (bound as above), `options`, `restatement`, `question`, `unit` and `citations`.
+- Intent gate: the picker charts an intent only when every field matches the deterministic lexicon reading of the question. If the model parse differs from it in any field (measure, window, scope, sources and so on), the user gets a clarify card instead (`intentGate` in picker.ts).
 - The renderer formats values exactly as they are, with no rounding (for example `$46,599.90`). Only axis ticks are rounded.
 - `Unit = count | $ | % | sqft | leases`. `good_direction = up | down`. A delta is drawn as an arrow, a sign and favorable/unfavorable. Favorable is gold; unfavorable gets a dashed border. No red or green.
 - `state = ready | loading | empty | partial | error_data | model_down`. A `partial` spec lists what is absent in `missing`.
