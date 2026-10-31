@@ -149,7 +149,7 @@ const unitEnd = (t: string, n: StatedNumber) => n.end + (t.slice(n.end).match(ne
 export function readSettings(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore, isLabel: (t: string, start: number, end: number) => boolean = () => false): SettingReading {
   const t = prep(input);
   const nums: Num[] = statedNumbers(input).filter((n) => !isLabel(t, n.start, n.end)).map((n) => ({ ...n, unit: unitOf(t, n) }));
-  const bindings: Binding[] = []; let ambiguous = false;
+  const bindings: Binding[] = []; let ambiguous = false; const consumed: [number, number][] = [];
   for (const w of t.matchAll(SETTING_WORD)) {
     const g = w.groups!, ws = w.index!, we = ws + w[0].length;
     const kind = (Object.keys(g) as (keyof typeof g)[]).find((k) => g[k] !== undefined)!;
@@ -160,10 +160,14 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
     // a number that runs past the setting's name ("beta zero one") is not a stated value we can read
     if (nums.some((n) => n.start < we && n.end > we)) { ambiguous = true; continue; }
     // fail closed: only a statement that parses fully under the strict grammar binds a value
-    const st = STATEMENT_AFTER.exec(t.slice(we)) ?? STATEMENT_BEFORE.exec(t.slice(0, ws));
+    const after = STATEMENT_AFTER.exec(t.slice(we)), before = after ? null : STATEMENT_BEFORE.exec(t.slice(0, ws));
+    const st = after ?? before;
+    if (st) consumed.push(after ? [we, we + after[0].length] : [before!.index, ws]);
     if (st) {
       const v = statementValue(st.groups!);
       const param = kind === 'prior' ? (v.unit !== 'none' ? PARAMETERS.beta0 : null) : PARAMETERS[kind as Parameter['id']];
+      // "per CAD" makes a rate: only the CAD rate is one
+      if (param && st.groups!.per && param.id !== 'cadRate') { ambiguous = true; continue; }
       if (param) bindings.push({ param, value: v.value, unit: v.unit }); else ambiguous = true; // "a prior of 1": which prior?
       continue;
     }
@@ -172,9 +176,20 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
     if (near) ambiguous = true;
   }
   // the rate written as an exchange, with no setting word: "1 CAD = 0.73 USD"
-  for (const m of t.matchAll(EXCHANGE)) bindings.push({ param: PARAMETERS.cadRate, value: Number(m.groups!.num), unit: 'USD' });
-  const matches = (b: Binding) => b.param.applies(intent) && b.value === b.param.value(store) && UNITS_OK[b.param.id].includes(b.unit);
-  return { bindings, ambiguous, mismatch: bindings.find((b) => !matches(b)) ?? null };
+  for (const m of t.matchAll(EXCHANGE)) { bindings.push({ param: PARAMETERS.cadRate, value: Number(m.groups!.num), unit: 'USD' }); consumed.push([m.index!, m.index! + m[0].length]); }
+  // accounting: once a setting is stated (or the computation is the learner, whose priors a user can
+  // state), every other number in every turn must be an input the computation used or a known
+  // non-setting (rank, duration; dates and ids are not read as numbers). Anything else, such as a
+  // later correction ("→ actually 2", "Use 1800 instead"), cannot be placed: neutral clarify.
+  if (bindings.length || learner(intent)) {
+    const used = usedInputs(intent);
+    const isConsumed = (n: StatedNumber) => consumed.some(([a, b]) => n.start >= a && n.end <= b);
+    if (nums.some((n) => !isConsumed(n) && !isRank(t, n) && n.unit !== 'duration' && !used.has(n.value))) ambiguous = true;
+  }
+  const equal = (b: Binding) => b.value === b.param.value(store) && UNITS_OK[b.param.id].includes(b.unit);
+  // the policy value stated where the computation does not use that setting ("Is beta0 3250?"): neutral
+  if (bindings.some((b) => equal(b) && !b.param.applies(intent))) ambiguous = true;
+  return { bindings, ambiguous, mismatch: bindings.find((b) => !equal(b)) ?? null };
 }
 /** The setting values a computation used, as stated in the question and equal to policy: the only setting numbers a title may echo. */
 export function boundPolicyValues(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore): Set<number> {

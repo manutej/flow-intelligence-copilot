@@ -109,3 +109,15 @@ test('strict grammar fails closed (TENACITY 228b925 1-4)', async () => {
   // 4: a bare rank word is not a setting value
   assert.equal((await askPanel('Which 1 channel has the highest spend after CAD rate conversion?', store)).spec.template, 'sorted_bar');
 });
+test('accounting: with a setting present every other number must be placed (TENACITY 717bfce)', async () => {
+  const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
+  const X = 'Then, was decision X001 in decisions.csv accepted, who decided it, and what was the monthly delta?';
+  for (const q of ['beta0 = 3250 → no, 1800 → ' + Q, 'beta0 = 3250 → make it 1800 → ' + Q, 'beta0 = 3250 → 1800 → ' + Q, 'beta0 = 3250, sorry 1800 → ' + Q,
+    'beta0 = 3250 and 1800 → ' + Q, 'beta0 = $3250 → change it to $1800 → ' + Q, 'alpha0 = 1 → actually 2 → ' + Q, 'Use 1800 instead → ' + Q,
+    'CAD rate 0.73 → actually 0.8 → ' + X, 'beta0 = 3250 USD per CAD → ' + Q, 'Is beta0 3250?']) {
+    const a = await askPanel(q, store);
+    assert.equal(a.spec.template, 'clarify_card', q);
+    assert.ok(!/not supported/.test(a.spec.title ?? ''), q);
+  }
+  for (const q of ['beta0 = 3250 → ' + Q, 'Is beta0 3250? → ' + Q, Q]) assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
+});
