@@ -855,6 +855,7 @@ export const FLOWIQ_SPECULATIVE_INTENT_QUESTIONS = {
     new_vs_renewal_and_concession:
       'Count of new vs renewal lease starts and average concession in USD',
     average_concession: 'Average lease concession in USD',
+    total_concession: 'Total lease concessions in USD',
     rent_at_risk:
       'Monthly rent at risk on leases with notice_given ending in the window',
     lease_count: 'Count of leases matching the filters',

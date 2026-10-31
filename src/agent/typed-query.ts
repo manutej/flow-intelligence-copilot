@@ -15,7 +15,7 @@ export const MEASURES = new Set(['void_and_duplicate_counts', 'decision_lookup',
   'dead_spend_building', 'tour_to_lease_rate', 'apply_rate', 'applied_without_tour', 'applied_and_leased',
   'cost_per_lead_and_tour', 'cost_per_lead', 'cost_per_tour', 'lead_count', 'spend_h1_vs_q3', 'spend_total',
   'signed_leases_ranking', 'cost_per_signed_lease', 'ending_and_renewed', 'renewal_rate',
-  'renewal_rate_class_comparison', 'new_vs_renewal_and_concession', 'average_concession', 'rent_at_risk',
+  'renewal_rate_class_comparison', 'new_vs_renewal_and_concession', 'average_concession', 'total_concession', 'rent_at_risk',
   'lease_count', 'vacancy_rate', 'occupied_share', 'avg_market_rent_and_sqft', 'avg_market_rent', 'avg_sqft',
   'rent_per_sqft', 'unit_count']);
 export const DOMAIN_SET = DOMAINS, AGGREGATION_SET = AGGREGATIONS;

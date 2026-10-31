@@ -919,6 +919,18 @@ export function executeCompositionalPlan(
       );
     }
 
+    if (intent.measure === 'total_concession') {
+      // One building is named only when the question resolved to exactly one.
+      const one = propRes?.matched.length === 1 ? propRes.matched[0] : undefined;
+      const where = one ? `At ${one.name} (${one.propertyId})` : 'Across the operating portfolio';
+      const leases = `${plural(leaseSummary.totalMatchingLeases, `${intent.leaseType ?? 'matching'} lease`)}${intent.leaseStartWindow ? ` starting in ${intent.dateWindow.label}` : ` in ${intent.dateWindow.label}`}`;
+      return finalize(
+        `${where}, concessions totalled ${fmtUsd(leaseSummary.totalConcessionUsd)} on the ${leases}.`,
+        { usd: leaseSummary.totalConcessionUsd, leases: leaseSummary.totalMatchingLeases },
+        leaseSummary.citations.slice(0, 8),
+      );
+    }
+
     if (intent.measure === 'average_concession') {
       if (
         intent.aggregation === 'argmax' ||
@@ -963,7 +975,7 @@ export function executeCompositionalPlan(
         );
       }
       return finalize(
-        `At ${propRow?.propertyName ?? 'the matching buildings'} (${propRow?.propertyId ?? ''}), the average concession on the ${leaseSummary.totalMatchingLeases} ${intent.leaseType ?? 'matching'} leases in ${intent.dateWindow.label} was ${fmtUsd(leaseSummary.averageConcessionUsd)} (${store.policy.includeZeroConcessions ? 'zeros included' : 'non-zero only'}).`,
+        `${propRes?.matched.length === 1 ? `At ${propRow?.propertyName} (${propRow?.propertyId})` : 'Across the operating portfolio'}, the average concession on the ${leaseSummary.totalMatchingLeases} ${intent.leaseType ?? 'matching'} leases in ${intent.dateWindow.label} was ${fmtUsd(leaseSummary.averageConcessionUsd)} (${store.policy.includeZeroConcessions ? 'zeros included' : 'non-zero only'}).`,
         {
           usd: leaseSummary.averageConcessionUsd,
         },

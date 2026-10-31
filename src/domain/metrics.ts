@@ -347,6 +347,8 @@ export interface PropertyLeaseMetrics {
   readonly renewalRatePercent: number;
   readonly totalMonthlyRentUsd: number;
   readonly averageConcessionUsd: number;
+  /** Sum of concession_usd over the matching leases. */
+  readonly totalConcessionUsd: number;
   readonly citations: readonly CitationId[];
 }
 
@@ -361,6 +363,8 @@ export interface LeaseQuerySummary {
   readonly renewalRatePercent: number;
   readonly totalMonthlyRentUsd: number;
   readonly averageConcessionUsd: number;
+  /** Sum of concession_usd over the matching leases. */
+  readonly totalConcessionUsd: number;
   readonly byProperty: readonly PropertyLeaseMetrics[];
   readonly citations: readonly CitationId[];
 }
@@ -545,6 +549,7 @@ export function queryLeasesAndRenewals(
       renewalRatePercent,
       totalMonthlyRentUsd,
       averageConcessionUsd,
+      totalConcessionUsd: roundTo(propLeases.reduce((acc, l) => acc + l.concessionUsd, 0), 2),
       citations: propCitations,
     });
   }
@@ -590,6 +595,7 @@ export function queryLeasesAndRenewals(
     ),
     totalMonthlyRentUsd,
     averageConcessionUsd,
+    totalConcessionUsd: roundTo(allMatching.reduce((acc, l) => acc + l.concessionUsd, 0), 2),
     byProperty,
     citations: [...citations],
   };
