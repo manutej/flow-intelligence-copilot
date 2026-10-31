@@ -19,16 +19,22 @@ import { inLabel, specErrors, type ChartSpec, type Evidence, type EvidenceItem, 
  */
 const UNIT_OF: Record<string, Unit> = { usd: '$', percent: '%', count: 'count', sqft: 'sqft', leases: 'leases' };
 const KEY_ORDER = ['usd', 'percent', 'count', 'sqft', 'leases'];
-const primaryKey = (r: Readonly<Record<string, unknown>>) => KEY_ORDER.find((k) => typeof r[k] === 'number');
+/** The result key a measure is about, where the generic order would pick a side figure (avg_sqft also carries the unit count). */
+const MEASURE_KEY: Readonly<Record<string, string>> = { avg_sqft: 'sqft', total_concession: 'usd', lease_count: 'count' };
+const primaryKey = (r: Readonly<Record<string, unknown>>, m?: string) => {
+  const own = m ? MEASURE_KEY[m] : undefined;
+  if (own) return typeof r[own] === 'number' ? own : undefined;
+  return KEY_ORDER.find((k) => typeof r[k] === 'number');
+};
 
 /** The insight each measure family shows, named for the reader. */
 export const INSIGHT: Record<string, string> = {
   unit_count: 'Inventory: how many units match', vacancy_rate: 'Vacancy pressure', occupied_share: 'Occupancy health',
   avg_market_rent: 'Pricing position', avg_sqft: 'Unit mix size', rent_per_sqft: 'Price per square foot',
   avg_market_rent_and_sqft: 'Pricing vs size', lease_count: 'Leasing velocity', renewal_rate: 'Retention',
-  ending_and_renewed: 'Renewal pipeline', average_concession: 'Concession cost', rent_at_risk: 'Revenue at risk',
+  ending_and_renewed: 'Renewal pipeline', average_concession: 'Concession cost', total_concession: 'Concession cost', rent_at_risk: 'Revenue at risk',
   new_vs_renewal_and_concession: 'New vs renewal mix', renewal_rate_class_comparison: 'Retention by class',
-  lead_count: 'Demand volume', spend_total: 'Marketing spend', spend_h1_vs_q3: 'Spend change between periods',
+  lead_count: 'Demand volume', leads_leased: 'Lead conversion', spend_total: 'Marketing spend', spend_h1_vs_q3: 'Spend change between periods',
   cost_per_lead: 'Channel efficiency', cost_per_tour: 'Channel efficiency', cost_per_lead_and_tour: 'Channel efficiency',
   cost_per_signed_lease: 'Channel return (cost per lease)', signed_leases_ranking: 'Lease production',
   tour_to_lease_rate: 'Funnel conversion', apply_rate: 'Funnel conversion', applied_without_tour: 'Funnel leakage',
@@ -144,8 +150,8 @@ function shiftMonths(months: readonly string[]): string[] {
 /** Which way is good, per measure (design: no red/green; the renderer says favorable/unfavorable). */
 export const GOOD_DIRECTION: Record<string, 'up' | 'down'> = {
   vacancy_rate: 'down', unit_count: 'down', occupied_share: 'up', avg_market_rent: 'up', rent_per_sqft: 'up', avg_sqft: 'up',
-  lease_count: 'up', renewal_rate: 'up', ending_and_renewed: 'up', average_concession: 'down', rent_at_risk: 'down',
-  lead_count: 'up', spend_total: 'down', spend_h1_vs_q3: 'down', cost_per_lead: 'down', cost_per_tour: 'down', cost_per_lead_and_tour: 'down',
+  lease_count: 'up', renewal_rate: 'up', ending_and_renewed: 'up', average_concession: 'down', total_concession: 'down', rent_at_risk: 'down',
+  lead_count: 'up', leads_leased: 'up', spend_total: 'down', spend_h1_vs_q3: 'down', cost_per_lead: 'down', cost_per_tour: 'down', cost_per_lead_and_tour: 'down',
   cost_per_signed_lease: 'down', signed_leases_ranking: 'up', tour_to_lease_rate: 'up', apply_rate: 'up', applied_and_leased: 'up',
   dead_spend_pairs: 'down', dead_spend_building: 'down', reallocation_leases: 'up', void_and_duplicate_counts: 'down',
 };
@@ -175,12 +181,12 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
   const items: EvidenceItem[] = [main];
   const m = intent.measure; const ag = intent.aggregation;
   const numKeys = Object.keys(res).filter((x) => typeof res[x] === 'number');
-  let k: string | undefined = primaryKey(res) ?? numKeys[0];
+  let k: string | undefined = primaryKey(res, intent.measure) ?? (MEASURE_KEY[intent.measure] ? undefined : numKeys[0]);
   let pre: EvidenceItem[] | null = null;
   if (!k && (ag === 'argmax' || ag === 'argmin')) {
     // the winner-only result: the breakdown supplies the measured key
     pre = res.source !== undefined ? bySource(store, core, intent, 'usd') : byBuilding(store, core, intent, '');
-    k = pre.length ? primaryKey(pre[0].result) : undefined;
+    k = pre.length ? primaryKey(pre[0].result, intent.measure) : undefined;
     if (k) pre = pre.filter((x) => typeof x.result[k!] === 'number');
   }
   const unit: Unit | undefined = k ? UNIT_OF[k] : undefined;
@@ -231,8 +237,9 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
   }
   if (ag === 'value' && DELTA.test(question) && intent.dateWindow.months.length) {
     const pm = shiftMonths(intent.dateWindow.months);
-    const pw = { key: 'PRIOR', label: `${monthWin(pm[0]).label} to ${monthWin(pm[pm.length - 1]).label}`, startDate: `${pm[0]}-01`, endDate: monthWin(pm[pm.length - 1]).endDate, months: pm };
-    const prior = sub(store, core, { ...intent, dateWindow: pw } as ParsedQueryIntent, 'prior', pw.label);
+    const pw = { key: 'PRIOR', label: pm.length === 1 ? monthWin(pm[0]).label : `${monthWin(pm[0]).label} to ${monthWin(pm[pm.length - 1]).label}`, startDate: `${pm[0]}-01`, endDate: monthWin(pm[pm.length - 1]).endDate, months: pm };
+    // the prior period moves every window the question is cut by, the lease-start window included
+    const prior = sub(store, core, { ...intent, dateWindow: pw, ...(intent.leaseStartWindow ? { leaseStartWindow: pw } : {}) } as ParsedQueryIntent, 'prior', pw.label);
     if (prior && typeof prior.result[k] === 'number') {
       items.push(prior);
       return done({ ...base, template: 'kpi_delta', props: { value: num(main, k), unit, prior: num(prior, k), vs: pw.label, current_label: intent.dateWindow.label, good_direction: gd } });
@@ -241,7 +248,7 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
   // trend_line: over time
   if (TREND.test(question) && intent.dateWindow.months.length >= 2) {
     const want = intent.dateWindow.months.map((mm) => monthWin(mm).label);
-    const pts = intent.dateWindow.months.map((mm) => sub(store, core, { ...intent, aggregation: 'value', dateWindow: monthWin(mm) } as ParsedQueryIntent, `M${mm.replace('-', '')}`, monthWin(mm).label))
+    const pts = intent.dateWindow.months.map((mm) => sub(store, core, { ...intent, aggregation: 'value', dateWindow: monthWin(mm), ...(intent.leaseStartWindow ? { leaseStartWindow: monthWin(mm) } : {}) } as ParsedQueryIntent, `M${mm.replace('-', '')}`, monthWin(mm).label))
       .filter((x): x is EvidenceItem => !!x && typeof x.result[k] === 'number');
     if (pts.length >= 2) {
       items.push(...pts);

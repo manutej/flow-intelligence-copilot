@@ -34,6 +34,7 @@ export type IntentMeasure =
   | 'cost_per_lead'
   | 'cost_per_tour'
   | 'lead_count'
+  | 'leads_leased'
   | 'spend_h1_vs_q3'
   | 'spend_total'
   | 'signed_leases_ranking'
@@ -944,7 +945,8 @@ function parseQueryIntentRaw(
     } else if (/\b(cost\s+per\s+tour|cpt)\b/i.test(question)) {
       measure = 'cost_per_tour';
     } else if (LEAD_COUNT_RE.test(question)) {
-      measure = 'lead_count';
+      // "leads that leased" counts the leads that converted, not every lead
+      measure = /\bleads?\b[^?.]*\b(?:leased|converted\s+(?:to|into)\s+(?:a\s+)?leases?|signed\s+(?:a\s+)?leases?)\b/i.test(question) ? 'leads_leased' : 'lead_count';
     } else if (
       /\bh1\s+spend\s+(?:vs\.?|versus)\s+q3\s+spend\b/i.test(question)
     ) {
@@ -1215,6 +1217,7 @@ const MEASURE_STATISTICS: Readonly<Record<IntentMeasure, readonly Statistic[]>> 
   cost_per_lead: ['average'],
   cost_per_tour: ['average'],
   lead_count: ['count'],
+  leads_leased: ['count'],
   spend_h1_vs_q3: ['sum'],
   spend_total: ['sum'],
   signed_leases_ranking: ['count'],

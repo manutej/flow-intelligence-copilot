@@ -299,15 +299,41 @@ export function executeCompositionalPlan(
     }
 
     if (wantsLearnedChannelRanking && report.channelRankings.length > 0) {
+      // the learner ranks channels within one building: the named building, else the one
+      // building every evaluated decision is in; never the first decision's building by default
+      const one = <T,>(xs: readonly T[]) => (new Set(xs).size === 1 ? xs[0] : undefined);
       const targetPropId =
-        matchedPropIds?.[0] ?? report.evaluatedDecisions[0]?.propertyId;
+        matchedPropIds && matchedPropIds.length > 0
+          ? one(matchedPropIds)
+          : one(report.evaluatedDecisions.map((d) => d.propertyId)) ?? one(report.channelRankings.map((r) => r.propertyId));
       const propRanks = targetPropId
         ? report.channelRankings.filter((r) => r.propertyId === targetPropId)
-        : report.channelRankings;
+        : [];
       const sortedByPosterior = [...propRanks].sort(
-        (a, b) => a.outcomeLearnedCpslUsd - b.outcomeLearnedCpslUsd,
+        (a, b) => a.outcomeLearnedCpslUsd - b.outcomeLearnedCpslUsd || a.source.localeCompare(b.source),
       );
+      const namedSrc = intent.mentionedSources.length === 1 ? intent.mentionedSources[0] : undefined;
+      if (namedSrc) {
+        // one named channel gets its own posterior, not the top channel's
+        const r = sortedByPosterior.find((x) => x.source === namedSrc);
+        return finalize(
+          r
+            ? `At ${r.propertyName} (${r.propertyId}), under the conjugate Gamma-Poisson Empirical-Bayes learner, ${r.source} ranks #${r.learnedRankInProperty} with a post-outcome posterior CPSL of ${fmtUsd(r.outcomeLearnedCpslUsd)}.`
+            : `The learner has no ranking for ${namedSrc} at ${targetPropId ? buildingLabel([targetPropId]) : 'one building'}, so its posterior CPSL is not defined.`,
+          { source: namedSrc, usd: r ? r.outcomeLearnedCpslUsd : null },
+          r ? r.citations.slice(0, 8) : report.citations.slice(0, 8),
+        );
+      }
       const topChannel = sortedByPosterior[0];
+      if (!targetPropId || (sortedByPosterior[1] && sortedByPosterior[1].outcomeLearnedCpslUsd === topChannel?.outcomeLearnedCpslUsd)) {
+        return finalize(
+          !targetPropId
+            ? 'The learner ranks channels within one building; name the building to get its top channel.'
+            : `At ${buildingLabel([targetPropId])}, ${sortedByPosterior.filter((r) => r.outcomeLearnedCpslUsd === topChannel!.outcomeLearnedCpslUsd).map((r) => r.source).join(' and ')} tie for the lowest posterior CPSL at ${fmtUsd(topChannel!.outcomeLearnedCpslUsd)}.`,
+          { source: null, usd: null },
+          report.citations.slice(0, 8),
+        );
+      }
       if (topChannel) {
         return finalize(
           `At ${topChannel.propertyName} (${topChannel.propertyId}), under the conjugate Gamma-Poisson Empirical-Bayes learner (alpha0=${report.priorAlpha0}, beta0=$${report.priorBeta0Usd}), ${topChannel.source} ranks #${topChannel.learnedRankInProperty} with the lowest post-outcome posterior CPSL at ${fmtUsd(topChannel.outcomeLearnedCpslUsd)} (raw CPSL ${fmtUsd((topChannel.rawCpslUsd ?? 0))} across ${plural(topChannel.totalSignedLeases, 'lease')} and ${fmtUsd(topChannel.totalSpendUsd)} spend; windowInvariance=${report.windowInvarianceVerified}).`,
@@ -518,7 +544,28 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'tour_to_lease_rate') {
-      const row = mkt.byPropertySource[0];
+      // one row is answered only when the question picks it: the one named source, the only
+      // row, or the extreme of a ranking; otherwise no row stands for the question
+      const t2lRows = mkt.byPropertySource;
+      // "which source has the best rate" ranks even when the parse kept a plain value
+      const t2lAgg = intent.aggregation !== 'value' ? intent.aggregation
+        : /\bwhich\b/i.test(question) && /\b(?:best|highest|top)\b/i.test(question) ? 'argmax'
+          : /\bwhich\b/i.test(question) && /\b(?:worst|lowest)\b/i.test(question) ? 'argmin' : 'value';
+      const t2lRanked = t2lAgg === 'argmax' || t2lAgg === 'argmin'
+        ? [...t2lRows].filter((r) => r.touredCount > 0).sort((a, b) => (t2lAgg === 'argmax' ? b.tourToLeaseConversionPercent - a.tourToLeaseConversionPercent : a.tourToLeaseConversionPercent - b.tourToLeaseConversionPercent) || a.source.localeCompare(b.source))
+        : null;
+      const row = intent.mentionedSources.length === 1
+        ? t2lRows.find((r) => r.source === intent.mentionedSources[0])
+        : t2lRanked
+          ? (t2lRanked.length > 1 && t2lRanked[0].tourToLeaseConversionPercent === t2lRanked[1].tourToLeaseConversionPercent ? undefined : t2lRanked[0])
+          : t2lRows.length === 1 ? t2lRows[0] : undefined;
+      if (!row && t2lRows.length > 1) {
+        return finalize(
+          `At ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, the tour-to-lease rate is reported per source; name one source to get its rate.`,
+          { percent: null },
+          propRes?.citations ?? [],
+        );
+      }
       if (!row) {
         const src = intent.mentionedSources[0] ?? 'the requested source';
         return finalize(
@@ -576,7 +623,17 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_lead_and_tour') {
-      const srcRow = mkt.bySource[0];
+      // one source row is answered only when it is the named source or the only row
+      const srcRow = intent.mentionedSources.length === 1
+        ? mkt.bySource.find((r) => r.source === intent.mentionedSources[0])
+        : mkt.bySource.length === 1 ? mkt.bySource[0] : undefined;
+      if (!srcRow && mkt.bySource.length > 1) {
+        return finalize(
+          `In ${mkt.windowLabel}, cost per lead and per tour are reported per source; name one source to get both figures.`,
+          { cpl_usd: null, cpt_usd: null },
+          mkt.citations.slice(0, 8),
+        );
+      }
       if (!srcRow) {
         return finalize(
           `No matching source had spend or leads in ${mkt.windowLabel}, so cost per lead and per tour are not defined.`,
@@ -597,6 +654,34 @@ export function executeCompositionalPlan(
       );
     }
 
+    if (intent.measure === 'cost_per_lead' && (intent.aggregation === 'argmax' || intent.aggregation === 'argmin') && /\b(?:which|what)\s+(?:building|property|asset)\b/i.test(question)) {
+      // "which building": rank buildings by their pooled paid cost per lead, not sources
+      const byProp = new Map<string, { id: string; name: string; spend: number; leads: number; cites: CitationId[] }>();
+      for (const r of mkt.byPropertySource) {
+        if (!r.isPaidSource || (intent.mentionedSources.length && !intent.mentionedSources.includes(r.source))) continue;
+        const e = byProp.get(r.propertyId) ?? { id: r.propertyId, name: r.propertyName, spend: 0, leads: 0, cites: [] };
+        e.spend += r.spendUsd; e.leads += r.leadsCreatedCount; e.cites.push(...r.citations.slice(0, 2));
+        byProp.set(r.propertyId, e);
+      }
+      const want = intent.aggregation === 'argmax' ? 'highest' : 'lowest';
+      const ranked = [...byProp.values()].filter((e) => e.leads > 0).map((e) => ({ ...e, usd: Math.round((e.spend / e.leads) * 100) / 100 }))
+        .sort((a, b) => (intent.aggregation === 'argmax' ? b.usd - a.usd : a.usd - b.usd) || a.name.localeCompare(b.name));
+      const best = ranked[0];
+      const tied = best ? ranked.filter((e) => e.usd === best.usd) : [];
+      if (!best || tied.length > 1) {
+        return finalize(
+          best ? `In ${mkt.windowLabel}, ${tied.map((e) => e.name).join(' and ')} tie for the ${want} cost per lead at ${fmtUsd(best.usd)}.` : `No building had paid leads in ${mkt.windowLabel}, so cost per lead is not defined.`,
+          { property_id: null, usd: best ? best.usd : null },
+          mkt.citations.slice(0, 8),
+        );
+      }
+      return finalize(
+        `In ${mkt.windowLabel}, ${best.name} (${best.id}) had the ${want} pooled cost per lead at ${fmtUsd(best.usd)} (${fmtUsd(best.spend)} paid spend / ${plural(best.leads, 'deduplicated lead')})${ranked[1] ? `; next: ${ranked[1].name} at ${fmtUsd(ranked[1].usd)}` : ''}.`,
+        { property_id: best.id, usd: best.usd },
+        best.cites.slice(0, 8),
+      );
+    }
+
     if (intent.measure === 'cost_per_lead') {
       const rows =
         matchedPropIds && matchedPropIds.length === 1
@@ -609,7 +694,25 @@ export function executeCompositionalPlan(
         (intent.aggregation === 'argmin' || intent.aggregation === 'argmax') && intent.mentionedSources.length !== 1 && rankable.length > 1
           ? [...rankable].sort((a, b) => intent.aggregation === 'argmax' ? b.costPerLeadUsd! - a.costPerLeadUsd! : a.costPerLeadUsd! - b.costPerLeadUsd!)
           : null;
-      const row = ranked ? ranked[0] : rows[0];
+      // unranked and not one named source: the pooled figure over the paid sources in scope
+      // (posted spend / their deduplicated leads), never the first source row
+      if (!ranked && intent.mentionedSources.length !== 1) {
+        const pool = rows.filter((r) => r.isPaidSource && (intent.mentionedSources.length === 0 || intent.mentionedSources.includes(r.source)));
+        const spend = pool.reduce((a, r) => a + r.spendUsd, 0);
+        const leads = pool.reduce((a, r) => a + r.leadsCreatedCount, 0);
+        const where = matchedPropIds && matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)}` : 'Across the matching operating buildings';
+        const set = intent.mentionedSources.length ? intent.mentionedSources.join(' and ') : 'paid sources';
+        if (leads === 0) {
+          return finalize(`${where} in ${mkt.windowLabel}, ${set} had no deduplicated leads, so cost per lead is not defined.`, { usd: null }, propRes?.citations ?? mkt.citations.slice(0, 8));
+        }
+        const usd = Math.round((spend / leads) * 100) / 100;
+        return finalize(
+          `${where} in ${mkt.windowLabel}, the pooled cost per lead across ${set} was ${fmtUsd(usd)} (${fmtUsd(spend)} spend / ${plural(leads, 'deduplicated lead')}).`,
+          { usd },
+          pool.flatMap((r) => r.citations).slice(0, 8),
+        );
+      }
+      const row = ranked ? ranked[0] : rows.find((r) => r.source === intent.mentionedSources[0]);
       if (!row) {
         const src = intent.mentionedSources[0] ?? null;
         return finalize(
@@ -647,7 +750,34 @@ export function executeCompositionalPlan(
       const eligible = mkt.byPropertySource.filter(
         (r) => r.isPaidSource && r.costPerTourUsd !== null,
       );
-      const top = eligible[0];
+      // the row answered is the named source, the ranking's unique extreme, or the only row; never row 0
+      const cptRanked = intent.aggregation === 'argmax' || intent.aggregation === 'argmin'
+        ? [...eligible].sort((a, b) => (intent.aggregation === 'argmax' ? b.costPerTourUsd! - a.costPerTourUsd! : a.costPerTourUsd! - b.costPerTourUsd!))
+        : null;
+      const top = intent.mentionedSources.length === 1
+        ? eligible.find((r) => r.source === intent.mentionedSources[0])
+        : cptRanked
+          ? (cptRanked.length > 1 && cptRanked[0].costPerTourUsd === cptRanked[1].costPerTourUsd ? undefined : cptRanked[0])
+          : eligible.length === 1 ? eligible[0] : undefined;
+      if (!cptRanked && intent.mentionedSources.length !== 1 && eligible.length > 1) {
+        // unranked, no one source: the pooled figure over the paid sources in scope
+        const pool = mkt.byPropertySource.filter((r) => r.isPaidSource && (intent.mentionedSources.length === 0 || intent.mentionedSources.includes(r.source)));
+        const spend = pool.reduce((a, r) => a + r.spendUsd, 0);
+        const tours = pool.reduce((a, r) => a + r.touredCount, 0);
+        const usd = Math.round((spend / tours) * 100) / 100;
+        return finalize(
+          `${matchedPropIds && matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)}` : 'Across the matching operating buildings'} in ${mkt.windowLabel}, the pooled cost per tour across ${intent.mentionedSources.length ? intent.mentionedSources.join(' and ') : 'paid sources'} was ${fmtUsd(usd)} (${fmtUsd(spend)} spend / ${plural(tours, 'tour')}).`,
+          { usd },
+          pool.flatMap((r) => r.citations).slice(0, 8),
+        );
+      }
+      if (!top && eligible.length > 1) {
+        return finalize(
+          `In ${mkt.windowLabel}, cost per tour by source: ${eligible.map((r) => `${r.source} ${fmtUsd(r.costPerTourUsd!)}`).join(', ')}; no single source answers the question.`,
+          { source: null, usd: null },
+          mkt.citations.slice(0, 8),
+        );
+      }
       if (!top) {
         return finalize(
           `No paid source had tours in ${mkt.windowLabel}, so cost per tour is not defined.`,
@@ -656,12 +786,22 @@ export function executeCompositionalPlan(
         );
       }
       return finalize(
-        `In ${mkt.windowLabel}, cost per tour by source: ${eligible.map((r) => `${r.source} ${fmtUsd(r.costPerTourUsd!)} (${fmtUsd(r.spendUsd)} / ${plural(r.touredCount, 'tour')})`).join(', ')}.`,
+        `In ${mkt.windowLabel}, ${cptRanked ? `${top.source} had the ${intent.aggregation === 'argmax' ? 'highest' : 'lowest'} cost per tour at ${fmtUsd(top.costPerTourUsd!)}; ` : ''}cost per tour by source: ${eligible.map((r) => `${r.source} ${fmtUsd(r.costPerTourUsd!)} (${fmtUsd(r.spendUsd)} / ${plural(r.touredCount, 'tour')})`).join(', ')}.`,
         {
           source: top.source,
           usd: top.costPerTourUsd,
         },
         top.citations.slice(0, 8),
+      );
+    }
+
+    if (intent.measure === 'leads_leased') {
+      // a lead counts once, as the earliest lead for the lease it signed (leasedFromCreated)
+      const leased = mkt.byPropertySource.reduce((a, r) => a + r.leasedFromCreatedLeadsCount, 0);
+      return finalize(
+        `In ${mkt.windowLabel}, ${plural(leased, 'lead')} created in the window went on to sign a lease (of ${plural(mkt.totalLeadsCreated, 'deduplicated lead')}).`,
+        { count: leased },
+        mkt.citations.slice(0, 8),
       );
     }
 
@@ -915,6 +1055,15 @@ export function executeCompositionalPlan(
           renewal_leases: leaseSummary.renewalLeaseCount,
           usd: leaseSummary.averageConcessionUsd,
         },
+        leaseSummary.citations.slice(0, 8),
+      );
+    }
+
+    if (intent.measure === 'total_concession' && leaseSummary.totalMatchingLeases === 0) {
+      // no lease matched (an unresolved place, an empty window): no total is reported, not $0
+      return finalize(
+        `No matching leases matched${intent.leaseStartWindow ? ` starting in ${intent.dateWindow.label}` : ''}, so there is no concession total to report.`,
+        { usd: null, leases: 0 },
         leaseSummary.citations.slice(0, 8),
       );
     }
