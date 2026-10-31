@@ -7,7 +7,8 @@
  * This is structural, not a phrase list: every number in every turn is read,
  * and "near a prior" is proximity to a prior keyword in the same clause.
  */
-import type { ParsedQueryIntent } from '../agent/intent.ts';
+import { UNIT_NOUN_RE, type ParsedQueryIntent } from '../agent/intent.ts';
+import { FLOW_PORTFOLIO_SCHEMA } from '../schema.ts';
 import type { PortfolioStore } from '../data/schema.ts';
 
 export interface StatedNumber { readonly start: number; readonly end: number; readonly value: number; readonly surface: string }
@@ -216,6 +217,10 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
           const st = a + m.index!, en = st + m[0].length;
           if (!all.some((n) => n.start < en && n.end > st)) all.push({ start: st, end: en, value: NaN, surface: m[0], unit: 'none' } as Num);
         }
+        for (const m of t.slice(a, b).matchAll(FOREIGN_NUMBER)) {
+          const st = a + m.index!, en = st + m[0].length;
+          if (SETTING_UNIT.test(t.slice(en, b)) && !all.some((n) => n.start < en && n.end > st)) all.push({ start: st, end: en, value: NaN, surface: m[0], unit: 'none' } as Num);
+        }
         // a standalone or request parse may consume a number only for its own slot: a plain count
         // the parse reads (deleting it changes the parse), never a currency, time or percent value
         let stripped = t.slice(a, b);
@@ -233,31 +238,48 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
 }
 const MAGNITUDE = /(?<![\p{L}\p{N}])(?:half\s+)?(?:an?\s+)?(?:dozen|hundred|thousand|million|billion)s?(?![\p{L}\p{N}])/giu;
 // The units the learner settings declare (see PARAMETERS, SettingUnit), written in EN/ES/FR/DE:
-// any currency (with its inflections and slang), a duration, a percent, and alpha0's leases / pseudo-observations. "units" is
-// the generic word for a count of the setting itself.
-const SETTING_UNIT = new RegExp(String.raw`^[\s-]*(?:\p{Sc}|${CUR}|d[oó]l\p{L}*|usd\p{L}*|eur(?:os?)?|pesos?|pounds?|yen|francs?|cents?|centavos?|grand|bucks?|credits?|${PERIOD}|d[ií]as?|semanas?|meses|mes|a[nñ]os?|jours?|semaines?|mois|ans?|ann[ée]es?|tage?n?|wochen?|monate?n?|jahren?|%|percent|pct|por\s*ciento|pour\s*cent|prozent|(?:pseudo[\s-]*)?(?:leases?|observations?|obs|counts?|arrendamientos?|baux|bail|mietvertr[äa]ge?)|units?|unidades?|unit[ée]s?|einheiten?)(?![\p{L}\p{N}])`, 'iu');
-// Words that attach to a number without naming what it counts: grammar (auxiliaries, pronouns,
-// prepositions, particles, quantifiers, and the linking verbs a value takes: "1800 works"), EN/ES/FR/DE. A number followed by one of these, or by
-// nothing, is bare. This is closed-class grammar, not a list of harmless nouns.
-const FUNCTION_WORD = /^(?:a|an|the|is|are|was|were|be|been|am|'s|would|will|should|could|can|may|might|must|do|does|did|for|to|of|in|on|at|as|by|with|from|into|than|then|and|or|but|so|if|it|its|that|this|these|those|them|me|us|you|him|her|here|there|now|instead|please|pls|plz|more|less|fewer|again|too|also|only|just|rather|actually|maybe|perhaps|really|ok|okay|right|has|does|seems|sounds|looks|feels|works|fits|suits|makes|goes|gets|stays|remains|appears|becomes|funciona|parece|suena|sirve|marche|semble|convient|passt|klingt|scheint|geht|reicht|yes|thus|minus|plus|this|its|us|as|y|o|de|del|la|el|los|las|un|una|en|por|para|con|que|es|mejor|más|menos|aquí|allí|ahí|eso|esto|favor|et|ou|le|les|du|des|une|pour|avec|est|ça|cela|ici|là|plutôt|plus|moins|svp|und|oder|der|die|das|den|dem|ein|eine|für|mit|ist|bitte|hier|da|dort|lieber|mehr|weniger|statt|stattdessen)$/iu;
-// The pronoun "one" after a modifier ("a quick one") names no value; the backstop cue list may
-// still deny it. It can only make a turn clarify, never chart.
-const EDIT_CUE = /(?<![\p{L}\p{N}])(?:use|using|make|set|try|go|pick|take|choose|want|change|switch|let'?s|instead|actually|rather|more|less|lower|higher|raise|reduce|increase|decrease|halve|double|should|meant?|say|assume|suppose|prefer|pretend|treat|usa|usar|pon|poner|mejor|cambia|vez|mets|mettons|utilise|plutôt|fait|nimm|nehme|setze|verwende|lieber|stattdessen|eigentlich)(?![\p{L}\p{N}])/iu;
-// A word reads as the noun a count names only when it agrees with the count: a plural form
-// (3+ letters ending in -s/-x) after any count but one, a content word of 4+ letters after one.
-// "4 tho", "1800 imo", "4 people" do not agree, so they stay bare and clarify (fail closed).
-const noun = (w: string, v: number) => /^\p{L}+$/u.test(w) && !FUNCTION_WORD.test(w) && (v === 1 ? w.length >= 4 && !/(?:ly|s)$/iu.test(w) : /^\p{L}{3,}[sx]$/u.test(w));
-// can this number, in this turn, be the value of a learner setting? Fail closed: only a number
-// attached to a noun no setting can be stated in, or the modifier pronoun "one", is not one.
+// any currency (codes, inflections, slang), a duration (with abbreviations), a percent, and
+// alpha0's leases / pseudo-observations. "units" is the generic word for a count of the setting.
+const SETTING_UNIT = new RegExp(String.raw`^[\s-]*(?:\p{Sc}|${CUR}|\p{Lu}{3}(?![\p{L}])|d[oó]l\p{L}*|dlls?|dls|usd\p{L}*|eur(?:os?)?|pesos?|pounds?|libras?|yen|francs?|francos?|cents?|centavos?|grand|bucks?|credits?|${PERIOD}|mos?|mths?|mnths?|wks?|hrs?|yrs?|d[ií]as?|semanas?|meses|mes|a[nñ]os?|jours?|semaines?|mois|ans?|ann[ée]es?|tage?n?|wochen?|monate?n?|jahren?|%|percent|pct|por\s*ciento|pour\s*cent|prozent|(?:pseudo[\s-]*)?(?:leases?|observations?|observaciones?|observación|beobachtungen?|obs|counts?|arrendamientos?|contratos?|contrats?|baux|bail|mietvertr[äa]ge?|vertr[äa]ge?)|units?|unidades?|unit[ée]s?|einheiten?)(?![\p{L}\p{N}])`, 'iu');
+// number words with no English spelling the numeral reader knows (ES/FR/DE): read only with a unit
+const FOREIGN_NUMBER = /(?<![\p{L}\p{N}])(?:uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|doce|veinte|treinta|cien|mil|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|douze|vingt|trente|cent|mille|eins|ein|eine|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zwölf|zwanzig|dreißig|hundert|tausend)(?![\p{L}\p{N}])/giu;
+// Closed-class grammar words (articles, auxiliaries, pronouns, prepositions, particles), EN/ES/FR/DE.
+// They never name what a number counts.
+const FUNCTION_WORD = /^(?:a|an|the|is|are|was|were|be|been|am|'s|would|will|should|could|can|may|might|must|do|does|did|has|have|had|for|to|of|in|on|at|as|by|with|from|into|than|then|and|or|but|so|if|it|its|that|this|these|those|them|me|us|you|him|her|here|there|now|instead|please|pls|plz|more|less|fewer|again|too|also|only|just|rather|actually|maybe|perhaps|really|ok|okay|yes|no|y|o|de|del|la|el|los|las|un|una|en|por|para|con|que|es|aquí|allí|ahí|eso|esto|favor|et|ou|le|les|du|des|une|pour|avec|est|ça|cela|ici|là|svp|und|oder|der|die|das|den|dem|ein|eine|für|mit|ist|bitte|hier|da|dort|statt)$/iu;
+// Positive counting frames, closed class: a determiner or possessive right before the number
+// ("the 12 numbers", "my 2 teams"), or a subject pronoun and its verb (with an optional
+// preposition) right before it ("we had 2 meetings", "I looked at 5 reports").
+const DETERMINER = /^(?:the|these|those|my|our|your|his|her|their|its|all|both|los|las|mis|tus|sus|nuestros|nuestras|estos|estas|esos|esas|les|mes|tes|ses|nos|vos|leurs|ces|die|meine|deine|seine|ihre|unsere|eure|diese)$/iu;
+const SUBJECT = /^(?:i|we|you|they|he|she|yo|nosotros|ellos|je|nous|on|ils|elles|ich|wir|sie|er)$/iu;
+const PREPOSITION = /^(?:at|to|for|on|in|with|about|over|through|a|en|con|sur|avec|dans|à|an|auf|mit|in)$/iu;
+// Backstop only: an edit or opinion verb denies the subject-verb frame and the pronoun "one";
+// it can only make a turn clarify, never chart.
+const EDIT_CUE = /(?<![\p{L}\p{N}])(?:use|using|make|set|try|go|pick|take|choose|want|change|switch|let'?s|instead|actually|rather|more|less|lower|higher|raise|reduce|increase|decrease|halve|double|should|meant?|say|assume|suppose|prefer|pretend|treat|think|thought|guess|guessed|believe|reckon|feel|figure|figured|bet|hope|expect|know|would|said|says|told|tell|usa|usar|pon|poner|mejor|cambia|vez|creo|pienso|mets|mettons|utilise|plutôt|fait|pense|crois|nimm|nehme|setze|verwende|lieber|stattdessen|eigentlich|denke|glaube)(?![\p{L}\p{N}])/iu;
+// nouns the grammar and schema already know: the parser's unit nouns and the schema's record kinds
+const SCHEMA_NOUNS = new Set(FLOW_PORTFOLIO_SCHEMA.stalks.flatMap((s) => [s.name.toLowerCase(), s.name.toLowerCase().replace(/s$/, '')]));
+const knownNoun = (surface: string, w: string) => SCHEMA_NOUNS.has(w.toLowerCase()) || new RegExp(`^(?:${UNIT_NOUN_RE.source})$`, 'iu').test(`${surface} ${w}`) || new RegExp(`^(?:${UNIT_NOUN_RE.source})$`, 'iu').test(w);
+const content = (w: string | undefined) => !!w && /^\p{L}+$/u.test(w) && !FUNCTION_WORD.test(w);
+function countingFrame(t: string, a: number, n: Num): boolean {
+  const clause = t.slice(a, n.start).split(/[,;:!?.]/u).pop()!, w = clause.split(/\s+/u).filter(Boolean);
+  if (DETERMINER.test(w.at(-1) ?? '')) return true;
+  if (EDIT_CUE.test(clause)) return false;
+  const k = PREPOSITION.test(w.at(-1) ?? '') ? w.length - 2 : w.length - 1; // the verb
+  if (k < 0) return false;
+  if (/^(?:j|n)'\p{L}+$/iu.test(w[k])) return true; // "j'ai"
+  return k >= 1 && SUBJECT.test(w[k - 1]) && /^\p{L}+$/u.test(w[k]);
+}
+// can this number, in this turn, be the value of a learner setting? Fail closed: it is let off
+// only on positive evidence that it counts a noun no setting is stated in, a known noun or a
+// counting frame, or as the modifier pronoun "one" ("a quick one"). Anything else is bare.
 function settingCandidate(t: string, a: number, b: number, n: Num): boolean {
   if (Number.isNaN(n.value) || n.unit !== 'none') return true;
   const after = t.slice(n.end, b);
   if (SETTING_UNIT.test(after)) return true;
-  const words = after.split(/[\s,;:!?.()]+/u).filter(Boolean), clauseEnd = /^\s*(?:$|[,;:!?.])/u.test(after);
-  if (words.length && !/^[\s-]*[,;:!?.]/u.test(after) && noun(words[0], n.value)) return false; // "2 meetings"
+  const words = /^[\s-]*[,;:!?.]/u.test(after) ? [] : after.split(/[\s,;:!?.()]+/u).filter(Boolean);
   // "one more question": a quantifier between the count and its noun
-  if (/^(?:more|other|extra|last|further)$/iu.test(words[0] ?? '') && words[1] && !SETTING_UNIT.test(' ' + words[1]) && noun(words[1], n.value)) return false;
-  if (/^one$/iu.test(n.surface) && clauseEnd) {
+  const head = /^(?:more|other|extra|last|further)$/iu.test(words[0] ?? '') ? words[1] : words[0];
+  if (content(head) && !SETTING_UNIT.test(' ' + head) && (knownNoun(n.surface, head!) || countingFrame(t, a, n))) return false;
+  if (/^one$/iu.test(n.surface) && /^\s*(?:$|[,;:!?.])/u.test(after)) {
     const prev = t.slice(a, n.start).match(/(\p{L}+)\s*$/u)?.[1];
     if (prev && !FUNCTION_WORD.test(prev) && !EDIT_CUE.test(t.slice(a, b))) return false; // "quick one"
   }

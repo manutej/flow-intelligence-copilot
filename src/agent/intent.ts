@@ -644,7 +644,7 @@ const measureText = (question: string): string => question.replace(RENT_FILTER_R
 
 const UNIT_COUNT_CUE_RE =
   /\b(?:how\s+many|number\s+of|count|total|list|which|show|what)\b|\bvacanc(?:y|ies)\b/i;
-const UNIT_NOUN_RE =
+export const UNIT_NOUN_RE =
   /\b(?:units?|apartments?|apts?|vacanc(?:y|ies)|studios?|flats?|homes|buildings?|properties|(?:one|two|three|four|\d)[-\s]?(?:bed(?:room)?s?|br)\b)/i;
 
 /**
