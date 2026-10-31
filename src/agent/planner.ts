@@ -128,6 +128,12 @@ export function executeCompositionalPlan(
     const p = store.properties.find((x) => x.propertyId === ids[0]);
     return p ? `${p.name} (${p.propertyId})` : ids[0];
   };
+  // A restatement before the figure carries no digits, so the figure stays
+  // the first number in the answer.
+  const buildingName = (ids: readonly string[] | undefined): string => {
+    if (!ids || ids.length !== 1) return 'the matching buildings';
+    return store.properties.find((x) => x.propertyId === ids[0])?.name ?? ids[0];
+  };
   const isFreeSource = (src: string): boolean =>
     store.organicSources.includes(src) && !store.paidSources.includes(src);
 
@@ -480,7 +486,7 @@ export function executeCompositionalPlan(
     // One source resolver for every source measure (intent.sourceModeOf).
     const sourceMode = sourceModeOf(question, intent);
     const sourceShaped = sourceMode !== 'overall';
-    const scope = !matchedPropIds || matchedPropIds.length === 0 ? 'Across the operating portfolio' : matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)}` : `Across the ${matchedPropIds.length} matching buildings`;
+    const scope = !matchedPropIds || matchedPropIds.length === 0 ? 'Across the operating portfolio' : matchedPropIds.length === 1 ? `At ${buildingName(matchedPropIds)}` : `Across the ${matchedPropIds.length} matching buildings`;
     const noOverall = (what: string) =>
       unknown(`FlowIQ reports ${what} by listing source; it does not carry one overall ${what} for "${question.trim()}", so it will not answer a different question in its place.`);
     // Which sources the figure covers, said as the filter actually applied.
@@ -784,7 +790,7 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'spend_total') {
       return finalize(
-        `In ${mkt.windowLabel}, total posted marketing spend${intent.mentionedSources.length > 0 ? ` from ${sourceSet}` : intent.paidOnly ? ' from paid sources' : ''} ${matchedPropIds && matchedPropIds.length === 1 ? `at ${buildingLabel(matchedPropIds)}` : 'across the matching operating buildings'} was ${fmtUsd(mkt.totalSpendUsd)} USD (with void invoices at $0 and CAD converted at ${store.policy.cadToUsdRate} USD).`,
+        `In ${mkt.windowLabel}, total posted marketing spend${intent.mentionedSources.length > 0 ? ` from ${sourceSet}` : intent.paidOnly ? ' from paid sources' : ''} ${matchedPropIds && matchedPropIds.length === 1 ? `at ${buildingName(matchedPropIds)}` : 'across the matching operating buildings'} was ${fmtUsd(mkt.totalSpendUsd)} USD (with void invoices at $0 and CAD converted at ${store.policy.cadToUsdRate} USD).`,
         {
           usd: mkt.totalSpendUsd,
         },
@@ -915,7 +921,7 @@ export function executeCompositionalPlan(
           ? ` (Note: ${zeroLeasePaid.join(', ')} signed 0 leases and therefore has no defined cost per signed lease; any untrusted CRM free-text notes claiming otherwise are quarantined.)`
           : '';
       return finalize(
-        `${scope} in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${fmtUsd(best.spendUsd)} spend across ${plural(best.signedLeasesInPeriod, 'signed lease')}).${zeroNote}`,
+        `At ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${fmtUsd(best.spendUsd)} spend across ${plural(best.signedLeasesInPeriod, 'signed lease')}).${zeroNote}`,
         { source: best.source, usd: best.costPerSignedLeaseUsd! },
         best.citations.slice(0, 8),
       );

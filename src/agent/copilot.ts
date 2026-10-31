@@ -497,7 +497,7 @@ function namedAlias(out: ReturnType<typeof executeCompositionalPlan>, question: 
   const masked = maskFiscalTokens(question);
   if (!LOCATIVE_FY_RE.test(masked)) return out;
   const fy = store.properties.find((p) => p.aka.some((a) => /^f\.?y\.?$/i.test(a.trim())));
-  if (!fy || out.envelope.answer.includes(fy.name)) return out;
+  if (!fy || out.envelope.answer.includes(`${fy.name} (${fy.propertyId})`)) return out;
   // The note names the property the figure is for, so it is added only when that is FY alone.
   const ids = resolvePropertiesFromText(store, question).matched.map((p) => p.propertyId);
   if (ids.length !== 1 || ids[0] !== fy.propertyId) return out;
