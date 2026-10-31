@@ -30,6 +30,7 @@
     "dashboard": "node --no-warnings src/dashboard-server.ts",
     "genui": "node --no-warnings src/genui/server.ts",
     "eval:genui": "node --no-warnings scripts/genui-eval.ts",
+    "eval:genui-grounded": "node --no-warnings scripts/genui-grounded.ts",
     "eval:adversarial-meta": "node --no-warnings scripts/run-adversarial-meta.ts",
     "test:fuzz": "node --no-warnings --test tests/fuzz/*.fuzz.test.ts",
     "test:harness": "node --no-warnings scripts/test-model-harness.ts",
