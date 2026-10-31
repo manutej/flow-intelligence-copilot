@@ -9,6 +9,47 @@ import { loadPortfolioStore } from '../src/data/loader.ts';
 import { askPanel } from '../src/genui/picker.ts';
 import { specErrors } from '../src/genui/spec.ts';
 
+// Expectations changed by 833b9a8 (TENACITY 5b15c51), disclosed in the commit body. Only the noun
+// right after a number frees it, so counts of nouns the parser and schema do not know clarify
+// (fail closed, no frames, no word list):
+const NOW_CLARIFY = new Set([
+  'Great, I looked at 5 reports today',
+  'Hello there, quick one',
+  'I had 2 questions earlier',
+  'I have 2 kids',
+  'I have 3 children',
+  'I read 2 articles',
+  'I read 3 papers',
+  'I read 3 papers on this',
+  'My 2 colleagues say hi',
+  'Thanks for the 12 numbers.',
+  'Thanks for the 3 charts',
+  'Thanks for the 4 slides',
+  'Thanks for the 5 answers',
+  'Thanks, those 12 numbers help',
+  'That was helpful for my 2 teams',
+  'We had 2 meetings today',
+  'We met 3 clients today',
+  'We visited 5 sites',
+  'ich habe 2 Fragen',
+  'j\'ai 3 questions',
+  'our 3 leads called',
+  'we have 4 people']);
+// ES/FR/DE schema nouns and the pronoun "one" before a singular non-unit word now chart:
+const NOW_CHART = new Set([
+  '4 Häuser',
+  'disons 4 immeubles',
+  'nehmen wir 4 Gebäude an',
+  'one more thing',
+  'one question',
+  'one small question',
+  'one tho',
+  'prefiero 4 edificios',
+  'supongamos 4 propiedades',
+  'tenemos 4 edificios']);
+const want = (q: string, e: string) => { const k = q.split(' → ')[0]; return NOW_CLARIFY.has(k) ? 'clarify_card' : NOW_CHART.has(k) ? 'sorted_bar' : e; };
+
+
 process.env.GENUI_STORE = fs.mkdtempSync(path.join(os.tmpdir(), 'genui-prior-'));
 const store = loadPortfolioStore();
 const base = (pr: string) => `At The Clarendon (P04) ${pr}, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?`;
@@ -19,14 +60,14 @@ const LEAKS = ['with a prior of 1800', 'with 1800 dollars as the prior', 'with a
 const POLICY = ['', 'with prior beta0=$3250', 'with prior beta0=3250.00', 'with prior beta0=$3,250', 'with a prior of 3250 dollars', 'with a prior of $3.25k'];
 
 test('HIGH: every stated prior the learner does not use clarifies', async () => {
-  for (const c of LEAKS) assert.equal((await askPanel(base(c), store)).spec.template, 'clarify_card', c);
+  for (const c of LEAKS) assert.equal((await askPanel(base(c), store)).spec.template, want(c, 'clarify_card'), c);
 });
 test('HIGH: an unused prior in an earlier turn, or a second match, clarifies', async () => {
   for (const q of ['Use prior beta0=$1800 → ' + base(''), 'I want b0 of 1800. → ' + base('with the usual prior'), base('with prior beta0=$3250') + ' → ' + base('with prior beta0=$1800')])
-    assert.equal((await askPanel(q, store)).spec.template, 'clarify_card', q);
+    assert.equal((await askPanel(q, store)).spec.template, want(q, 'clarify_card'), q);
 });
 test('HIGH: the policy prior in any spelling still charts', async () => {
-  for (const c of POLICY) { const a = await askPanel(base(c), store); assert.equal(a.spec.template, 'sorted_bar', c); assert.deepEqual(a.errors, [], c); }
+  for (const c of POLICY) { const a = await askPanel(base(c), store); assert.equal(a.spec.template, want(c, 'sorted_bar'), c); assert.deepEqual(a.errors, [], c); }
 });
 test('HIGH: a title echoes a question number only if the computation used it (normalized)', async () => {
   // the policy CAD rate is 0.73: a stated 0.7 is not the input used, so it is never charted under that title
@@ -55,7 +96,7 @@ test('one mechanism: any stated model parameter the computation did not use give
   const q = (s: string) => `${s}, was decision X001 in decisions.csv accepted, who decided it, and what was the monthly delta?`;
   for (const [stated, policy] of [['Under CAD rate 0.7', '1 CAD = 0.73 USD'], ['Under CAD rate 1', '1 CAD = 0.73 USD'], ['Using fx rate 0.8', '1 CAD = 0.73 USD']] as const) {
     const a = await askPanel(q(stated), store);
-    assert.equal(a.spec.template, 'clarify_card', stated);
+    assert.equal(a.spec.template, want(stated, 'clarify_card'), stated);
     assert.equal(a.spec.state, 'ready', stated); // not error_data
     assert.equal(a.spec.title, 'This CAD rate is not supported');
     assert.ok((a.spec as any).props.restatement.includes(policy), stated);
@@ -76,7 +117,7 @@ test('settings bind per parameter with value and unit (TENACITY f9a64d0 1-3, 5)'
   // 5: a number that is not plainly the setting's value: neutral clarify, never a chart, never a setting name
   for (const q of ['I want prior\n1800 → ' + base(''), 'prior → 1800 → ' + base(''), 'Set prior to 1800 → ' + base(''), base('with a prior (1800)'), base('with a prior, namely 1800'), base('with a prior of 1')]) {
     const a = await askPanel(q, store);
-    assert.equal(a.spec.template, 'clarify_card', q);
+    assert.equal(a.spec.template, want(q, 'clarify_card'), q);
     assert.ok(!/not supported/.test(a.spec.title ?? ''), q);
   }
   // 3: ranks and durations are not setting values
@@ -87,7 +128,7 @@ test('settings bind per parameter with value and unit (TENACITY f9a64d0 1-3, 5)'
 test('a title that would repeat an unused figure gives a neutral clarify, not an error card (TENACITY f9a64d0 4)', async () => {
   for (const q of ['renewal rate is 68%. where is it lowest?', 'What is the renewal rate? → renewal rate is 68%. where is it lowest?']) {
     const a = await askPanel(q, store);
-    assert.equal(a.spec.template, 'clarify_card', q);
+    assert.equal(a.spec.template, want(q, 'clarify_card'), q);
     assert.equal(a.spec.state, 'ready', q);
     assert.deepEqual(a.errors, [], q);
     assert.deepEqual(specErrors(a.spec, a.evidence, store), [], q);
@@ -105,7 +146,7 @@ test('strict grammar fails closed (TENACITY 228b925 1-4)', async () => {
   // fully parsed policy value and unit: charts
   for (const s of ['with prior beta0 = USD 3250', 'with prior beta0 = 3250 USD', 'with prior beta0 = 3,250 dollars']) assert.equal((await at(s)).template, 'sorted_bar', s);
   const q = (s: string) => `${s}, was decision X001 in decisions.csv accepted, who decided it, and what was the monthly delta?`;
-  for (const s of ['Under 1 CAD = 0.73 USD', 'Under a CAD rate of 0.73 USD', 'Under CAD rate 0.73']) assert.equal((await askPanel(q(s), store)).spec.template, 'kpi', s);
+  for (const s of ['Under 1 CAD = 0.73 USD', 'Under a CAD rate of 0.73 USD', 'Under CAD rate 0.73']) assert.equal((await askPanel(q(s), store)).spec.template, want(s, 'kpi'), s);
   // 4: a bare rank word is not a setting value
   assert.equal((await askPanel('Which 1 channel has the highest spend after CAD rate conversion?', store)).spec.template, 'sorted_bar');
 });
@@ -116,10 +157,10 @@ test('accounting: with a setting present every other number must be placed (TENA
     'beta0 = 3250 and 1800 → ' + Q, 'beta0 = $3250 → change it to $1800 → ' + Q, 'alpha0 = 1 → actually 2 → ' + Q, 'Use 1800 instead → ' + Q,
     'CAD rate 0.73 → actually 0.8 → ' + X, 'beta0 = 3250 USD per CAD → ' + Q, 'Is beta0 3250?']) {
     const a = await askPanel(q, store);
-    assert.equal(a.spec.template, 'clarify_card', q);
+    assert.equal(a.spec.template, want(q, 'clarify_card'), q);
     assert.ok(!/not supported/.test(a.spec.title ?? ''), q);
   }
-  for (const q of ['beta0 = 3250 → ' + Q, 'Is beta0 3250? → ' + Q, Q]) assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
+  for (const q of ['beta0 = 3250 → ' + Q, 'Is beta0 3250? → ' + Q, Q]) assert.equal((await askPanel(q, store)).spec.template, want(q, 'sorted_bar'), q);
 });
 test('accounting by mention, scoped to setting and referring turns (TENACITY beded12)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
@@ -129,13 +170,13 @@ test('accounting by mention, scoped to setting and referring turns (TENACITY bed
     // a value change with no numeral in a referring turn: neutral
     'beta0 = 3250 → halve it → ' + Q, 'beta0 = 3250 → double it → ' + Q, 'beta0 = 3250 → 1e3 → ' + Q]) {
     const a = await askPanel(q, store);
-    assert.equal(a.spec.template, 'clarify_card', q); assert.equal(a.spec.title, 'Could you restate the question?', q);
+    assert.equal(a.spec.template, want(q, 'clarify_card'), q); assert.equal(a.spec.title, 'Could you restate the question?', q);
   }
   // earlier turns that do not refer back do not block (Q77 rule)
   assert.equal((await askPanel('beta0 = 3250 → How many units at P01 have 2 bedrooms? → ' + Q, store)).spec.template, 'sorted_bar');
   // earlier turns that do not refer back do not block (Q77 rule): a number counting a noun is not a prior
   for (const q of ['Show me 3 properties with highest vacancy → ' + Q, 'Thanks for the 12 numbers. → ' + Q])
-    assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
+    assert.equal((await askPanel(q, store)).spec.template, want(q, 'sorted_bar'), q);
 });
 test('after a setting, only standalone questions may follow it; with no setting, earlier turns are not read (TENACITY cfd6ff3)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
@@ -143,14 +184,14 @@ test('after a setting, only standalone questions may follow it; with no setting,
   for (const c of ['hmm, should be 1800 i think', 'should have said 1800 there', 'mejor que sea 1800 por favor', 'en fait mettons 1800 svp',
     "let's go with 4 please", 'go lower please', 'hmm, lower please', 'halve it']) {
     const a = await askPanel('beta0 = 3250 → ' + c + ' → ' + Q, store);
-    assert.equal(a.spec.template, 'clarify_card', c); assert.equal(a.spec.title, 'Could you restate the question?', c);
+    assert.equal(a.spec.template, want(c, 'clarify_card'), c); assert.equal(a.spec.title, 'Could you restate the question?', c);
   }
   // no setting stated: earlier turns are not read (Q77)
   for (const c of ['What is it like at P01?', 'Use the marketing data', 'Which channels double as referrals?', 'Thanks!', 'Hi'])
-    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, 'sorted_bar'), c);
   // a standalone question after the setting, and a policy setting in parentheses, chart
   for (const q of ['beta0 = 3250 → How many units at P01 have 2 bedrooms? → ' + Q, 'beta0 = 3250 → ' + Q.replace('ranks #1', 'ranks #1 (beta0 = 3250)')])
-    assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
+    assert.equal((await askPanel(q, store)).spec.template, want(q, 'sorted_bar'), q);
 });
 test('learner with no setting: a non-question earlier turn with a stray number fails closed (fail-closed decision on 7ce8377)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
@@ -158,7 +199,7 @@ test('learner with no setting: a non-question earlier turn with a stray number f
     assert.equal((await askPanel(c + ' → ' + Q, store)).spec.title, 'Could you restate the question?', c);
   // non-learner Q77 rows still chart; learner earlier turns with no number still chart
   assert.equal((await askPanel('Thanks for the 12 numbers. → How many vacant units are at Halsted & Lake?', store)).spec.template, 'kpi');
-  for (const c of ['Thanks!', 'Use the marketing data', 'What was spend in 2025?']) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+  for (const c of ['Thanks!', 'Use the marketing data', 'What was spend in 2025?']) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, 'sorted_bar'), c);
 });
 test('turn-leading numbers, standalone turns with tails, counts and the pronoun one (TENACITY 6ca99c4)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
@@ -169,16 +210,16 @@ test('turn-leading numbers, standalone turns with tails, counts and the pronoun 
     assert.equal((await askPanel(q, store)).spec.title, 'Could you restate the question?', q);
   for (const q of ['Hello there, quick one → ' + Q, 'Show me 3 properties with highest vacancy and use that list → ' + Q,
     'How many units at P01 have 2 bedrooms, actually? → ' + Q, P + ' → ' + Q, 'beta0 = 3250 → ' + P + ' → ' + Q])
-    assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
+    assert.equal((await askPanel(q, store)).spec.template, want(q, 'sorted_bar'), q);
 });
 test('learner with no setting: numbers clarify unless the turn is clearly non-editing (TENACITY 6a56c25)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
   const noset = ['1800 dollars','4 leases','3250 units per month','use 4 months','1800 bucks instead','make it 4 percent','use 1800 euros','1800 pesos please','make it 1800 dollares','use 4 weeks','4 months instead','try 1800 credits','use 4 units instead','1800 units','go with 4 observations','prior of 4 leads','1800 dólares','mejor 4 meses','mettons 1800 euros','4 cents','1800 people','4 children','4 data','use 1800 USDs','1800 grand','use 4 pseudo-leases','4 pseudoleases','4 pseudo leases','4 leases instead','alpha0 4 leads','4 pseudo-observations','half a dozen months','1800 yen'];
   const oneNoset = ['one question', 'make it one', 'use one instead', 'one more', 'go with one', 'make it a thousand'];
-  for (const c of [...noset, ...oneNoset]) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
+  for (const c of [...noset, ...oneNoset]) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, 'clarify_card'), c);
   for (const c of ['Show me 3 properties with highest vacancy', 'Thanks for the 12 numbers.', 'I manage 4 buildings',
     'Hello there, quick one', 'We had 2 meetings today', 'I have one more question'])
-    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, 'sorted_bar'), c);
 });
 test('no-setting numbers: corrections clarify, small talk charts (TENACITY 06921c8)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
@@ -203,9 +244,9 @@ const B: [string,string][] = [
 ];
   // the settings' declared units decide: a bedroom is no setting's unit, so this row charts
   const BY_UNIT = new Set(['assume one bedroom for it']);
-  for (const [, c] of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, BY_UNIT.has(c) ? 'sorted_bar' : 'clarify_card', c);
+  for (const [, c] of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, BY_UNIT.has(c) ? 'sorted_bar' : 'clarify_card'), c);
   // no noun evidence: clarifies (fail closed, needs TENACITY approval)
-  for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, c === 'one question' ? 'clarify_card' : 'sorted_bar', c);
+  for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, c === 'one question' ? 'clarify_card' : 'sorted_bar'), c);
 });
 test('no-setting numbers are read by the learner settings\' declared units (TENACITY ebd7e8c)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
@@ -241,18 +282,18 @@ const B: [string,string][] = [
     'pretend there are 4 buildings', '4 properties would be better', 'I would prefer 4 buildings',
     'show me 3 properties with highest vacancy, I think 4 properties', 'How many units at P01 have 4 bedrooms, assume that',
     'How many units at P01 have 1800 bedrooms?', 'assume one bedroom for it', 'mejor 3 properties', 'je préfère 4 properties', 'ich nehme 4 buildings']);
-  for (const [, c] of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, BY_UNIT.has(c) ? 'sorted_bar' : 'clarify_card', c);
-  for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+  for (const [, c] of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, BY_UNIT.has(c) ? 'sorted_bar' : 'clarify_card'), c);
+  for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, 'sorted_bar'), c);
   // held-out rewordings: bare values, setting units, and counts with no noun evidence clarify
   for (const c of ['make it four', 'maybe 1800 then', 'go 4 months', 'how about 3 percent', 'say 1800 USD', '4 pseudo-observations would be better',
     'honestly 1800', '1,800 dollars feels right', '3k', 'two leases please', 'what about 1800?', 'prefiero 1800 dólares', 'disons 4 mois',
     'nehmen wir 4 Monate', '1800 works', 'I think 1800 works', '4 seems right', '1800 sounds good', 'one works', '4 tho', '1800 imo', 'one tho',
     '1800 people', 'just one', '1800 passt', '4 funciona', 'one small question', 'hola, tengo 2 preguntas'])
-    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, 'clarify_card'), c);
   // held-out small talk: counts of nouns that no setting takes
   for (const c of ['We met 3 clients today', 'I read 2 articles', 'Thanks for the 4 slides', 'My 2 colleagues say hi', 'We visited 5 sites',
     "j'ai 3 questions", 'Just a quick one'])
-    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, 'sorted_bar'), c);
 });
 test('a no-setting number is let off only on noun evidence (TENACITY 724ce96)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
@@ -283,11 +324,21 @@ const R: [string,string,string][] = [
 ];
   // no noun the parser or schema knows and no counting frame: these clarify (fail closed, needs TENACITY approval)
   const NO_EVIDENCE = new Set(['one more thing', 'nehmen wir 4 Gebäude an', 'tenemos 4 edificios', '2 mice ran by', '4 Häuser']);
-  for (const [, e, c] of R) if (e !== '?') assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, e === 'C' || NO_EVIDENCE.has(c) ? 'clarify_card' : 'sorted_bar', c);
+  for (const [, e, c] of R) if (e !== '?') assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, e === 'C' || NO_EVIDENCE.has(c) ? 'clarify_card' : 'sorted_bar'), c);
   // held-out rewordings, not run against the code before they were written
   for (const c of ['1800 wins', '4 does the trick', '1800 slaps', 'they said 4 works', 'I said 1800 tops', 'cinco meses', 'drei Monate', 'deux semaines',
     '4 contratos', '1800 libras', '3 mnths', '2 wk', '4 Verträge', '1800 dls', 'what about 4', 'honestly 4 is plenty', 'one tops', 'quatre contrats'])
-    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, 'clarify_card'), c);
   for (const c of ['We toured 3 apartments', 'I saw 2 studios', 'Thanks for the 5 answers', 'our 3 leads called', 'they own 6 homes', 'ich habe 2 Fragen'])
-    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, want(c, 'sorted_bar'), c);
+});
+
+test('only the noun right after a number frees it; no frames, ISO codes only (TENACITY 5b15c51)', async () => {
+  const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
+  // the C rows of repros/genui-noun-5b15c51.ts, verbatim
+  const C = ['I reckon 1800 rocks', 'I figure 1800 works', 'I feel 1800 fits', 'I suppose 1800 rocks', 'I believe 1800 holds', 'I imagine 1800 works', 'I suspect 1800 works', 'I estimate 1800 dollars', 'I estimate 1800 overall', 'I propose 1800 instead', 'I recommend 1800 flat', 'we need 1800 flat', 'we picked 1800 total', 'I typed 1800 wrongly', 'I meant 1800 sharp', 'I mean 1800 sharp', 'I wrote 1800 originally', 'we agreed 1800 earlier', 'I entered 1800 above', 'we budgeted 1800 monthly', 'I estimated 1800 overall', 'they quoted 1800 flat', 'I said 1800 earlier', 'they said 1800 tops', 'creo 1800 basta', 'pienso 1800 funciona', 'yo digo 1800 mejor', 'yo propongo 1800 exacto', 'ich glaube 1800 passt', 'ich sage 1800 genau', 'je pense 1800 suffit', 'je propose 1800 pile', 'je dis 1800 pile', 'nous voulons 1800 pile', 'wir brauchen 1800 genau', 'nosotros queremos 1800 exacto', 'we need 1800', 'I want 4', 'they said 1800', 'I reckon 1800', 'je pense 1800', 'ich glaube 1800', 'my 1800', 'the 1800 works', 'our 4 is fine', 'that 1800 rocks', 'my 1800 rocks', 'the 1800 stands', 'their 1800 wins', 'our 1800 holds', 'all 4 work', 'both 4 work', 'the 1800 figure', 'your 1800 estimate', 'the 1800 baseline', 'my 1800 guess', 'the 1800 prior', 'our 1800 number', 'la 1800 funciona', 'mi 1800 basta', 'mis 1800 bastan', 'meine 1800 passt', 'die 1800 stimmt', 'mes 1800 suffisent', 'les 1800 marchent', 'these 1800 look good', '1800 spend', '4 leads', 'the 1800 spend', '4 decisions', '1800 per lead', 'four months', 'cuatro meses', 'vier Monate', 'quatre mois', 'dos semanas', 'zwei Wochen', 'deux semaines', 'cuatro arrendamientos', 'vier Verträge', 'quatre contrats', 'mil dólares', 'tausend Euro', 'mille euros', 'veinte por ciento', 'zwanzig Prozent', 'vingt pour cent', 'cuatro observaciones', 'vier Beobachtungen', 'dieciocho cientos', 'mil ochocientos', 'mil ochocientos dólares', 'achtzehnhundert', 'dix-huit cents', 'quatorze mois', 'catorce meses', 'vierzehn Monate', 'quince días', 'quinze jours', 'fünfzehn Tage', 'once meses', 'onze mois', 'elf Monate', '4 mths', '1800 dlls', '1800 MXN', '1800 libras', '1800 francos', '4 contratos', '4 contrats', '4 Verträge', '4 observaciones', '4 Beobachtungen', '1800 Franken', '1800 Pfund', '1800 Dollar', '1800 dólares', '1800 Euro', '4 trimestres', '4 Quartale', '4 hebdomadaires', '4 Std', '4 Stunden', '4 horas', '4 heures', '4 Mon.', '4 mins', '1800 MXN pesos', '1800 k', '1.8 mil', '1800 lucas', '1800 pavos', '1800 balles', '1800 Kröten', '20 pc'];
+  // rewordings written 2026-10-31 01:11:21 CST, before the fix was run (scratch/rewordings-5b15c51.txt)
+  const RW: [string, string][] = [['C', 'I gather 1800 suffices'], ['C', 'we settled 1800 finally'], ['C', 'I chose 1800 deliberately'], ['C', 'the 1800 amount'], ['C', 'our 1800 target'], ['C', 'his 1800 works'], ['C', 'nuestro 1800 vale'], ['C', 'unsere 1800 reicht'], ['C', 'notre 1800 va'], ['C', '1800 spending'], ['C', 'the 4 count'], ['C', 'make it one'], ['C', 'one instead'], ['C', 'one lease'], ['C', 'one more month'], ['C', 'one is fine'], ['C', 'one works'], ['C', 'one thing, use 4'], ['C', 'diecisiete meses'], ['C', 'dreizehn Monate'], ['C', 'treize mois'], ['C', 'veintidós días'], ['C', 'cuatro'], ['C', 'dreihundert'], ['B', 'one small question'], ['B', 'one last question'], ['B', 'one more detail'], ['B', 'a quick one'], ['B', 'tenemos 3 edificios en Chicago'], ['B', 'ich verwalte 4 Wohnungen'], ['B', 'nous gérons 4 logements'], ['B', '4 apartamentos en Austin'], ['B', 'una pregunta rápida']];
+  for (const c of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
+  for (const [k, c] of RW) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, k === 'C' ? 'clarify_card' : 'sorted_bar', c);
 });
