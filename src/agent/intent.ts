@@ -1460,7 +1460,9 @@ export function droppedBreakdown(question: string, intent: ParsedQueryIntent): {
  * than 2 bedrooms", "at most $2000") is consumed by that filter.
  */
 const SCALAR_LEFTOVERS: ReadonlyArray<readonly [string, RegExp]> = [
-  ['an ordering', /\b(?:top|bottom|best|worst|highest|lowest|most|least|biggest|largest|greatest|smallest|cheapest|priciest|richest|leader(?:s|board)?|leads\s+in|rank\w*|sort\w*|order(?:ed)?|number\s+one|winner|tops|topped)\b|#\s*1\b|-(?:best|worst|highest|lowest)\b/i],
+  ['an ordering', /\b(?:top|bottom|best|worst|highest|lowest|most|least|biggest|largest|greatest|smallest|cheapest|priciest|richest|leader(?:s|board)?|rank\w*|sort\w*|order(?:ed)?|number\s+one|winner|tops|topped)\b|#\s*1\b|-(?:best|worst|highest|lowest)\b/i],
+  // A second measure set against the first ("spend over leads", "spend ÷ tours", "spend and leases").
+  ['a second measure', /(?:\bover\s+|÷\s*|\b(?:against|and|to)\s+)(?:the\s+)?(?:number\s+of\s+|count\s+of\s+|total\s+)?(?:signed\s+)?(?:leads?|leases?|tours?|applications?|renewals?|move[-\s]?ins?)\b(?!\s+(?:where|that|which|who|with|ending|starting|signed\s+in)\b)/i],
   ['a comparison', /\b(?:compar\w*|versus|vs\.?|higher|lower|more|fewer|less|than|difference|differ\w*|relative)\b/i],
   // A ratio operator before a rate denominator; "concierge/doorman" is an
   // alternation and "for every lease where ..." is the set being summed.
@@ -1480,6 +1482,9 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
   for (const [what, re] of SCALAR_LEFTOVERS) {
     // A measure that is itself a comparison (H1 versus Q3) consumes the comparison words.
     if (what === 'a comparison' && /_vs_|comparison|delta|change/.test(intent.measure)) continue;
+    const m0 = re.exec(q);
+    // A measure that already joins two counts (tour_to_lease_rate) owns its second noun.
+    if (what === 'a second measure' && m0 && /_to_|_and_|cost_per/.test(intent.measure)) continue;
     const m = re.exec(q);
     if (m) return `${what} ("${m[0].trim()}")`;
   }
@@ -1514,7 +1519,7 @@ function namedProperties(question: string, store: PortfolioStore): string[] {
   // One span that fits two properties ("the Grove") is one mention, an ambiguity for the resolver.
   const spans = new Map<number, { end: number; names: Set<string> }>();
   for (const p of store.properties) {
-    for (const l of [p.name, p.propertyId, ...p.aka, ...distinctiveTokens(store).get(p.propertyId)!].map((x) => x.trim()).filter((x) => x.length > 2)) {
+    for (const l of [p.name, p.propertyId, ...p.aka, ...distinctiveTokens(store).get(p.propertyId)!].map((x) => x.trim()).filter((x) => x.length >= 2)) {
       const m = new RegExp(String.raw`(?<![\p{L}\p{N}])${l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\p{L}\p{N}])`, 'iu').exec(question);
       if (!m) continue;
       const s = spans.get(m.index) ?? { end: m.index + m[0].length, names: new Set<string>() };
