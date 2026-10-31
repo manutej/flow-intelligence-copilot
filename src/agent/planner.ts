@@ -584,7 +584,7 @@ export function executeCompositionalPlan(
         if (toured === 0) return noOverall('tour-to-lease rate');
         const pct = rateOf(toured, leased);
         return finalize(
-          `${scope} in ${mkt.windowLabel}, ${leased} of ${plural(toured, 'toured deduplicated lead')} from ${sourceSet} signed a lease, an overall tour-to-lease rate of ${pct.toFixed(1)}%.`,
+          `${scope} in ${mkt.windowLabel}, ${leased} of ${plural(toured, 'toured deduplicated lead')} from ${sourceSet} signed a lease, ${sourceSet === 'all sources' ? 'an overall' : 'a pooled'} tour-to-lease rate of ${pct.toFixed(1)}%.`,
           sourceMode === 'pooled' ? { sources: [...intent.mentionedSources], percent: pct } : { percent: pct },
           mkt.citations.slice(0, 12),
         );
@@ -699,7 +699,7 @@ export function executeCompositionalPlan(
         if (mkt.totalLeadsCreated === 0) return noOverall('cost per lead');
         const usd = Math.round((mkt.totalSpendUsd / mkt.totalLeadsCreated) * 100) / 100;
         return finalize(
-          `${scope} in ${mkt.windowLabel}, the overall cost per lead was ${fmtUsd(usd)} (${fmtUsd(mkt.totalSpendUsd)} posted spend / ${plural(mkt.totalLeadsCreated, 'deduplicated lead')} from ${sourceSet}).`,
+          `${scope} in ${mkt.windowLabel}, the ${sourceSet === 'all sources' ? 'overall' : 'pooled'} cost per lead was ${fmtUsd(usd)} (${fmtUsd(mkt.totalSpendUsd)} posted spend / ${plural(mkt.totalLeadsCreated, 'deduplicated lead')} from ${sourceSet}).`,
           sourceMode === 'pooled' ? { sources: [...intent.mentionedSources], usd } : { usd },
           mkt.citations.slice(0, 8),
         );
