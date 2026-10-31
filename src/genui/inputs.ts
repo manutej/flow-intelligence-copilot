@@ -146,7 +146,7 @@ const isRank = (t: string, n: StatedNumber) => n.surface.startsWith('#') || /(?:
 const unitEnd = (t: string, n: StatedNumber) => n.end + (t.slice(n.end).match(new RegExp(String.raw`^(?:[\s-]*(?:%|percent|pct|cad|c\$|usd|dollars?|bucks|${PERIOD})\b|\s*%)?`, 'iu'))?.[0].length ?? 0);
 
 /** Read every stated setting in every turn (turn markers count as separators). */
-export function readSettings(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore, isLabel: (t: string, start: number, end: number) => boolean = () => false): SettingReading {
+export function readSettings(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore, isLabel: (t: string, start: number, end: number) => boolean = () => false, parse?: (turn: string) => string): SettingReading {
   const t = prep(input);
   const nums: Num[] = statedNumbers(input).filter((n) => !isLabel(t, n.start, n.end)).map((n) => ({ ...n, unit: unitOf(t, n) }));
   const bindings: Binding[] = []; let ambiguous = false; const consumed: [number, number][] = [];
@@ -177,19 +177,42 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
   }
   // the rate written as an exchange, with no setting word: "1 CAD = 0.73 USD"
   for (const m of t.matchAll(EXCHANGE)) { bindings.push({ param: PARAMETERS.cadRate, value: Number(m.groups!.num), unit: 'USD' }); consumed.push([m.index!, m.index! + m[0].length]); }
-  // accounting: once a setting is stated (or the computation is the learner, whose priors a user can
-  // state), every other number in every turn must be an input the computation used or a known
-  // non-setting (rank, duration; dates and ids are not read as numbers). Anything else, such as a
-  // later correction ("→ actually 2", "Use 1800 instead"), cannot be placed: neutral clarify.
+  // accounting, by mention: once a setting is stated (or the computation is the learner, whose
+  // priors a user can state), each number in the setting turns, in the turns that refer back to a
+  // setting, and in the charted turn must be a mention something consumed: a setting statement, or
+  // (charted turn only) the parser, tested by deleting that one mention and re-parsing. Two
+  // mentions with the same value are different mentions. Turns that do not refer back are not read
+  // (Q77 rule). A referring turn that binds nothing carries an unconsumed modifier ("halve it").
   if (bindings.length || learner(intent)) {
-    const used = usedInputs(intent);
     const isConsumed = (n: StatedNumber) => consumed.some(([a, b]) => n.start >= a && n.end <= b);
-    if (nums.some((n) => !isConsumed(n) && !isRank(t, n) && n.unit !== 'duration' && !used.has(n.value))) ambiguous = true;
+    const turns: [number, number][] = []; let at = 0;
+    for (const m of t.matchAll(/\s*→\s*/g)) { turns.push([at, m.index!]); at = m.index! + m[0].length; }
+    turns.push([at, t.length]);
+    const last = turns.length - 1, [fs, fe] = turns[last];
+    const base = parse?.(t.slice(fs, fe));
+    const parserUsed = (n: StatedNumber) => parse ? parse(t.slice(fs, n.start) + t.slice(n.end, fe)) !== base : usedInputs(intent).has(n.value);
+    turns.forEach(([a, b], i) => {
+      const own = nums.filter((n) => n.start >= a && n.end <= b && !isRank(t, n) && n.unit !== 'duration');
+      const text = t.slice(a, b);
+      const setting = [...t.matchAll(SETTING_WORD)].some((w) => w.index! >= a && w.index! < b) || consumed.some(([x]) => x >= a && x < b);
+      const refers = i !== last && !setting && refersBack(text, own.map((n) => [n.start - a, n.end - a]));
+      if (!setting && !refers && i !== last) return;
+      if (own.some((n) => !isConsumed(n) && !(i === last && parserUsed(n)))) ambiguous = true;
+      if (refers) ambiguous = true; // refers back to a setting and binds nothing: a value change we cannot read
+    });
   }
   const equal = (b: Binding) => b.value === b.param.value(store) && UNITS_OK[b.param.id].includes(b.unit);
   // the policy value stated where the computation does not use that setting ("Is beta0 3250?"): neutral
   if (bindings.some((b) => equal(b) && !b.param.applies(intent))) ambiguous = true;
   return { bindings, ambiguous, mismatch: bindings.find((b) => !equal(b)) ?? null };
+}
+// A turn refers back when it names what came before or is only a value. This short word list is
+// unavoidable: "halve it" and "Use 4 instead" have no structure that marks them as corrections.
+const BACK = /(?<![\p{L}\p{N}])(?:it|that|this|instead|actually|rather|no|nope|sorry|wait|oops|make|change|use|set|same|correction|meant|mean|halve|double|triple)(?![\p{L}\p{N}])/iu;
+function refersBack(text: string, spans: [number, number][]): boolean {
+  if (BACK.test(text)) return true;
+  let rest = text; for (const [a, b] of [...spans].sort((x, y) => y[0] - x[0])) rest = rest.slice(0, a) + ' ' + rest.slice(b);
+  return (rest.match(/\p{L}+/gu) ?? []).length <= 2; // a bare value: "1800", "minus 1", "1e3"
 }
 /** The setting values a computation used, as stated in the question and equal to policy: the only setting numbers a title may echo. */
 export function boundPolicyValues(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore): Set<number> {

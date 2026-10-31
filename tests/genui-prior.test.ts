@@ -121,3 +121,17 @@ test('accounting: with a setting present every other number must be placed (TENA
   }
   for (const q of ['beta0 = 3250 → ' + Q, 'Is beta0 3250? → ' + Q, Q]) assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
 });
+test('accounting by mention, scoped to setting and referring turns (TENACITY beded12)', async () => {
+  const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
+  // a correction equal to a used value (4 from P04, 1 from #1) is a different mention: neutral
+  for (const q of ['alpha0 = 1 → actually 4 → ' + Q, 'alpha0 = 1, no wait, 4 → ' + Q, 'beta0 = 3250 → no, 4 → ' + Q, 'Use 4 instead → ' + Q,
+    'At The Clarendon (P04) with alpha0 = 1, actually 4, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?',
+    // a value change with no numeral in a referring turn: neutral
+    'beta0 = 3250 → halve it → ' + Q, 'beta0 = 3250 → double it → ' + Q, 'beta0 = 3250 → 1e3 → ' + Q]) {
+    const a = await askPanel(q, store);
+    assert.equal(a.spec.template, 'clarify_card', q); assert.equal(a.spec.title, 'Could you restate the question?', q);
+  }
+  // earlier turns that do not refer back do not block (Q77 rule)
+  for (const q of ['Show me 3 properties with highest vacancy → ' + Q, 'Thanks for the 12 numbers. → ' + Q, 'beta0 = 3250 → How many units at P01 have 2 bedrooms? → ' + Q])
+    assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
+});

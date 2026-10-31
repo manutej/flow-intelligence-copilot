@@ -301,7 +301,7 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   // with a value and a unit: a clear value that differs from what the computation used gives the
   // card for that setting; a number we cannot place gives a neutral clarify (TENACITY f9a64d0)
   const tid = turn.envelope.proof?.template_id ?? 'guard';
-  const settings = readSettings(input, intentOf(turn) ?? parseQueryIntent(coreQuestion(question), store), store, inLabel);
+  const settings = readSettings(input, intentOf(turn) ?? parseQueryIntent(coreQuestion(question), store), store, inLabel, (q) => canon(parseQueryIntent(coreQuestion(q), store)));
   const done = (spec: ChartSpec): Panel => ({ question: input, spec, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null });
   if (settings.mismatch) {
     const { name, policy } = settings.mismatch.param;
