@@ -1,0 +1,12 @@
+{
+  "set/questions.jsonl": {
+    "sha256": "e5833107921e081e12ff3503a36c7596acb2385a66fea6a71b605c70b23a701e",
+    "label": "Scenario dev: generalization tier is a non-answer stress set (other portfolio world); grounded tier uses FlowIQ's 9 properties",
+    "floors": { "grounded": 8, "generalization": 0 }
+  },
+  "questions/operadic-600-bank.jsonl": {
+    "sha256": "041e6da0372423221b959b913dd23f289ef700d7f56655ed055df4c4f69785c9",
+    "label": "operadic bank: answer coverage",
+    "floors": { "all": 90 }
+  }
+}

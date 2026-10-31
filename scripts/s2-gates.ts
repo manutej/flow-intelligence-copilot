@@ -80,10 +80,14 @@ const same = (k: string) => JSON.stringify(d?.[k]) === JSON.stringify(o?.[k]);
 gate('G-S2-8', 'model down = model off (paths, answers, wrong, coverage, forgery)', d && o ? `paths ${JSON.stringify(d.paths)}, answered ${d.answered}/${o.answered}, coverage ${d.coveragePct}/${o.coveragePct}%` : 'no output',
   !!d && !!o && (d.paths.deterministic ?? 0) === 200 && ['answered', 'wrong', 'coveragePct', 'forgeryAcceptancePct', 'falseRejections', 'deadEndPct'].every(same));
 // F4: question sets the S2 generator did not write.
-for (const src of ['/home/box/flowiq-scenarios/v1/set/questions.jsonl', 'questions/operadic-600-bank.jsonl']) {
-  const x = run('node', ['--no-warnings', 'scripts/s3-external-fuzz.ts', src], OFF);
-  let j: Fuzz | null = null; try { j = JSON.parse(x.out.trim().split('\n').at(-1)!); } catch { /* no output */ }
-  gate('G-S2-5', `external ${path.basename(src)}: false rejections 0, forgeries 0, model divergence 0`, j ? `answered ${j.answered}/${j.questions}, false rej ${j.falseRejections}, forged ${j.coherentForgeriesAccepted}/${j.coherentForgeries}, model ${j.modelDivergedAnswers}+${j.modelAnswerMismatch}/${j.modelAnswers}` : 'no output', x.code === 0 && !!j);
+// Each source and tier blocks on its own pinned sha256 and answer floor
+// (scripts/external-sets.json); the generalization tier is a non-answer
+// stress set, so only its verifier counts gate it.
+const SCN = '/home/box/flowiq-scenarios/v1/set/questions.jsonl';
+for (const [src, tier] of [[SCN, 'grounded'], [SCN, 'generalization'], ['questions/operadic-600-bank.jsonl', null]] as const) {
+  const x = run('node', ['--no-warnings', 'scripts/s3-external-fuzz.ts', src, ...(tier ? ['--tier', tier] : [])], OFF);
+  let j: (Fuzz & Record<string, any>) | null = null; try { j = JSON.parse(x.out.trim().split('\n').at(-1)!); } catch { /* no output */ }
+  gate('G-S2-5', `external ${path.basename(src)}${tier ? ` [${tier}]` : ''}: pin, floor, false rejections 0, forgeries 0`, j ? `${j.pinError ?? 'pin ok'}, answered ${j.answeredPct}% (floor ${j.answerFloorPct}%), false rej ${j.falseRejections}+${j.nonAnswerFalseRejections}, forged ${j.coherentForgeriesAccepted + j.nonAnswerAndShapeForgeriesAccepted}/${j.coherentForgeries + j.nonAnswerAndShapeForgeries}` : 'no output', x.code === 0 && !!j);
 }
 if (!argv.includes('--skip-compare')) {
   const c = run('bash', ['scripts/compare-main.sh']);
