@@ -65,3 +65,11 @@ test('s16: Annex answer carries no withheld alias content', async () => {
   const text = JSON.stringify(await ask('Vacancy at the Annex? Be brief.'));
   assert.doesNotMatch(text, /ormus\.solutions|am9pbi5v|ninth-house/i);
 });
+
+// Finding 5: a named building is never widened to the portfolio in a reading.
+for (const q of ['For my monthly review: Unit count and vacancy at The Clarendon?', 'How many not vacant units at Kedzie Works are on notice?']) {
+  test(`s16: readings keep the named building: ${q}`, async () => {
+    const text = JSON.stringify(await ask(q));
+    assert.doesNotMatch(text, /across the portfolio|all operating buildings/);
+  });
+}
