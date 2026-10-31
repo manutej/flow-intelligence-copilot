@@ -1,7 +1,7 @@
 import { hashOf, templateId } from '../agent/envelope.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from '../agent/intent.ts';
 import { coreQuestion } from './picker.ts';
-import { identifierTokens, statedNumbers, usedInputs } from './inputs.ts';
+import { boundPolicyValues, identifierTokens, statedNumbers, usedInputs } from './inputs.ts';
 import { executeCompositionalPlan } from '../agent/planner.ts';
 import { verifyAnswerEnvelope } from '../domain/guards.ts';
 import type { PortfolioStore } from '../data/schema.ts';
@@ -138,7 +138,7 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
   // a title may echo a number from the question only if the computation used it (normalized:
   // $1,800 = 1.8k = eighteen hundred = 1800); TENACITY 601bdfa HIGH
   const mainItem = ev.items.find((i) => i.key === 'main');
-  const used = store && mainItem ? usedInputs(mainItem.recipe?.intent, store) : new Set<number>();
+  const used = store && mainItem ? new Set([...usedInputs(mainItem.recipe?.intent), ...boundPolicyValues(mainQ, mainItem.recipe?.intent, store)]) : new Set<number>();
   const echo = new Set<string>();
   for (const id of identifierTokens(mainQ, mainItem?.recipe?.intent)) echo.add(id);
   // vague quantity words with no value of their own ("pair", "couple", "first") echo as typed, as before

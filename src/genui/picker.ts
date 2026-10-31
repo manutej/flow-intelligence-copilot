@@ -6,7 +6,7 @@ import { hashOf } from '../agent/envelope.ts';
 import { verifyAnswerEnvelope } from '../domain/guards.ts';
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import type { ParseConfig } from '../agent/model-parse.ts';
-import { MODEL_PARAMETERS, unusedParameter } from './inputs.ts';
+import { readSettings } from './inputs.ts';
 import { inLabel, specErrors, type ChartSpec, type Evidence, type EvidenceItem, type Num, type PanelState, type Unit } from './spec.ts';
 
 /**
@@ -275,12 +275,17 @@ export function intentGate(turn: CopilotTurnResult, core: string, store: Portfol
   return { ...clarify('clarify', turn, turn.envelope.proof.template_id, core), insight: 'The parsed reading differs from the question text', title: 'Which did you mean?' };
 }
 
-/** First number stated near a prior word in any turn that the computation did not use, or null. */
-/** The first prior stated in the question that `used` does not hold (kept for the TENACITY repro). */
+/** The first prior value stated in the question (beta0 or alpha0) that `used` does not hold (kept for the TENACITY repro). */
 export function statedPrior(input: string, used: ReadonlySet<number> = new Set()): number | null {
-  const prior = MODEL_PARAMETERS.find((p) => p.name === 'prior')!;
-  return unusedParameter(input, null, { policy: {} } as PortfolioStore, inLabel, [{ ...prior, used: () => used }])?.value ?? null;
+  const r = readSettings(input, null, { policy: {} } as PortfolioStore, inLabel);
+  return r.bindings.find((b) => b.param.id !== 'cadRate' && !used.has(b.value))?.value ?? null;
 }
+
+// a clarify that names no setting: the question has a number we cannot place, or a title we cannot write
+const neutral = (turn: CopilotTurnResult, intent: string, question: string, why: string): ChartSpec => ({
+  ...clarify('clarify', { ...turn, clarifyingQuestion: why, clarifyOptions: [] } as CopilotTurnResult, intent, question),
+  insight: 'Needs a restatement before charting', title: 'Could you restate the question?',
+});
 
 /** Full path: S2 parse (model if configured, deterministic otherwise) -> picker -> validated spec. */
 export async function askPanel(input: string, store: PortfolioStore, parse: ParseConfig | null = null): Promise<Panel> {
@@ -292,14 +297,18 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   const question = turns[turns.length - 1];
   const gate = intentGate(turn, coreQuestion(question), store);
   if (gate) return { question: input, spec: gate, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
-  // a model parameter (prior, CAD rate) stated with a number the computation did not use, in any
-  // turn and any match: the numbers would not reflect it, so nothing is charted (TENACITY 601bdfa HIGH)
-  const unused = unusedParameter(input, intentOf(turn) ?? parseQueryIntent(coreQuestion(question), store), store, inLabel);
-  if (unused) {
-    const { name, policy } = unused.param;
+  // each stated model setting (beta0, alpha0, CAD rate), in any turn, bound to its own parameter
+  // with a value and a unit: a clear value that differs from what the computation used gives the
+  // card for that setting; a number we cannot place gives a neutral clarify (TENACITY f9a64d0)
+  const tid = turn.envelope.proof?.template_id ?? 'guard';
+  const settings = readSettings(input, intentOf(turn) ?? parseQueryIntent(coreQuestion(question), store), store, inLabel);
+  const done = (spec: ChartSpec): Panel => ({ question: input, spec, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null });
+  if (settings.mismatch) {
+    const { name, policy } = settings.mismatch.param;
     const t = { ...turn, clarifyingQuestion: `A ${name} stated in the question is not an input this analysis used (it uses the policy ${policy(store)} where a ${name} applies), so nothing is charted. Ask again without that ${name}, or change it in the policy.`, clarifyOptions: [] };
-    return { question: input, spec: { ...clarify('unknown', t as CopilotTurnResult, turn.envelope.proof?.template_id ?? 'guard', question), insight: `Stated ${name} is not applied`, title: `This ${name} is not supported` }, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
+    return done({ ...clarify('unknown', t as CopilotTurnResult, tid, question), insight: `Stated ${name} is not applied`, title: `This ${name} is not supported` });
   }
+  if (settings.ambiguous) return done(neutral(turn, tid, question, 'The question states a number that could be read more than one way, so nothing is charted. Ask again with the number stated plainly, or without it.'));
   const { spec, evidence } = pick({ question, turn, store });
   const errors = specErrors(spec, evidence, store);
   // a spec that fails fidelity is never rendered as a chart

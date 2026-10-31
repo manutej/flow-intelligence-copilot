@@ -66,3 +66,21 @@ test('one mechanism: any stated model parameter the computation did not use give
   assert.equal(p.spec.title, 'This prior is not supported');
   assert.ok((p.spec as any).props.restatement.includes('policy prior beta0 = $3250'));
 });
+test('settings bind per parameter with value and unit (TENACITY f9a64d0 1-3, 5)', async () => {
+  const title = async (s: string) => (await askPanel(base(s), store)).spec;
+  // 1: beta0 is compared with 3250 alone, never with alpha0's 1
+  for (const s of ['with prior beta0=1', 'with prior beta0=$1', 'with a $1 prior', 'with beta0 = 1 dollar']) assert.equal((await title(s)).title, 'This prior is not supported', s);
+  // 2: the currency is part of the value
+  for (const s of ['with prior beta0 = 3250 CAD', 'with prior beta0 = $3250 CAD']) assert.equal((await title(s)).title, 'This prior is not supported', s);
+  for (const s of ['with prior beta0=$3250', 'with a prior of 3250 dollars', 'with prior beta0 = 3.25k']) assert.equal((await title(s)).template, 'sorted_bar', s);
+  // 5: a number that is not plainly the setting's value: neutral clarify, never a chart, never a setting name
+  for (const q of ['I want prior\n1800 → ' + base(''), 'prior → 1800 → ' + base(''), 'Set prior to 1800 → ' + base(''), base('with a prior (1800)'), base('with a prior, namely 1800'), base('with a prior of 1')]) {
+    const a = await askPanel(q, store);
+    assert.equal(a.spec.template, 'clarify_card', q);
+    assert.ok(!/not supported/.test(a.spec.title ?? ''), q);
+  }
+  // 3: ranks and durations are not setting values
+  assert.equal((await askPanel('How much CAD spend converted at the CAD rate went to the top 1 channel?', store)).spec.template, 'kpi');
+  for (const q of ['Compare vacancy to the prior 3 months at P04', 'What was vacancy at P04 in the prior 30 days?', 'How did the prior 2 quarters compare at P04?', 'What is the CAD rate used for 1 property?', 'What prior is used for 2 bedroom leasing?'])
+    assert.ok(!/not supported/.test((await askPanel(q, store)).spec.title ?? ''), q);
+});
