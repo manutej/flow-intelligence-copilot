@@ -2,6 +2,7 @@ import { typedQueryErrors } from './typed-query.ts';
 import { COMPARATOR_PHRASES } from '../domain/comparators.ts';
 import { spellCalendarYear } from '../domain/fiscal.ts';
 import { FIXED, isDataWord } from '../domain/vocabulary.ts';
+import { foreignCurrency, periodPoint, toDatePeriod, NUMBER_WORD } from './categories.ts';
 import { mentionsQuantity, statedValues, type Field } from '../domain/comparators.ts';
 import { unresolvedUnitWords } from './closed-world.ts';
 import { DATE_WINDOWS, type DateWindowSpec } from '../config/rules.ts';
@@ -1556,11 +1557,11 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
     const m = re.exec(q);
     if (m) return `${what} ("${m[0].trim()}")`;
   }
-  const currency = unsupportedCurrency(question);
+  const currency = unsupportedCurrency(question, store);
   if (currency) return currency;
   // A to-date period is relative to a "today" the exports do not carry.
-  const toDate = /(?<![\p{L}\p{N}])(?:[ymq]\.?-?t\.?-?d\.?(?![\p{L}\p{N}])|(?:(?:year|quarter|month|week)[\s-]+)?to[\s-]+date\b|so\s+far(?:\s+this\s+(?:year|quarter|month))?\b)/iu.exec(question);
-  if (toDate) return `a to-date period ("${toDate[0].trim()}"), but FlowIQ has no "today" to count to`;
+  const toDate = toDatePeriod(question);
+  if (toDate) return `a to-date period ("${toDate}"), but FlowIQ has no "today" to count to`;
   const unitFilter = unappliedUnitFilter(question, intent);
   if (unitFilter) return unitFilter;
   const rentRoll = unsplittableFilter(question, intent, store);
@@ -1676,8 +1677,8 @@ function unsplittableFilter(question: string, intent: ParsedQueryIntent, store: 
   const term = LEASE_TERM_RE.exec(q);
   if (term) return `a lease term ("${term[0].trim()}"), but the lease ledger records only new or renewal, not the term`;
   if (intent.domain === 'units') {
-    const end = PERIOD_END_RE.exec(q);
-    if (end) return `a period end ("${end[0].trim()}"), but unit figures are one snapshot of the current rent roll, not a history`;
+    const end = periodPoint(q);
+    if (end) return `a period end ("${end}"), but unit figures are one snapshot of the current rent roll, not a history`;
     let d = spellIsoMonths(spellCalendarYear(q)).replace(/\$\s?[\d,]+(?:\.\d+)?\s*[kK]?|\b[\d,]+(?:\.\d+)?\s*(?:sq\.?\s*f(?:ee)?t|sqft|sf|square\s+f(?:ee|oo)t)\b/g, ' ');
     for (const re of COMPARATOR_PHRASES) d = d.replace(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`), ' ');
     if (intent.yearBuiltMin !== undefined || intent.yearBuiltMax !== undefined) d = d.replace(/\b(?:built|constructed|opened|completed|delivered)\b[^?.!]*?\b(?:19|20)\d{2}\b/gi, ' ');
@@ -1690,30 +1691,21 @@ function unsplittableFilter(question: string, intent: ParsedQueryIntent, store: 
 }
 
 /** A lease term the ledger does not record (it holds only new or renewal). */
-const TERM_COUNT = String.raw`(?:\d+|a|an|one|two|three|four|six|nine|ten|twelve|fifteen|eighteen|twenty[\s-]?four|half)`;
+const TERM_COUNT = NUMBER_WORD;
 const LEASE_TERM_RE = new RegExp(String.raw`\b(?:month[\s-]+to[\s-]+month|m2m|mtm|fixed[\s-]+term|short[\s-]+term|long[\s-]+term|annual|yearly|${TERM_COUNT}[\s-]*(?:months?|mos?|years?|yrs?)(?:[\s-]+long)?[\s-]+(?:leases?|terms?|contracts?))\b`, 'i');
-
-/** A point in time at the end of a period ("at year end", "end of quarter"). */
-const PERIOD_END_RE = /\b(?:(?:fiscal[\s-]+)?(?:year|quarter|month|week|period|fy)(?:['’]s)?[\s-]*end(?:ing)?|end\s+of\s+(?:the\s+)?(?:fiscal\s+)?(?:year|quarter|month|week|period|fy)|eo[ymqw])\b/i;
 
 /**
  * Every figure FlowIQ reports is in USD (CAD invoices are converted). A
- * figure asked for in any other currency would carry the wrong unit, so the
- * currency is left over rather than ignored.
+ * currency other than USD named anywhere, by code, symbol or name, asks for
+ * a unit or a currency subset FlowIQ does not apply ("in CAD", "billed in
+ * CAD", "CAD rows", ", CAD rate?"), so it is left over rather than ignored.
+ * A lower-case word FlowIQ reads ("all") is not a code unless the spend data
+ * itself carries that currency.
  */
-function unsupportedCurrency(question: string): string | null {
-  // A currency named anywhere ("in CAD", ", CAD?", "(CAD)", "CAD spend") is a
-  // requested unit; only the source currency of invoices ("CAD invoices",
-  // "converted from CAD") describes the data rather than the answer.
-  const re = /(?<![\p{L}\p{N}])(CAD|EUR|GBP|MXN|JPY|AUD|NZD|CHF|CNY|INR|BRL|C\$|A\$|€|£|¥|(?:canadian|australian|aussie|new\s+zealand)(?:\s+dollars?)?|loonies|euros?|pounds?(?:\s+sterling)?|pesos?|yen|francs?)(?![\p{L}\p{N}])/giu;
-  for (const m of question.normalize('NFKC').matchAll(re)) {
-    const before = question.slice(0, m.index).toLowerCase();
-    const after = question.slice(m.index + m[0].length).toLowerCase();
-    if (/\b(?:from|billed\s+in|invoiced\s+in|paid\s+in)\s*$/.test(before)) continue;
-    if (/^\s*(?:-?denominated\s+)?(?:invoices?|rows?|entries|line\s+items?|conversion|rate|fx|exchange)\b/.test(after)) continue;
-    return `a currency ("${m[1]}"), but FlowIQ reports figures in USD only`;
-  }
-  return null;
+function unsupportedCurrency(question: string, store: PortfolioStore): string | null {
+  const dataCurrencies = new Set(store.spend.map((r) => r.currency as string));
+  const hit = foreignCurrency(question, (w) => FIXED.has(w.toLowerCase()) && !dataCurrencies.has(w.toUpperCase()));
+  return hit ? `a currency ("${hit}"), but FlowIQ reports figures in USD only and applies no currency filter` : null;
 }
 
 /** Words a "from <phrase>" source phrase may hold besides source, property and date names. */
@@ -1897,7 +1889,7 @@ function uncoveredToken(question: string, store: PortfolioStore, intent: ParsedQ
   return null;
 }
 /** Capitalised words that are not names: the pronoun, units and metric acronyms. */
-const CAPITALISED_OK = /^(?:I|I'm|I'd|I've|USD|CAD|CPL|CPT|CPSL|CPA|ILS|YTD|QTD|MTD|YoY|QoQ|MoM|FY|PMS|CRM|NOI|ID|IDs|OK)$/u;
+const CAPITALISED_OK = /^(?:I|I'm|I'd|I've|USD|CPL|CPT|CPSL|CPA|ILS|YTD|QTD|MTD|YoY|QoQ|MoM|FY|PMS|CRM|NOI|ID|IDs|OK)$/u;
 const SOURCE_GENERIC_WORD = /^(?:apartments?|list|com|ads|rent|website|referrals?)$/i;
 
 /** Building-type words that name no one property on their own. */
