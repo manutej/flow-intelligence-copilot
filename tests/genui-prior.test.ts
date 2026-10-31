@@ -167,7 +167,9 @@ test('turn-leading numbers, standalone turns with tails, counts and the pronoun 
     'beta0 = 3250 → ' + P + ' use 1800 instead → ' + Q, 'beta0 = 3250 → What was spend in 2025? 4 instead → ' + Q,
     P + ' use 4 instead → ' + Q, 'What was spend in 2025? 4 instead → ' + Q, 'beta0 = 3250 → ' + P + ' also 1800 → ' + Q])
     assert.equal((await askPanel(q, store)).spec.title, 'Could you restate the question?', q);
-  for (const q of ['Hello there, quick one → ' + Q, 'Show me 3 properties with highest vacancy and use that list → ' + Q,
+  // small talk with no entity noun now clarifies (fail-closed, TENACITY 06921c8 ruling)
+  assert.equal((await askPanel('Hello there, quick one → ' + Q, store)).spec.template, 'clarify_card');
+  for (const q of ['Show me 3 properties with highest vacancy and use that list → ' + Q,
     'How many units at P01 have 2 bedrooms, actually? → ' + Q, P + ' → ' + Q, 'beta0 = 3250 → ' + P + ' → ' + Q])
     assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
 });
@@ -176,6 +178,34 @@ test('learner with no setting: numbers clarify unless the turn is clearly non-ed
   const noset = ['1800 dollars','4 leases','3250 units per month','use 4 months','1800 bucks instead','make it 4 percent','use 1800 euros','1800 pesos please','make it 1800 dollares','use 4 weeks','4 months instead','try 1800 credits','use 4 units instead','1800 units','go with 4 observations','prior of 4 leads','1800 dólares','mejor 4 meses','mettons 1800 euros','4 cents','1800 people','4 children','4 data','use 1800 USDs','1800 grand','use 4 pseudo-leases','4 pseudoleases','4 pseudo leases','4 leases instead','alpha0 4 leads','4 pseudo-observations','half a dozen months','1800 yen'];
   const oneNoset = ['make it one', 'use one instead', 'one more', 'go with one', 'make it a thousand'];
   for (const c of [...noset, ...oneNoset]) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
-  for (const c of ['Hello there, quick one', 'Show me 3 properties with highest vacancy', 'Thanks for the 12 numbers.', 'I manage 4 buildings', 'We had 2 meetings today', 'one question', 'I have one more question'])
+  for (const c of ['Hello there, quick one', 'We had 2 meetings today', 'one question', 'I have one more question']) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
+  for (const c of ['Show me 3 properties with highest vacancy', 'Thanks for the 12 numbers.', 'I manage 4 buildings'])
     assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+});
+test('no-setting numbers pass only as entity counts or request parses (TENACITY 06921c8)', async () => {
+  const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
+  // rows copied verbatim from genui-exempt-06921c8.ts
+const C: [string,string][] = [
+ // cue after the number
+ ['cue-after','1800 euros would be better'],['cue-after','4 units, use that'],['cue-after','1800 please instead'],['cue-after','4 units would be better'],
+ ['cue-after','I think 1800 dollars instead'],['cue-after','I think 1800 dollars would be better'],['cue-after','we want 4 units instead of that'],
+ // padded filler, no listed cue
+ ['pad','I think maybe 1800 dollars is right'],['pad','I think maybe 4 units is right'],['pad','I would prefer 1800 dollars here'],['pad','how about 1800 dollars for that'],
+ ['pad','what if it were 4 units'],['pad','assume 4 leases for the prior'],['pad','please put 1800 dollars there'],['pad','I would go 1800 dollars here'],
+ ['pad','the prior should really be 4 leases'],['pad','prefiero 4 meses para eso'],['pad','je préfère 1800 euros pour ça'],['pad','ich möchte 4 Monate bitte'],
+ ['pad','assume one bedroom for it'],['pad','I would pick 4 months for it'],['pad','I would like 1800 dollars there'],
+ // one before noun used as edit
+ ['one-edit','one bedroom prior please'],['one-edit','try one unit'],['one-edit','one lease prior is fine'],['one-edit','one pseudo lease please'],['one-edit','assume one lease here'],['one-edit','I want one lease as prior'],
+ // more/less mid-turn
+ ['moreless','more like 1800 please'],['moreless','less like 4 leases please'],['moreless','something more like 1800 dollars'],['moreless','more like 4 units really'],
+];
+const B: [string,string][] = [
+ ['ok','Show me 3 properties with highest vacancy'],['ok','Thanks for the 12 numbers.'],['ok','I manage 4 buildings'],['ok','We had 2 meetings today'],['ok','one question'],['ok','I have one more question'],['ok','Hello there, quick one'],
+ ['ok','Thanks!'],['ok','Thanks for the 3 charts'],['ok','Great, I looked at 5 reports today'],['ok','We have 12 properties in Chicago'],['ok','I read 3 papers on this'],['ok','Show me 3 properties'],['ok','3 properties please'],['ok','Hi, I run 4 buildings'],['ok','I had 2 questions earlier'],['ok','Thanks, those 12 numbers help'],['ok','That was helpful for my 2 teams'],
+];
+  // accepted over-clarifies: small talk with no data-entity noun fails closed (no harmless-noun list)
+  const SMALL_TALK = new Set(['We had 2 meetings today', 'one question', 'I have one more question', 'Hello there, quick one',
+    'Great, I looked at 5 reports today', 'I read 3 papers on this', 'I had 2 questions earlier', 'That was helpful for my 2 teams']);
+  for (const [, c] of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
+  for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, SMALL_TALK.has(c) ? 'clarify_card' : 'sorted_bar', c);
 });
