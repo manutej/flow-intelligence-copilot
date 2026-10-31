@@ -150,10 +150,11 @@ export function checkUnknownDataGuard(
     };
   }
 
-  // Bare "FY" outside "at/for/in FY" is Fulton Yards or a fiscal year: ask.
+  // Bare "FY" is Fulton Yards only after "at" and only when the resolver
+  // binds it to that property ("at F.Y." it does not); otherwise ask.
   const masked = maskFiscalTokens(question);
-  if (BARE_FY_RE.test(masked) && !LOCATIVE_FY_RE.test(masked)) {
-    const fy = store.properties.find((p) => p.aka.some((a) => /^f\.?y\.?$/i.test(a.trim())));
+  const fy = store.properties.find((p) => p.aka.some((a) => /^f\.?y\.?$/i.test(a.trim())));
+  if (BARE_FY_RE.test(masked) && (!LOCATIVE_FY_RE.test(masked) || !fy || !resolvePropertiesFromText(store, question).matched.some((p) => p.propertyId === fy.propertyId))) {
     const place = fy ? `${fy.name} (${fy.propertyId})` : 'a property';
     return {
       unknown: true,

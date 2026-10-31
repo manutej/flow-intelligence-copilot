@@ -26,6 +26,7 @@ import {
 } from './model-harness.ts';
 import { classifyFrame, composeFrame, frameModelConfig, PROTECTED_GROUPS, type FrameAnswers, type ProtectedGroup } from './frame-model.ts';
 import { executeCompositionalPlan, LEFTOVER_REASON_HEAD } from './planner.ts';
+import { resolvePropertiesFromText } from '../domain/resolver.ts';
 import { coverage, modelParse, parseConfigFromEnv, toIntent, type ModelParse, type ParseConfig } from './model-parse.ts';
 import type { RunStore } from './run-store.ts';
 import { canonicalQuestion } from './clarify.ts';
@@ -497,6 +498,9 @@ function namedAlias(out: ReturnType<typeof executeCompositionalPlan>, question: 
   if (!LOCATIVE_FY_RE.test(masked)) return out;
   const fy = store.properties.find((p) => p.aka.some((a) => /^f\.?y\.?$/i.test(a.trim())));
   if (!fy || out.envelope.answer.includes(fy.name)) return out;
+  // The note names the property the figure is for, so it is added only when that is FY alone.
+  const ids = resolvePropertiesFromText(store, question).matched.map((p) => p.propertyId);
+  if (ids.length !== 1 || ids[0] !== fy.propertyId) return out;
   const envelope: AnswerEnvelope = { ...out.envelope, answer: `Reading "FY" as the property ${fy.name} (${fy.propertyId}), not a fiscal year: ${out.envelope.answer}` };
   return { ...out, envelope };
 }
