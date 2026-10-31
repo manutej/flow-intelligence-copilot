@@ -1,9 +1,10 @@
+import { DATE_WINDOWS } from '../config/rules.ts';
 import { nonAnswerKind, sealNonAnswer, setNonAnswerRenderer, type NonAnswerInput } from './envelope.ts';
 import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
 import { LOCATIVE_FY_RE, maskFiscalTokens } from '../domain/fiscal.ts';
 import type { ParsedQueryIntent } from './intent.ts';
 import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
-import { META_INSTRUCTION_RE, coordinatedMeasureLeftOut, parseQueryIntent } from './intent.ts';
+import { META_INSTRUCTION_RE, UNSPECIFIED_PERIOD_RE, coordinatedMeasureLeftOut, parseQueryIntent } from './intent.ts';
 import { continuesPreviousTurn, refersBackToPeople, type FairHousingSession } from '../domain/fair-housing.ts';
 import { unknownWords } from '../domain/vocabulary.ts';
 import type { PortfolioPolicyConfig } from '../config/rules.ts';
@@ -416,7 +417,7 @@ export function runDeterministicToolRouter(
   const out = closedVocabulary(executeCompositionalPlan(qRecord, store), qRecord, store);
   const r = out.envelope.result as Record<string, unknown>;
   const answered = r.unknown !== true && r.refused !== true && r.clarification_needed !== true;
-  const offered = answered || r.refused === true ? [] : out.clarifyOptions ?? unitClarify(qRecord.question, store).clarifyOptions ?? [];
+  const offered = answered || r.refused === true ? [] : out.clarifyOptions ?? periodClarify(qRecord.question, store) ?? unitClarify(qRecord.question, store).clarifyOptions ?? [];
   const opts = wellFormedOptions(offered, qRecord, store);
   return {
     ...withClarify(out, opts, qRecord, store),
@@ -480,6 +481,23 @@ function withClarify(
     clarifyingQuestion: out.clarifyingQuestion ?? options.map((o) => o.question).join(' / '),
     verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
   };
+}
+
+/**
+ * A period referred to but not named ("for the period") gets one typed
+ * reading per date window FlowIQ knows, each the user's question with that
+ * window named; wellFormedOptions keeps only the ones that answer.
+ */
+function periodClarify(question: string, store: PortfolioStore): ClarifyOption[] | undefined {
+  const m = UNSPECIFIED_PERIOD_RE.exec(question);
+  if (!m || parseQueryIntent(question, store).dateExplicit) return undefined;
+  const lead = /^\s*(?:for|in|over|during|across)\b/i.test(m[0]) ? '' : 'in ';
+  return Object.values(DATE_WINDOWS).map((w) => {
+    const named = w.label.replace(/\s*\(.*\)$/, '');
+    const q = `${question.slice(0, m.index)}${m[0].match(/^\s*(?:for|in|over|during|across)\b/i)?.[0] ?? ''} ${lead}${named}${question.slice(m.index + m[0].length)}`.replace(/\s+/g, ' ').replace(/\s+([?.!,])/g, '$1');
+    const query = parseQueryIntent(q, store);
+    return { label: `${named}: ${restate(query, q, store).replace(/^I computed: /, '').replace(/\.$/, '')}`, question: q, query };
+  });
 }
 
 /** A unit question left unknown by words no filter binds gets typed readings, not a dead end. */

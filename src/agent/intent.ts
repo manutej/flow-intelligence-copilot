@@ -2,7 +2,7 @@ import { typedQueryErrors } from './typed-query.ts';
 import { COMPARATOR_PHRASES } from '../domain/comparators.ts';
 import { spellCalendarYear } from '../domain/fiscal.ts';
 import { FIXED, isDataWord } from '../domain/vocabulary.ts';
-import { foreignCurrency, periodPoint, toDatePeriod, NUMBER_WORD } from './categories.ts';
+import { foldSeparators, foreignCurrency, periodPoint, toDatePeriod, NUMBER_WORD } from './categories.ts';
 import { mentionsQuantity, statedValues, type Field } from '../domain/comparators.ts';
 import { unresolvedUnitWords } from './closed-world.ts';
 import { DATE_WINDOWS, type DateWindowSpec } from '../config/rules.ts';
@@ -1096,8 +1096,10 @@ function parseQueryIntentRaw(
         : undefined;
     // A renewal rate for a named period is over the leases ending in it.
     const isRenewalRateQuery = /\brenewal\s+rate\b|\brenew(?:ed|al)?\s+(?:share|percent|%)/i.test(question);
+    // "this year" with no other date is the calendar year the data window lies in.
+    const thisYear = !dateExplicit && /\bthis\s+year\b/i.test(question) ? calendarYearOf(dateWindow) : undefined;
     const leaseEndWindow =
-      (hasEndSignal || (isRenewalRateQuery && dateExplicit)) && !hasStartSignal ? dateWindow : undefined;
+      (hasEndSignal || (isRenewalRateQuery && (dateExplicit || thisYear))) && !hasStartSignal ? thisYear ?? dateWindow : undefined;
 
     let measure: IntentMeasure = 'lease_count';
     if (
@@ -1560,6 +1562,8 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
   const currency = unsupportedCurrency(question, store);
   if (currency) return currency;
   // A to-date period is relative to a "today" the exports do not carry.
+  const unnamed = unspecifiedPeriod(question);
+  if (unnamed && !intent.dateExplicit) return `a period the question refers to but does not name ("${unnamed}")`;
   const toDate = toDatePeriod(question);
   if (toDate) return `a to-date period ("${toDate}"), but FlowIQ has no "today" to count to`;
   const unitFilter = unappliedUnitFilter(question, intent);
@@ -1635,6 +1639,21 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
     }
   }
   return null;
+}
+
+/** The calendar year a data window lies in, labelled as the reading of "this year". */
+function calendarYearOf(w: DateWindowSpec): DateWindowSpec {
+  const y = w.startDate.slice(0, 4);
+  return { key: `CY_${y}`, label: `${y} (this year, read as the calendar year of the data)`, startDate: `${y}-01-01`, endDate: `${y}-12-31`, months: Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`) } as DateWindowSpec;
+}
+
+/**
+ * A period referred to but not named ("for the period", "that window",
+ * "the same timeframe"): a determiner with a period noun and no date.
+ */
+export const UNSPECIFIED_PERIOD_RE = /\b(?:for|in|over|during|across)?\s*(?:the|that|this|said|same|the\s+same)\s+(?:period|window|time\s?frame|time\s+period|date\s+range|range|cycle)\b/i;
+export function unspecifiedPeriod(question: string): string | null {
+  return UNSPECIFIED_PERIOD_RE.exec(foldSeparators(question))?.[0].trim() ?? null;
 }
 
 /** A word that names a quantity in any domain. */
