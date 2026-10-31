@@ -716,6 +716,18 @@ export function executeCompositionalPlan(
 
     // Default Marketing Measure: Cost Per Signed Lease (CPSL)
     const wantHighest = intent.aggregation === 'argmax';
+    // The CPSL answers below name one source. A question that neither ranks
+    // nor asks about sources wants the overall ratio, which they do not carry.
+    const asksSources =
+      intent.aggregation !== 'value' ||
+      intent.mentionedSources.length > 0 ||
+      /\b(?:sources?|channels?|listing\s+sites?|vendors?|platforms?|best|cheapest|which|what\s+paid)\b/i.test(question) ||
+      /\bhow\s+many\s+(?:signed\s+)?leases\b/i.test(question);
+    if (!asksSources) {
+      return unknown(
+        `FlowIQ ranks cost per signed lease by listing source; it does not carry one overall cost per signed lease for "${question.trim()}", so it will not answer a different question in its place.`,
+      );
+    }
     const isSingleBuilding =
       Boolean(matchedPropIds && matchedPropIds.length === 1);
 
