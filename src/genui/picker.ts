@@ -1,3 +1,5 @@
+import { extreme } from '../domain/extreme.ts';
+import { currencyGuard, twoMeasureGuard, misspeltBuildingGuard } from './guards.ts';
 import { askFlowIqCopilot, type CopilotTurnResult } from '../agent/copilot.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from '../agent/intent.ts';
 import { executeCompositionalPlan } from '../agent/planner.ts';
@@ -125,10 +127,7 @@ function byBuilding(store: PortfolioStore, q: string, intent: ParsedQueryIntent,
  * argmin, smallest) plotted value. When the extreme value is shared, nothing is highlighted.
  */
 export function seriesWinner(series: ReadonlyArray<{ label: string; v: number }>, want: 'max' | 'min'): string | null {
-  if (!series.length) return null;
-  const best = want === 'max' ? Math.max(...series.map((x) => x.v)) : Math.min(...series.map((x) => x.v));
-  const at = series.filter((x) => x.v === best);
-  return at.length === 1 ? at[0].label : null;
+  return extreme(series, (x) => x.v, want).winner?.label ?? null;
 }
 function bySource(store: PortfolioStore, q: string, intent: ParsedQueryIntent, k: string): EvidenceItem[] {
   const srcs = intent.paidOnly || /\bpaid\b/i.test(q) ? store.paidSources : [...store.paidSources, ...store.organicSources];
@@ -277,9 +276,21 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
       items.push(rent, size); return { label: p.name, x: num(size, 'sqft'), y: num(rent, 'usd') };
     }).filter((x): x is NonNullable<typeof x> => !!x);
     if (pts.length >= 2) {
-      const top = [...pts].sort((a, b) => b.y.v / b.x.v - a.y.v / a.x.v)[0].label;
-      return done({ ...base, ...partial(names, pts.map((p) => p.label)), template: 'scatter', props: { points: pts, x: { label: 'Avg sq ft', unit: 'sqft' }, y: { label: 'Avg market rent', unit: '$' }, highlight: [top], highlight_reason: 'highest rent per square foot' } });
+      // the highest rent per square foot, unique; a tie highlights nothing
+      const top = extreme(pts, (p) => p.y.v / p.x.v, 'max').winner?.label;
+      return done({ ...base, ...partial(names, pts.map((p) => p.label)), template: 'scatter', props: { points: pts, x: { label: 'Avg sq ft', unit: 'sqft' }, y: { label: 'Avg market rent', unit: '$' }, highlight: top ? [top] : [], highlight_reason: 'highest rent per square foot' } });
     }
+  }
+  // "by source" / "by building": one bar per group, each its own verified answer; no winner is
+  // claimed. A measure with no per-group answer clarifies rather than giving one pooled figure.
+  const byDim = breakdownDimension(question);
+  if (byDim && ag !== 'argmax' && ag !== 'argmin') {
+    const bd = byDim === 'source' ? bySource(store, core, intent, k) : byBuilding(store, core, intent, k);
+    if (bd.length < 2) return { spec: { ...clarify('unknown', { ...turn, clarifyingQuestion: `FlowIQ has no per-${byDim} answer for this measure, so the ${byDim} breakdown asked for is not charted and no pooled figure is shown in its place.` } as CopilotTurnResult, tid, asked), title: `No breakdown by ${byDim}` }, evidence: { items: [] } };
+    items.push(...bd);
+    const want = byDim === 'source' ? [...new Set([...store.paidSources, ...(intent.paidOnly ? [] : store.organicSources)] as string[])] : (namedBuildings(store, core) ?? store.operatingProperties).map((p) => p.name);
+    const sorted = [...bd].sort((a, b) => (b.result[k!] as number) - (a.result[k!] as number) || a.label.localeCompare(b.label));
+    return done({ ...base, ...partial(want, bd.map((x) => x.label)), template: 'sorted_bar', props: { items: sorted.map((x) => ({ label: x.label, value: num(x, k!) })), unit, sort: 'desc', highlight: [], good_direction: gd } });
   }
   // argmax / argmin / compare: breakdown chart
   if (ag === 'argmax' || ag === 'argmin' || ag === 'compare' || intent.topK) {
@@ -293,6 +304,10 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
       const named = String(res.source ?? store.properties.find((p) => p.propertyId === res.property_id)?.name ?? '');
       if ((ag === 'argmax' || ag === 'argmin') && top !== null && named && named !== top)
         return { spec: clarify('unknown', turn, tid, asked, 'error_data'), evidence: { items: [] } };
+      // the text must name the chart's winner: an engine answer that names no entity (a pooled
+      // total) would sit beside a highlighted bar it never mentions, so nothing is charted
+      if ((ag === 'argmax' || ag === 'argmin') && top !== null && !named && !res.unknown)
+        return { spec: { ...clarify('unknown', { ...turn, clarifyingQuestion: 'The computed answer is one pooled figure and names no winner, so a ranking chart would claim a winner the answer does not state. Nothing is charted.' } as CopilotTurnResult, tid, asked), title: 'No ranking for this measure' }, evidence: { items: [] } };
       const winner = top;
       const ent = res.source !== undefined ? 'Source' : 'Building';
       if (RANK.test(question) || intent.topK) {
@@ -357,6 +372,17 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
     return done({ ...clarify('unknown', t as CopilotTurnResult, tid, question), insight: `Stated ${name} is not applied`, title: `This ${name} is not supported` });
   }
   if (settings.ambiguous) return done(neutral(turn, tid, question, 'The question states a number that could be read more than one way, so nothing is charted. Ask again with the number stated plainly, or without it.'));
+  // shapes answered with another question's number: another currency, two measures, a misspelt building
+  // (an answer the engine already declined keeps its own reason, except a misspelt building)
+  const r0 = (turn.envelope.result ?? {}) as Record<string, unknown>;
+  if (!r0.refused) {
+    const answered = !r0.unknown && !r0.clarification_needed;
+    const why = (answered ? currencyGuard(question) ?? twoMeasureGuard(coreQuestion(question), intentOf(turn)) : null) ?? misspeltBuildingGuard(coreQuestion(question), store);
+    if (why) {
+      const t = { ...turn, clarifyingQuestion: why, clarifyOptions: [] } as CopilotTurnResult;
+      return done({ ...clarify('unknown', t, tid, question), title: 'Not answered as asked' });
+    }
+  }
   const { spec, evidence } = pick({ question, turn, store });
   const errors = specErrors(spec, evidence, store);
   // a spec that fails fidelity is never rendered as a chart
@@ -383,4 +409,11 @@ export async function panelErrors(question: string, spec: unknown, store: Portfo
   const errs = [...specErrors(fresh.spec, fresh.evidence, store).map((e) => `fresh spec: ${e}`), ...specErrors(spec as ChartSpec, fresh.evidence, store)];
   if (canon(spec) !== canon(fresh.spec)) errs.push('spec differs from the spec the picker builds for this question');
   return errs;
+}
+
+/** The grouping a question asks for ("by source", "for each building"), or null. */
+export function breakdownDimension(q: string): 'source' | 'building' | null {
+  const m = /\b(?:by|per|for\s+each|each|broken\s+down\s+by|split\s+by)\s+(?:listing\s+|lead\s+|marketing\s+)?(sources?|channels?|buildings?|propert(?:y|ies)|assets?)\b(?!\s+(?:class|type|manager|management))/i.exec(q);
+  if (!m) return null;
+  return /^(?:source|channel)/i.test(m[1]) ? 'source' : 'building';
 }

@@ -338,7 +338,7 @@ function withClarify(
   const head = out.envelope.answer.replace(/\s*Did you mean:[\s\S]*$/, '').trim();
   const envelope: AnswerEnvelope = {
     ...out.envelope,
-    answer: `${head} Did you mean: ${options.map((o, k) => `(${k + 1}) ${o.label}`).join('; ')}?`,
+    answer: options.length ? `${head} Did you mean: ${options.map((o, k) => `(${k + 1}) ${o.label}`).join('; ')}?` : head,
     result: { ...r, unknown: true, clarification_needed: true },
   };
   return {

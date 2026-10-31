@@ -1,6 +1,7 @@
 import { sealProof } from './envelope.ts';
 import type { ClarifyOption } from './clarify.ts';
 import { fmtUsd, plural } from '../domain/format.ts';
+import { extreme } from '../domain/extreme.ts';
 import { roundTo } from '../data/loader.ts';
 import type {
   AnswerEnvelope,
@@ -813,6 +814,25 @@ export function executeCompositionalPlan(
       );
     }
 
+    if (intent.measure === 'spend_total' && (intent.aggregation === 'argmax' || intent.aggregation === 'argmin') && mkt.byProperty.length > 1) {
+      // "which building had the highest spend": the text names the building, never the pooled total
+      const want = intent.aggregation === 'argmax' ? 'max' : 'min';
+      const ex = extreme(mkt.byProperty, (p) => p.spendUsd, want);
+      const list = ex.ranked.map((p) => `${p.propertyName} [${p.propertyId}]: ${fmtUsd(p.spendUsd)}`).join(' vs. ');
+      if (!ex.winner) {
+        return finalize(
+          `In ${mkt.windowLabel}, ${ex.tied.map((p) => `${p.propertyName} (${p.propertyId})`).join(' and ')} tied for the ${want === 'max' ? 'highest' : 'lowest'} posted marketing spend at ${fmtUsd(ex.best ?? 0)} USD (${list}).`,
+          { tied: ex.tied.map((p) => p.propertyId), usd: ex.best },
+          mkt.citations.slice(0, 8),
+        );
+      }
+      return finalize(
+        `In ${mkt.windowLabel}, ${ex.winner.propertyName} (${ex.winner.propertyId}) had the ${want === 'max' ? 'highest' : 'lowest'} posted marketing spend at ${fmtUsd(ex.winner.spendUsd)} USD (${list}; void invoices at $0, CAD converted at ${store.policy.cadToUsdRate} USD).`,
+        { property_id: ex.winner.propertyId, usd: ex.winner.spendUsd },
+        [...new Set([...ex.winner.citations.slice(0, 6), ...mkt.citations.slice(0, 2)])],
+      );
+    }
+
     if (intent.measure === 'spend_total') {
       return finalize(
         `In ${mkt.windowLabel}, total posted marketing spend across the matching operating buildings was ${fmtUsd(mkt.totalSpendUsd)} USD (with void invoices at $0 and CAD converted at ${store.policy.cadToUsdRate} USD).`,
@@ -1017,9 +1037,10 @@ export function executeCompositionalPlan(
     const leaseSummary = leaseTrace.rawOutput as LeaseQuerySummary;
 
     if (intent.measure === 'ending_and_renewed') {
-      const propRow = leaseSummary.byProperty[0];
+      // one building is named only when exactly one matched; otherwise the text says so
+      const propRow = leaseSummary.byProperty.length === 1 ? leaseSummary.byProperty[0] : undefined;
       return finalize(
-        `At ${propRow?.propertyName ?? 'the matching buildings'} (${propRow?.propertyId ?? ''}), ${plural(leaseSummary.totalMatchingLeases, 'lease')} end in ${intent.dateWindow.label}, and ${leaseSummary.renewedCount} of them have renewed (with ${leaseSummary.pendingCount} pending and ${leaseSummary.noticeGivenCount} with notice given).`,
+        `At ${propRow ? `${propRow.propertyName} (${propRow.propertyId})` : 'the matching buildings'}, ${plural(leaseSummary.totalMatchingLeases, 'lease')} end in ${intent.dateWindow.label}, and ${leaseSummary.renewedCount} of them have renewed (with ${leaseSummary.pendingCount} pending and ${leaseSummary.noticeGivenCount} with notice given).`,
         {
           ending: leaseSummary.totalMatchingLeases,
           renewed: leaseSummary.renewedCount,

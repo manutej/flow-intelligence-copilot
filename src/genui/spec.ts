@@ -216,6 +216,10 @@ export function highlightErrors(spec: ChartSpec): string[] {
   const vals = series.map((x) => x.v);
   const unique = (b: number) => vals.filter((x) => x === b).length === 1;
   const max = Math.max(...vals), min = Math.min(...vals);
+  // the direction the spec's intent asked for (".argmax" / ".argmin"); the other extreme is wrong
+  const dir = /\.argmin$/.test(spec.intent) ? 'min' : /\.argmax$/.test(spec.intent) ? 'max' : null;
+  if (dir === 'max' && !(v[0].v === max && unique(max))) return [`spec.props.highlight: ${JSON.stringify(hl[0])} is not the unique maximum the intent asks for`];
+  if (dir === 'min' && !(v[0].v === min && unique(min))) return [`spec.props.highlight: ${JSON.stringify(hl[0])} is not the unique minimum the intent asks for`];
   if (!((v[0].v === max && unique(max)) || (v[0].v === min && unique(min)))) return [`spec.props.highlight: ${JSON.stringify(hl[0])} is not the unique extreme of the plotted values`];
   return [];
 }
