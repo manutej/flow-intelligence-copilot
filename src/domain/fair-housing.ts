@@ -57,7 +57,7 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     terms: ['religion', 'religious', 'islam', 'judaism', 'christianity', 'hinduism', 'buddhism', 'ramadan', 'synagogue', 'muslim', 'muslims', 'christian', 'christians', 'catholic', 'catholics', 'jewish', 'church', 'synagogue', 'mosque'],
     legalBasis: FHA,
     pattern:
-      /\b(islam|judaism|christianity|hinduism|buddhism|sikhism|ramadan|shabbat|religio(?:n|us)|church[-\s]?go\w*|churchgo\w*|church|christians?|catholics?|protestants?|muslims?|islamic|jewish|jews?|hindus?|sikhs?|mormons?|evangelicals?|orthodox|hasidi?c?m?|amish|quakers?|jehovah\w*|buddhists?|atheists?|synagogue|mosque|temple[-\s]go\w*|faith[-\s]based|devout|pray\w*|hijabs?|turbans?|yarmulkes?|kippahs?)\b/i,
+      /\b(islam|judaism|christianity|hinduism|buddhism|sikhism|ramadan|shabbat|religio(?:n|us)|church[-\s]?go\w*|churchgo\w*|church|christians?|catholics?|protestants?|muslims?|islamic|jewish|jews?|hindus?|sikhs?|mormons?|evangelicals?|orthodox|hasidi?c?m?|amish|quakers?|jehovah\w*|buddhists?|atheists?|synagogue|mosque|temple[-\s]go\w*|faith[-\s]based|devout|pray\w*|hijabs?|turbans?|yarmulkes?|kippahs?|head\s*(?:scar(?:f|ves)|coverings?|wraps?)|halal|kosher)\b/i,
   },
   {
     protectedClass: 'sex, gender identity, or sexual orientation',
@@ -71,14 +71,14 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     terms: ['disabled', 'disability', 'disabilities', 'wheelchair', 'wheelchairs', 'diabetes', 'dialysis', 'chemotherapy', 'dementia', 'epilepsy', 'autism', 'handicapped', 'medical', 'conditions', 'illness', 'impaired'],
     legalBasis: `${FHA}(f)`,
     pattern:
-      /\b(disab(?:ility|ilities|led)|handicap\w*|wheelchairs?|walkers?|canes?|crutches|mobility\s+aids?|service\s+(?:animals?|dogs?)|emotional\s+support\s+animals?|esas?|blind|deaf|mental(?:ly)?\s+ill\w*|mental\s+health|hiv|aids\s+patients?|recovering\s+addicts?|medical\s+(?:needs?|conditions?|issues?|histor(?:y|ies)|records?)|health\s+(?:conditions?|issues?|problems?)|illness\w*|chronic(?:ally)?\s+ill\w*|impair\w*|hard\s+of\s+hearing|cancer|diabet\w*|dialysis|chemo\w*|autis\w*|epilep\w*|dementia|alzheimer\w*|parkinson\w*|multiple\s+sclerosis|asthma\w*|(?:in\s+)?recovery(?:\s+from\s+addiction)?|addict\w*)\b/i,
+      /\b(disab(?:ility|ilities|led)|handicap\w*|wheelchairs?|walkers?|canes?|crutches|mobility\s+aids?|service\s+(?:animals?|dogs?)|emotional\s+support\s+animals?|esas?|blind|deaf|mental(?:ly)?\s+ill\w*|mental\s+health|hiv|aids\s+patients?|recovering\s+addicts?|medical\s+(?:needs?|conditions?|issues?|histor(?:y|ies)|records?)|health\s+(?:conditions?|issues?|problems?)|illness\w*|chronic(?:ally)?\s+ill\w*|impair\w*|hard\s+of\s+hearing|cancer|diabet\w*|dialysis|chemo\w*|autis\w*|epilep\w*|dementia|alzheimer\w*|parkinson\w*|multiple\s+sclerosis|asthma\w*|(?:in\s+)?recovery(?:\s+from\s+addiction)?|addict\w*|bipolar|schizo\w*|ptsd|psychiatric\w*|psychotic|psychos[ie]s|ocd|adhd|depression|anxiety\s+disorders?|eating\s+disorders?|mental\s+(?:illness\w*|disorders?|conditions?))\b/i,
   },
   {
     protectedClass: 'age',
     terms: ['elderly', 'seniors', 'retirees'],
     legalBasis: `${IHRA} and ${CHICAGO}`,
     pattern:
-      /\b((?:over|under)\s+\d{2}(?!\s*(?:lbs?|pounds?|kg|kilos?|sq|sqft|square|feet|ft|%|percent|units?|dollars?|usd|\$|k\b|days?|months?|minutes?))|(?:older|younger)\s+than\s+[\w-]+|born\s+(?:before|after|in)\s+\d{4}|mature\s+(?:people|tenants|renters|residents|applicants)|age[sd]?\s+\d{2}|seniors?|elderly|older\s+(?:people|tenants|renters|residents|applicants|adults)|retirees?|young(?:er)?\s+(?:people|tenants|renters|residents|applicants|professionals|adults|crowd)|millennials?|gen[-\s]?z|boomers?)\b/i,
+      /\b((?:over|under)\s+\d{2}(?!\s*(?:lbs?|pounds?|kg|kilos?|sq|sqft|square|feet|ft|%|percent|units?|dollars?|usd|\$|k\b|days?|months?|minutes?))|(?:older|younger)\s+than\s+[\w-]+|born\s+(?:before|after|in)\s+\d{4}|mature\s+(?:people|tenants|renters|residents|applicants)|age[sd]?\s+\d{2}|seniors?|elderly|older\s+(?:people|tenants|renters|residents|applicants|adults)|retirees?|young(?:er)?\s+(?:people|tenants|renters|residents|applicants|professionals|adults|crowd)|millennials?|gen[-\s]?z|boomers?|in\s+(?:their|his|her)\s+(?:teens|(?:twen|thir|for|fif|six|seven|eigh|nine)ties|[1-9]0'?s)|(?:people|tenants|renters|residents|applicants|occupants)\s+(?:who\s+)?(?:are|is)\s+(?:older|younger|old|young|elderly|aging|ageing))\b/i,
   },
   {
     protectedClass: 'marital status',

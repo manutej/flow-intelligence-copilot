@@ -168,9 +168,16 @@ export const GOOD_DIRECTION: Record<string, 'up' | 'down'> = {
   dead_spend_pairs: 'down', dead_spend_building: 'down', reallocation_leases: 'up', void_and_duplicate_counts: 'down',
 };
 
+/** An unknown card whose text is the engine's verified answer (no reason given, a proof that
+ * checks, no unknown result): the answer was computed and only the chart is missing, so the
+ * label must say that rather than "Not in the connected data". */
+const answeredUncharted = (mode: string, t: CopilotTurnResult): boolean =>
+  mode === 'unknown' && !t.clarifyingQuestion && !!t.envelope.proof && t.verification.valid &&
+  !(t.envelope.result as Record<string, unknown>).unknown && !!t.envelope.answer;
+
 const clarify = (mode: 'clarify' | 'unknown' | 'refuse', t: CopilotTurnResult, intent: string, asked: string, state: PanelState = 'ready'): ChartSpec => ({
-  template: 'clarify_card', state, intent, source: 'guard', insight: mode === 'refuse' ? 'Fair-housing guard' : mode === 'clarify' ? 'Needs a choice before charting' : 'Outside the data',
-  title: mode === 'refuse' ? 'FlowIQ will not do this' : mode === 'clarify' ? 'Which did you mean?' : 'Not in the connected data',
+  template: 'clarify_card', state, intent, source: 'guard', insight: mode === 'refuse' ? 'Fair-housing guard' : mode === 'clarify' ? 'Needs a choice before charting' : state === 'ready' && answeredUncharted(mode, t) ? 'Answered without a chart' : 'Outside the data',
+  title: mode === 'refuse' ? 'FlowIQ will not do this' : mode === 'clarify' ? 'Which did you mean?' : state === 'ready' && answeredUncharted(mode, t) ? 'Answered, not charted' : 'Not in the connected data',
   props: {
     mode, question: asked, restatement: t.clarifyingQuestion ?? t.envelope.answer,
     options: (t.clarifyOptions ?? []).slice(0, 4).map((o, i) => ({ id: `o${i + 1}`, label: (o as { label?: string }).label ?? (o as { question?: string }).question ?? String(o) })),

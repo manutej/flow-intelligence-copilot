@@ -34,10 +34,15 @@ people persons person lessee lessees leaseholder leaseholders folks prospect pro
 /** Nouns naming people: the subject a person lookup asks about. */
 const PEOPLE = /\b(?:tenants?|residents?|renters?|applicants?|occupants?|households?|people|persons?|lessees?|leaseholders?|folks|prospects?)\b/;
 const LOOKUP_VERB = /\b(?:which|who|whom|whose|list|show|find|name|identify|flag|count|display|pull\s+up|look\s+up|how\s+many|what)\b/;
+/** Counting or summing people by a trait is a lookup of them too. */
+const AGGREGATE = /\b(?:number\s+of|count|total|sum|average|avg|mean|share|percent(?:age)?)\b/;
 /** "who at Kedzie Works ...", "who here is ...": a person lookup with no people noun. */
 const WHO_LOOKUP = /^\s*(?:and\s+|so\s+|now\s+)?who\b/;
 /** "who covers ... for the leasing team": a bare who about the operator's own staff is not a resident lookup. */
-const STAFF = /\b(?:team|staff|leasing\s+(?:agents?|office)|managers?|employees?|crew|vendors?|contractors?)\b/;
+const STAFF_WORDS = ['team', 'staff', 'leasing agent', 'leasing agents', 'leasing office', 'manager', 'managers', 'employee', 'employees', 'crew', 'vendor', 'vendors', 'contractor', 'contractors'];
+// built after PROTECTED_CLASS_RULES is read, through the same isTrait check FILLER gets
+let staffRe: RegExp | null = null;
+const staffOf = (s: string) => (staffRe ??= new RegExp(`\\b(?:${STAFF_WORDS.filter((w) => !isTrait(w)).map((w) => w.replace(/\s+/g, '\\s+')).join('|')})\\b`)).test(s);
 /** Words that never name what is looked up: articles, prepositions, pronouns, quantifiers. */
 const FUNCTION = new Set(`a an the of in on at to for by from with all any some every each our my your their its this that these those me us
 many much more most few which what who whom whose is are was were be do does did have has had s here there please
@@ -54,7 +59,7 @@ const namesPeople = (s: string) => [...s.matchAll(new RegExp(PEOPLE.source, 'g')
  * modifier), but not "how many units have residents who ..." or "total rent from residents". */
 /** Prepositions that make the people noun the owner of what is asked. */
 const OF_PEOPLE = new Set(['of', 'from', 'for', 'by', 'among', 'across']);
-function asksAboutPeople(ws: readonly string[], vocab: Set<string>): boolean {
+function asksAboutPeople(ws: readonly string[], vocab: Set<string>, scoped = true): boolean {
   const verbs = new Set(['which', 'who', 'whom', 'whose', 'list', 'show', 'find', 'name', 'identify', 'flag', 'count', 'display', 'many', 'what', 'up']);
   // the start of the sentence counts as a lookup word: a bare "the residents who ..." is a list
   return ['', ...ws].some((v, j) => {
@@ -64,7 +69,7 @@ function asksAboutPeople(ws: readonly string[], vocab: Set<string>): boolean {
     for (let k = i + 1; k < ws.length; k++) {
       const w = ws[k];
       // "the satisfaction score from residents": a thing asked of people, not a lookup of them
-      if (skipped && OF_PEOPLE.has(w)) return false;
+      if (scoped && skipped && OF_PEOPLE.has(w)) return false;
       if (FUNCTION.has(w)) continue;
       if (PEOPLE.test(w)) return namesPeople(ws.slice(k).join(' '));
       if (vocab.has(w) || vocab.has(stem(w))) return false;
@@ -133,20 +138,29 @@ export function personAttributeLookup(question: string, store: PortfolioStore): 
   const classes = new Set<ProtectedClassRule>();
   for (const s of sentences) {
     const ws = tokens(s);
-    if (!(asksAboutPeople(ws, vocab) || (WHO_LOOKUP.test(s) && !STAFF.test(s)))) continue;
-    const miss = ws.filter((w) => !known(w, vocab));
-    if (!miss.length) continue;
-    for (const w of miss) unknown.add(w);
+    // a protected-class match anywhere in the sentence (not one describing a thing, "family-size
+    // units") switches the scope rules off: staff "who" and "X from residents" still refuse
+    const hits = new Map<ProtectedClassRule, string[]>();
     for (const r of PROTECTED_CLASS_RULES) {
       const re = new RegExp(r.pattern.source, 'gi');
       for (const m of [...s.matchAll(re), ...normalizeForFairHousing(s).matchAll(re)]) {
         const span = tokens(m[0]);
-        if (!span.some((w) => miss.includes(w))) continue;
+        // a one-word match must be a word no column accounts for; a phrase match ("renters are
+        // older", "in their seventies") is the trait itself even when its words are common
+        if (span.length < 2 && !span.some((w) => !known(w, vocab))) continue;
         const compound = /^((?:-[a-z]+)+)\s+([a-z]+)/.exec(s.slice((m.index ?? 0) + m[0].length));
-        const describesThing = !!compound && vocab.has(stem(compound[2])) && !PEOPLE.test(compound[2]);
-        if (!describesThing) classes.add(r);
+        if (compound && vocab.has(stem(compound[2])) && !PEOPLE.test(compound[2])) continue;
+        hits.set(r, [...(hits.get(r) ?? []), ...span]);
       }
     }
+    const scopedLookup = asksAboutPeople(ws, vocab) || (WHO_LOOKUP.test(s) && !staffOf(s));
+    const traitLookup = hits.size > 0 && (asksAboutPeople(ws, vocab, false) || WHO_LOOKUP.test(s) || ((LOOKUP_VERB.test(s) || AGGREGATE.test(s)) && namesPeople(s)));
+    if (!scopedLookup && !traitLookup) continue;
+    const miss = ws.filter((w) => !known(w, vocab));
+    if (!miss.length && !hits.size) continue;
+    for (const w of miss) unknown.add(w);
+    for (const [r, span] of hits) { classes.add(r); for (const w of span) if (!known(w, vocab)) unknown.add(w); }
+    if (!unknown.size) for (const [, span] of hits) unknown.add(span.join(' '));
   }
   return unknown.size ? { unknown: [...unknown], classes: [...classes] } : null;
 }
