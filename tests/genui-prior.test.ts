@@ -171,3 +171,11 @@ test('turn-leading numbers, standalone turns with tails, counts and the pronoun 
     'How many units at P01 have 2 bedrooms, actually? → ' + Q, P + ' → ' + Q, 'beta0 = 3250 → ' + P + ' → ' + Q])
     assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
 });
+test('learner with no setting: numbers clarify unless the turn is clearly non-editing (TENACITY 6a56c25)', async () => {
+  const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
+  const noset = ['1800 dollars','4 leases','3250 units per month','use 4 months','1800 bucks instead','make it 4 percent','use 1800 euros','1800 pesos please','make it 1800 dollares','use 4 weeks','4 months instead','try 1800 credits','use 4 units instead','1800 units','go with 4 observations','prior of 4 leads','1800 dólares','mejor 4 meses','mettons 1800 euros','4 cents','1800 people','4 children','4 data','use 1800 USDs','1800 grand','use 4 pseudo-leases','4 pseudoleases','4 pseudo leases','4 leases instead','alpha0 4 leads','4 pseudo-observations','half a dozen months','1800 yen'];
+  const oneNoset = ['make it one', 'use one instead', 'one more', 'go with one', 'make it a thousand'];
+  for (const c of [...noset, ...oneNoset]) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
+  for (const c of ['Hello there, quick one', 'Show me 3 properties with highest vacancy', 'Thanks for the 12 numbers.', 'I manage 4 buildings', 'We had 2 meetings today', 'one question', 'I have one more question'])
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+});

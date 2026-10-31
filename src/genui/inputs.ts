@@ -203,9 +203,20 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
       const sa = standalone?.(t.slice(a, b)) ?? false, turnBase = parse?.(t.slice(a, b));
       const leftover = own.filter((n) => !(parse && parse(t.slice(a, n.start) + t.slice(n.end, b)) !== turnBase));
       if (first >= 0 && i > first) { if (!sa || leftover.length) ambiguous = true; return; }
-      // the learner with no setting stated (Q77 governs): a stray number in an earlier turn may be a
-      // prior ("Use 4 instead"); a count of a noun ("3 properties") or the pronoun "one" is not
-      if (first < 0 && learner(intent) && (sa ? leftover : own).some((n) => !isCount(t, n, b) && !/^(?:one|a|an)$/i.test(n.surface))) ambiguous = true;
+      // the learner with no setting stated (Q77 governs): any number in an earlier non-standalone
+      // turn, durations included, may be a prior ("Use 4 instead", "use 4 months"), so it clarifies
+      // unless the turn is clearly non-editing; only then is a count ("3 properties") or the
+      // pronoun "one" exempt. When unsure, clarify.
+      if (first < 0 && learner(intent)) {
+        const all = nums.filter((n) => n.start >= a && n.end <= b && !isRank(t, n));
+        // a magnitude word with no numeral ("make it a thousand", "half a dozen months") is a value too
+        for (const m of t.slice(a, b).matchAll(MAGNITUDE)) {
+          const st = a + m.index!, en = st + m[0].length;
+          if (!all.some((n) => n.start < en && n.end > st)) all.push({ start: st, end: en, value: NaN, surface: m[0] } as Num);
+        }
+        const pool = sa ? all.filter((n) => leftover.includes(n) || n.unit === 'duration' && !(parse && parse(t.slice(a, n.start) + t.slice(n.end, b)) !== turnBase)) : all;
+        if (pool.some((n) => !(nonEditing(t, a, b, n) && (isCount(t, n, b) || /^(?:one|a|an)$/i.test(n.surface))))) ambiguous = true;
+      }
     });
   }
   const equal = (b: Binding) => b.value === b.param.value(store) && UNITS_OK[b.param.id].includes(b.unit);
@@ -213,12 +224,23 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
   if (bindings.some((b) => equal(b) && !b.param.applies(intent))) ambiguous = true;
   return { bindings, ambiguous, mismatch: bindings.find((b) => !equal(b)) ?? null };
 }
-// a number directly followed by a plural noun counts things ("3 properties", "12 numbers"); a unit,
-// a setting name or an edit word after it ("4 instead", "1800 dollars", "4 leases") does not
-const NOT_COUNT = /^(?:usd|dollars|bucks|cads?|leases|pseudo|priors?|alphas?|betas?|instead|please|thanks|times|percent|points|ks)$/i;
+const MAGNITUDE = /(?<![\p{L}\p{N}])(?:half\s+)?(?:an?\s+)?(?:dozen|hundred|thousand|million|billion)s?(?![\p{L}\p{N}])/giu;
+// a number directly followed by a plural word counts things ("3 properties", "12 numbers")
 function isCount(t: string, n: StatedNumber, end: number): boolean {
-  const w = /^\s+(\p{L}{3,}s)\b/u.exec(t.slice(n.end, end));
-  return !!w && !NOT_COUNT.test(w[1]);
+  return /^\s+\p{L}{3,}s\b/u.test(t.slice(n.end, end));
+}
+// An edit cue (EN/ES/FR/DE). This list can only make a turn clarify, never chart: it gates the
+// count and pronoun exemptions, and a turn without those exemptions clarifies anyway.
+const EDIT_CUE = /(?<![\p{L}\p{N}])(?:use|using|make|set|try|go|change|switch|let'?s|instead|actually|rather|more|less|lower|higher|raise|reduce|increase|decrease|halve|double|should|meant?|say|usa|usar|pon|poner|mejor|cambia|vez|mets|mettons|utilise|plutôt|fait|nimm|setze|verwende|lieber|stattdessen|eigentlich)(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])(?:more|less|más|menos|plus|moins|mehr|weniger)(?!\s*\p{L})/iu;
+// clearly non-editing: no edit cue, the number does not open the turn, and the turn has at least
+// three words besides its numbers
+function nonEditing(t: string, a: number, b: number, n: StatedNumber): boolean {
+  const text = t.slice(a, b);
+  if (EDIT_CUE.test(t.slice(a, n.start)) || EDIT_CUE.test(t.slice(n.end, b).replace(/^\s*\p{L}+/u, '')) && /^\s*$/u.test(t.slice(a, n.start))) return false;
+  if (/^(?:one|a|an)$/i.test(n.surface) && /^\s+\p{L}/u.test(t.slice(n.end, b)) && !EDIT_CUE.test(text)) return true; // "one question"
+  if (!/\p{L}/u.test(t.slice(a, n.start))) return false;
+  const rest = t.slice(a, n.start) + ' ' + t.slice(n.end, b);
+  return (rest.match(/\p{L}+/gu) ?? []).length >= 3;
 }
 /** The setting values a computation used, as stated in the question and equal to policy: the only setting numbers a title may echo. */
 export function boundPolicyValues(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore): Set<number> {
