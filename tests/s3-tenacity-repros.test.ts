@@ -144,7 +144,7 @@ test('c082279 F3: a true "I don\'t know" moved onto an answerable question is re
   const idk = (await askFlowIqCopilot('What was total marketing spend in Q1 2025?', { store, parse: null }));
   assert.equal((idk.envelope.result as Record<string, unknown>).unknown, true);
   assert.equal(idk.verification.valid, true);
-  const moved = { ...idk.envelope, ...sealNonAnswer(Q2, idk.envelope) };
+  const moved = { ...idk.envelope, ...sealNonAnswer({ question: Q2, origin: 'deterministic' }, idk.envelope) };
   assert.equal(verifyAnswerEnvelope(moved, store).valid, false);
 });
 test('c082279 F3: an unsealed "I don\'t know" is rejected', () => {
@@ -154,9 +154,31 @@ test('c082279 F3: a figure added to a non-answer is rejected, sealed or not', as
   const idk = (await askFlowIqCopilot('What was total marketing spend in Q1 2025?', { store, parse: null })).envelope;
   const answer = `${idk.answer} Halsted & Lake spent $40,000.`;
   assert.equal(verifyAnswerEnvelope({ ...idk, answer }, store).valid, false);
-  assert.equal(verifyAnswerEnvelope({ ...idk, answer, ...sealNonAnswer(idk.query!.question, { answer, result: idk.result }) }, store).valid, false);
+  assert.equal(verifyAnswerEnvelope({ ...idk, answer, ...sealNonAnswer({ question: idk.query!.question, origin: 'deterministic' }, { answer, result: idk.result }) }, store).valid, false);
 });
 test('c082279 F3: a refusal the fair-housing guard does not make is rejected', () => {
   const answer = 'Refused under the Fair Housing Act.';
-  assert.equal(verifyAnswerEnvelope({ id: 'Q2', answer, result: { refused: true }, citations: [], ...sealNonAnswer(Q2, { answer, result: { refused: true } }) }, store).valid, false);
+  assert.equal(verifyAnswerEnvelope({ id: 'Q2', answer, result: { refused: true }, citations: [], ...sealNonAnswer({ question: Q2, origin: 'deterministic' }, { answer, result: { refused: true } }) }, store).valid, false);
+});
+
+// f2424a7 verdict: forgeries sealed with the live key must still fail the
+// deterministic re-render; a genuine non-answer must still verify.
+const IDK_Q = 'What was total marketing spend in Q1 2025?';
+for (const [name, answer, result] of [
+  ['small figure', "I don't know. Fulton Yards has 7 vacant units.", { unknown: true }],
+  ['spelled-out figure', "I don't know. Spend was forty thousand dollars.", { unknown: true }],
+  ['scientific figure', "I don't know. Spend was 4e4.", { unknown: true }],
+  ['clarify with a figure', 'Spend was $40,000. Did you mean Q2 or Q3?', { unknown: true, clarification_needed: true }],
+  ['clarify with invented candidates', 'Did you mean Fulton Yards or Moon Base?', { unknown: true, clarification_needed: true, candidates: ['Fulton Yards', 'Moon Base'] }],
+] as const) {
+  test(`f2424a7: a keyed-sealed ${name} non-answer is rejected`, () => {
+    const env = { answer, result: result as Record<string, unknown>, citations: [] };
+    assert.equal(verifyAnswerEnvelope({ id: 'X', ...env, ...sealNonAnswer({ question: IDK_Q, origin: 'deterministic' }, env) }, store).valid, false);
+  });
+}
+test('f2424a7: a genuine non-answer verifies and re-sealing it unchanged still verifies', async () => {
+  const idk = (await askFlowIqCopilot(IDK_Q, { store, parse: null })).envelope;
+  assert.equal(verifyAnswerEnvelope(idk, store).valid, true);
+  const env = { answer: idk.answer, result: idk.result, citations: idk.citations };
+  assert.equal(verifyAnswerEnvelope({ ...idk, ...sealNonAnswer({ question: IDK_Q, origin: 'deterministic' }, env) }, store).valid, true);
 });
