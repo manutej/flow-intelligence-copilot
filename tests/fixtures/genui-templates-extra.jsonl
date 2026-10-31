@@ -1,0 +1,12 @@
+{"id": "X01", "text": "How many leads did Zillow generate at Printers Row Tower by month from April to September 2026?", "expected_template": "trend_line", "why": "view cue in the question"}
+{"id": "X02", "text": "What was total posted marketing spend by month across the portfolio from April to September 2026?", "expected_template": "trend_line", "why": "view cue in the question"}
+{"id": "X03", "text": "What was total posted marketing spend at Wabash Point in Q3 2026 compared to the prior period?", "expected_template": "kpi_delta", "why": "view cue in the question"}
+{"id": "X04", "text": "How many leads were generated across the portfolio from April to September 2026, by building and source?", "expected_template": "grid_heatmap", "why": "view cue in the question"}
+{"id": "X05", "text": "Show average market rent vs square footage by building", "expected_template": "scatter", "why": "view cue in the question"}
+{"id": "X06", "text": "Where are we losing money? List every paid source and building pair that produced no leases from April to September 2026.", "expected_template": "recommendation_card", "why": "budget move with lease impact"}
+{"id": "X07", "text": "Across the whole portfolio, which listing source had the highest cost per signed lease from April to September 2026, as a ranked table?", "expected_template": "ranked_table", "why": "a list of pairs or sources with a total"}
+{"id": "X08", "text": "Which building has the most vacant units?", "expected_template": "sorted_bar", "why": "winner among buildings or sources: show the field it beat"}
+{"id": "X09", "text": "How many leases at Printers Row Tower end in November 2026, and how many of them have renewed?", "expected_template": "stacked_bar", "why": "part of a whole (renewed of ending)"}
+{"id": "X10", "text": "What's the occupancy at Kedzie Works?", "expected_template": "kpi", "why": "one verified value"}
+{"id": "X11", "text": "How many units at Kedzie Works are rented?", "expected_template": "clarify_card", "why": "refused, unknown, or needs a choice: never a guessed chart"}
+{"id": "X12", "text": "What should I change? Move all April-to-September 2026 spend on paid source and building pairs that signed no lease to the paid source with the lowest portfolio cost per signed lease in the same period. At that cost, how many more leases would it buy? Whole leases, rounded down.", "expected_template": "recommendation_card", "why": "budget move with lease impact"}
