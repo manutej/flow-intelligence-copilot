@@ -12,7 +12,7 @@
  */
 import fs from 'node:fs';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
-import { sealProof } from '../src/agent/envelope.ts';
+import { nonAnswerKind, sealNonAnswer, sealProof } from '../src/agent/envelope.ts';
 import { parseQueryIntent } from '../src/agent/intent.ts';
 import { parseConfigFromEnv } from '../src/agent/model-parse.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
@@ -38,6 +38,9 @@ const qs = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => 
   .filter((q): q is string => typeof q === 'string');
 let answered = 0, falseReject = 0, forged = 0, forgedAccepted = 0, modelAnswers = 0, modelDiverged = 0, modelMismatch = 0;
 let prev: AnswerEnvelope | null = null;
+let nonAnswers = 0, nonAnswerFalseReject = 0, idkForged = 0, idkForgedAccepted = 0;
+let lastIdk: AnswerEnvelope | null = null;
+const rejectSample: string[] = [];
 for (const q of qs) {
   const d = await askFlowIqCopilot(q, { store, parse: null });
   const e = d.envelope;
@@ -50,6 +53,26 @@ for (const q of qs) {
       if (verifyAnswerEnvelope({ ...prev, id: e.id, query, proof: sealProof(query, prev.result, prev.proof?.row_ids ?? []) }, store).valid) forgedAccepted++;
     }
     prev = e;
+    // TENACITY c082279 findings 2/3: a non-answer moved onto this answerable
+    // question, an unsealed "I don't know", and one with an added figure.
+    if (lastIdk) {
+      const moved = { ...lastIdk, id: e.id, ...sealNonAnswer(q, lastIdk) };
+      const bare = { id: e.id, answer: "I don't know.", result: { unknown: true }, citations: [] } as AnswerEnvelope;
+      const figure = { ...lastIdk, answer: `${lastIdk.answer} Fulton Yards spent $40,000.` };
+      for (const f of [moved, bare, figure]) { idkForged++; if (verifyAnswerEnvelope(f as AnswerEnvelope, store).valid) idkForgedAccepted++; }
+    }
+  } else if (nonAnswerKind(e.result as Record<string, unknown>)) {
+    nonAnswers++;
+    if (!d.verification.valid) { nonAnswerFalseReject++; if (rejectSample.length < 5) rejectSample.push(`${q.slice(0, 80)} :: ${(d.verification.errors ?? []).join('; ')}`); }
+    else lastIdk = e;
+  }
+  if (isAnswer(e.result as Record<string, unknown>) && e.query) {
+    // Citations shape forgeries on a real answer turned to $0.
+    for (const citations of [undefined, null, 'units:U0001', {}]) {
+      idkForged++;
+      const z = { ...e, citations, result: Object.fromEntries(Object.entries(e.result).map(([k, v]) => [k, typeof v === 'number' ? 0 : v])), answer: 'It was $0.', proof: { ...(e.proof as object), row_ids: [] } };
+      if (verifyAnswerEnvelope(z as unknown as AnswerEnvelope, store).valid) idkForgedAccepted++;
+    }
   }
   const a = await askFlowIqCopilot(q, { store, parse, parseDeps: replay(q) } as never);
   if (a.parsePath === 'model' && isAnswer(a.envelope.result as Record<string, unknown>)) {
@@ -58,6 +81,7 @@ for (const q of qs) {
     if (a.envelope.answer !== e.answer) modelMismatch++;
   }
 }
-const out = { source: file, questions: qs.length, answered, falseRejections: falseReject, coherentForgeries: forged, coherentForgeriesAccepted: forgedAccepted, modelAnswers, modelDivergedAnswers: modelDiverged, modelAnswerMismatch: modelMismatch };
+const floor = Number(process.env.EXTERNAL_ANSWER_FLOOR ?? 0);
+const out = { source: file, questions: qs.length, answered, answeredPct: Math.round((1000 * answered) / Math.max(1, qs.length)) / 10, answerFloorPct: floor, nonAnswers, nonAnswerFalseRejections: nonAnswerFalseReject, nonAnswerAndShapeForgeries: idkForged, nonAnswerAndShapeForgeriesAccepted: idkForgedAccepted, rejectSample, falseRejections: falseReject, coherentForgeries: forged, coherentForgeriesAccepted: forgedAccepted, modelAnswers, modelDivergedAnswers: modelDiverged, modelAnswerMismatch: modelMismatch };
 console.log(JSON.stringify(out));
-if (falseReject || forgedAccepted || modelDiverged || modelMismatch) process.exitCode = 1;
+if (falseReject || forgedAccepted || nonAnswerFalseReject || idkForgedAccepted || (floor > 0 && out.answeredPct < floor) || modelDiverged || modelMismatch) process.exitCode = 1;
