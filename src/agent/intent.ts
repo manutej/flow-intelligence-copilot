@@ -1256,6 +1256,18 @@ const FIELD_COVERAGE: ReadonlyArray<readonly [Field, (i: ParsedQueryIntent) => b
   ['rent', (i) => i.rentMin !== undefined || i.rentMax !== undefined],
 ];
 
+const GROUP_VERB = String.raw`\b(?:by|for\s+each|for\s+every|broken\s+(?:down|out)\s+by|split\s+by|grouped\s+by|segmented\s+by|across\s+(?:each|every|all\s+the))\s+`;
+// "per" groups only by an entity; "per month" or "per lease" is a rate.
+const GROUPING_RE_RAW = new RegExp(`(?:${GROUP_VERB}(?:(?:property|building|asset|unit)\\s+)?(?:class(?:es)?|propert(?:y|ies)|buildings?|assets?|months?|quarters?|bedrooms?|bed\\s+counts?|unit\\s+types?|floorplans?|floors?|views?|pms|submarkets?|neighbou?rhoods?|regions?|vintages?)|\\bper\\s+(?:(?:property|building|asset)\\s+)?(?:class|property|building|asset|submarket|region))\\b`, 'i');
+// A parenthetical qualifies an input ("spend (by source and building)"),
+// not the requested output, so it is not a stated grouping.
+const outsideParens = (re: RegExp) => ({ test: (q: string) => re.test(q.replace(/\([^)]*\)/g, ' ')) });
+const GROUPING_RE = outsideParens(GROUPING_RE_RAW);
+
+const SOURCE_GROUPING_RE = outsideParens(new RegExp(`(?:${GROUP_VERB}|\\bper\\s+)(?:(?:lead|listing|marketing|ad|paid)\\s+)?(?:sources?|channels?)\\b`, 'i'));
+/** Measures whose template reports one line per source. */
+const PER_SOURCE_MEASURES: ReadonlySet<IntentMeasure> = new Set(['cost_per_lead', 'cost_per_tour', 'cost_per_lead_and_tour', 'cost_per_signed_lease', 'tour_to_lease_rate', 'signed_leases_ranking', 'apply_rate']);
+
 const COVERAGE_RULES: ReadonlyArray<{
   readonly words: { test(q: string): boolean };
   readonly covered: (i: ParsedQueryIntent) => boolean;
@@ -1272,6 +1284,11 @@ const COVERAGE_RULES: ReadonlyArray<{
   })),
   // A view the parser did not turn into a filter.
   { words: /\bviews?\b/i, covered: (i) => i.view !== undefined || i.domain !== 'units' },
+  // A stated grouping ("by property class", "for each building") needs a
+  // per-group answer; a single scalar would silently drop it (343668c F4).
+  { words: GROUPING_RE, covered: (i) => i.aggregation !== 'value' || i.isClassComparison },
+  // Per-source templates list every source, so they honor "by source".
+  { words: SOURCE_GROUPING_RE, covered: (i) => i.aggregation !== 'value' || PER_SOURCE_MEASURES.has(i.measure) },
   // Lease rent is not market rent.
   { words: /\b(?:lease|leased|monthly)\s+rents?\b|\brent\s+on\s+leases\b/i,
     covered: (i) => !/market_rent|rent_per_sqft/.test(i.measure) },
