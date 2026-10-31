@@ -1,6 +1,7 @@
 import { typedQueryErrors } from './typed-query.ts';
 import { COMPARATOR_PHRASES } from '../domain/comparators.ts';
 import { spellCalendarYear } from '../domain/fiscal.ts';
+import { FIXED } from '../domain/vocabulary.ts';
 import { mentionsQuantity, statedValues, type Field } from '../domain/comparators.ts';
 import { unresolvedUnitWords } from './closed-world.ts';
 import { DATE_WINDOWS, type DateWindowSpec } from '../config/rules.ts';
@@ -1788,6 +1789,9 @@ function uncoveredToken(question: string, store: PortfolioStore): string | null 
   for (const m of q.matchAll(/(?<![\p{L}\p{N}'’])\p{Lu}[\p{L}'’]*/gu)) {
     if (/(?:^|[.?!:;]|\.\.\.)\s*["'“(]?\s*$/u.test(q.slice(0, m.index))) continue;
     if (CAPITALISED_OK.test(m[0])) continue;
+    // Title case ("Cost Per Lead") is not a name; a month word still is,
+    // since a consumed month was blanked above.
+    if (FIXED.has(m[0].toLowerCase()) && !/^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)$/i.test(m[0])) continue;
     return m[0];
   }
   return null;
