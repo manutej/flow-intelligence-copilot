@@ -738,6 +738,57 @@ function enumerateYearMonths(startMonth: string, endMonth: string): string[] {
   return result;
 }
 
+/** A period string that names no exact window; callers answer IDK, never a default window. */
+export class UnresolvedPeriodError extends Error {
+  readonly period: string;
+  constructor(period: string) {
+    super(`period "${period}" does not name an exact window (use e.g. "Q3 2026", "2026-08", "August 2026", "H1 2026")`);
+    this.period = period;
+    this.name = 'UnresolvedPeriodError';
+  }
+}
+
+const MONTH_INDEX: Readonly<Record<string, number>> = Object.fromEntries(
+  ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].map((m, i) => [m, i + 1]),
+);
+
+function spanWindow(label: string, y: number, m1: number, m2: number) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const last = new Date(Date.UTC(y, m2, 0)).getUTCDate();
+  const startDate = `${y}-${pad(m1)}-01`, endDate = `${y}-${pad(m2)}-${pad(last)}`;
+  const known = Object.values(DATE_WINDOWS).find((w) => w.startDate === startDate && w.endDate === endDate);
+  return known ?? { label, startDate, endDate, months: enumerateYearMonths(startDate.slice(0, 7), endDate.slice(0, 7)) };
+}
+
+/**
+ * The exact window a period string names, or undefined. A period is a
+ * DATE_WINDOWS key or label, a quarter or half with its year in either
+ * order, a month with its year, or YYYY-MM. Anything else (no year,
+ * relative words, free text) names no window.
+ */
+export function periodWindow(period: string): { label: string; startDate: string; endDate: string; months: readonly string[] } | undefined {
+  const p = period.trim().replace(/\s+/g, ' ');
+  const key = p.toUpperCase().replace(/[\s-]+/g, '_');
+  if (key in DATE_WINDOWS) return DATE_WINDOWS[key];
+  const byLabel = Object.values(DATE_WINDOWS).find((w) => w.label.toLowerCase() === p.toLowerCase() || w.label.replace(/\s*\(.*\)$/, '').toLowerCase() === p.toLowerCase());
+  if (byLabel) return byLabel;
+  const part = p.match(/^(?:([qh])([1-4])[\s_-]?(\d{4})|(\d{4})[\s_-]?([qh])([1-4]))$/i);
+  if (part) {
+    const kind = (part[1] ?? part[5]).toLowerCase(), n = Number(part[2] ?? part[6]), y = Number(part[3] ?? part[4]);
+    if (kind === 'h' && n > 2) return undefined;
+    const [m1, m2] = kind === 'q' ? [3 * n - 2, 3 * n] : [6 * n - 5, 6 * n];
+    return spanWindow(`${kind.toUpperCase()}${n} ${y}`, y, m1, m2);
+  }
+  const ym = p.match(/^(\d{4})-(\d{2})$/);
+  if (ym && Number(ym[2]) >= 1 && Number(ym[2]) <= 12) return spanWindow(p, Number(ym[1]), Number(ym[2]), Number(ym[2]));
+  const named = p.match(/^([a-z]{3,9})\.? (\d{4})$/i);
+  const mi = named ? MONTH_INDEX[named[1].slice(0, 3).toLowerCase()] : undefined;
+  if (named && mi && /^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)$/i.test(named[1])) {
+    return spanWindow(`${named[1][0].toUpperCase()}${named[1].slice(1).toLowerCase()} ${named[2]}`, Number(named[2]), mi, mi);
+  }
+  return undefined;
+}
+
 export function resolveDateWindow(filter: MarketingQueryFilter): {
   label: string;
   startDate: string;
@@ -756,47 +807,9 @@ export function resolveDateWindow(filter: MarketingQueryFilter): {
     };
   }
   if (filter.period) {
-    const p = filter.period.trim();
-    const upperKey = p.toUpperCase().replace(/[\s-]+/g, '_');
-    if (upperKey in DATE_WINDOWS) {
-      return DATE_WINDOWS[upperKey];
-    }
-    if (/^q2\b/i.test(p) || /apr(il)?\s*(to|-|–)\s*jun(e)?/i.test(p)) {
-      return DATE_WINDOWS.Q2_2026;
-    }
-    if (/^q3\b/i.test(p) || /jul(y)?\s*(to|-|–)\s*sep(tember)?/i.test(p)) {
-      return DATE_WINDOWS.Q3_2026;
-    }
-    if (/^q4\b/i.test(p)) {
-      return DATE_WINDOWS.Q4_2026;
-    }
-    if (/^h1\b/i.test(p) || /first\s+half/i.test(p)) {
-      return DATE_WINDOWS.H1_2026;
-    }
-    if (/^q1\s*2027\b/i.test(p)) {
-      return DATE_WINDOWS.Q1_2027;
-    }
-    const monthMatch = p.match(/^(\d{4})-(\d{2})$/);
-    if (monthMatch) {
-      const ym = `${monthMatch[1]}-${monthMatch[2]}`;
-      const matchWin = Object.values(DATE_WINDOWS).find(
-        (w) => w.months.length === 1 && w.months[0] === ym,
-      );
-      if (matchWin) {
-        return matchWin;
-      }
-      return {
-        label: ym,
-        startDate: `${ym}-01`,
-        endDate: `${ym}-31`,
-        months: [ym],
-      };
-    }
-    for (const win of Object.values(DATE_WINDOWS)) {
-      if (win.label.toLowerCase() === p.toLowerCase()) {
-        return win;
-      }
-    }
+    const win = periodWindow(filter.period);
+    if (!win) throw new UnresolvedPeriodError(filter.period);
+    return win;
   }
   return DATE_WINDOWS.APR_SEP_2026;
 }

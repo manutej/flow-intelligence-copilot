@@ -221,6 +221,9 @@ export function executeCompositionalPlan(
       'query_marketing_spend_and_funnel',
       {
         period: intent.dateWindow.label,
+        // The window's own dates, so its label is never re-parsed into another window.
+        startDate: intent.dateWindow.startDate,
+        endDate: intent.dateWindow.endDate,
         includeDataQualityAudit: true,
       },
     );
