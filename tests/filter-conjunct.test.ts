@@ -83,3 +83,31 @@ test('count answers name the bedroom filter (S3 53ca424 F5)', async () => {
     assert.match(e.answer, bed, q);
   }
 });
+
+test('status counts: a status word outside the measure phrase is a second figure (S3 9474975 F1, F2)', async () => {
+  for (const q of [
+    'vacancy rate and occupied 2-bed units at Kedzie Works',
+    'vacancy rate and units occupied at Kedzie Works',
+    'vacancy rate and occupied homes at Kedzie Works',
+    // fresh shapes of the same category
+    'occupancy rate at Fulton Yards and vacant studio apartments',
+    'Kedzie Works vacancy rate plus the residences that are occupied',
+    'vacancy rate at Kedzie Works, and empty units',
+    'vacancy rate and available units at Kedzie Works',
+    'occupancy at Halsted & Lake and also the empty units',
+    'vacancy rate and occupied 1-bedroom homes at Halsted & Lake',
+  ]) {
+    const e = await turn(q);
+    // The plan computes one figure, so the fail-safe answer is not to answer.
+    assert.ok(!answered(e), q);
+  }
+});
+
+test('status counts: a status word inside the measure phrase is still answered', async () => {
+  for (const q of [
+    'How many occupied 2-bed units at Kedzie Works?',
+    'How many units are occupied at Kedzie Works?',
+    'Count of vacant units at Kedzie Works',
+    'What is the average rent of occupied units at Fulton Yards?',
+  ]) assert.ok(answered(await turn(q)), q);
+});
