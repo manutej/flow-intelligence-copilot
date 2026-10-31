@@ -37,13 +37,19 @@ fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, '');
 
+// Questions run one at a time (concurrency 1). FLOWIQ_PARSE_BUDGET_MS caps
+// the run's total model time; once spent, the rest run model-off and say so.
+const budgetMs = Number(env.FLOWIQ_PARSE_BUDGET_MS ?? 0);
+let modelMs = 0;
 const lines = fs.readFileSync(file, 'utf8').split('\n').filter((l) => l.trim());
 const tally: Record<string, number> = {};
 for (const [k, line] of lines.entries()) {
   const q = JSON.parse(line) as { qid?: string; id?: string; question: string; expected?: number };
   const qid = q.qid ?? q.id ?? `q${k + 1}`;
   const t0 = performance.now();
-  const turn = await askFlowIqCopilot({ id: qid, type: 'adhoc', question: q.question }, { store, parse: cfg, parseDeps: { runStore: runs } });
+  const overBudget = budgetMs > 0 && modelMs >= budgetMs;
+  const turn = await askFlowIqCopilot({ id: qid, type: 'adhoc', question: q.question }, { store, parse: overBudget ? null : cfg, parseDeps: { runStore: runs } });
+  modelMs += turn.parse?.latencyMs ?? 0;
   const r = turn.envelope.result as Record<string, unknown>;
   const answered = r.unknown !== true && r.refused !== true && r.clarification_needed !== true;
   const fig = typeof r.value === 'number' ? r.value : typeof r.count === 'number' ? r.count : null;
@@ -52,7 +58,7 @@ for (const [k, line] of lines.entries()) {
   tally[outcome] = (tally[outcome] ?? 0) + 1;
   const mp = turn.parse;
   const row = {
-    qid, question: q.question, path: turn.parsePath ?? 'deterministic', fallback: turn.parse ? (turn.parseFallbackReason ?? null) : `pre_model:${r.refused === true ? 'fair_housing' : r.unknown === true ? 'out_of_scope' : 'guard'}`, cache_hit: mp?.cacheHit ?? false,
+    qid, question: q.question, path: turn.parsePath ?? 'deterministic', fallback: overBudget ? `model budget ${budgetMs} ms spent; model off` : turn.parse ? (turn.parseFallbackReason ?? null) : `pre_model:${r.refused === true ? 'fair_housing' : r.unknown === true ? 'out_of_scope' : 'guard'}`, cache_hit: mp?.cacheHit ?? false,
     raw_output: mp?.raw ?? null, parsed_query: mp?.intent ?? null, coverage: mp?.coverage ?? null, outcome, answer: turn.envelope.answer,
     clarify_options: (turn.clarifyOptions ?? []).map((o) => o.question), restatement: turn.restatement ?? null,
     model_latency_ms: mp?.latencyMs ?? null, total_latency_ms: Math.round(performance.now() - t0), verified: answered && turn.verification.valid, call: mp?.call ?? null,
