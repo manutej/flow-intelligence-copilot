@@ -19,11 +19,17 @@ const REJECT = ['three units', 'There are 2025 leads', '1.2k leads', 'a dozen le
   'MMXXV leases', '１２ leases', 'Ⅻ leases', '٣ leases', 'x̄ ≈ ½ lease', 'first place', 'a couple of leads', 'a score of leases', 'nil leases', 'XII sources'];
 const ACCEPT = ['Q3 2026 results', 'FY 2026', '2026-09-30', 'Sept 2026',
   // N3: bare years in a temporal context
-  'In 2026 leases rose', 'since 2025', '2026 YTD', 'during 2026', 'through 2026'];
+  'In 2026, leases rose', 'Leases rose in 2026.', 'up since 2025', 'since 2025', '2026 YTD', 'during 2026', 'through 2026'];
 
 test('N2: unicode digits, roman numerals, fractions and quantity words are figures', () => {
   for (const t of REJECT) assert.ok(errs(t).length > 0, `accepted: ${t}`);
 });
 test('N3: a bare year in a temporal context is a label, not a figure', () => {
   for (const t of ACCEPT) assert.deepEqual(errs(t), [], t);
+});
+
+// TENACITY VERDICT-GENUI-60e142a L1/L2 (non-blocking notes) as tests.
+test('L1: a temporal year is exempt only at a clause end or before punctuation', () => {
+  for (const t of ['during 2025 units sold', 'in 2026 units', 'in 1999 leases']) assert.ok(errs(t).length > 0, `accepted: ${t}`);
+  for (const t of ['Leases rose in 2026.', 'since 2025', 'In 2026, leases rose', 'through 2026; then fell']) assert.deepEqual(errs(t), [], t);
 });

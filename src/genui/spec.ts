@@ -66,10 +66,11 @@ const MONTHS = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?
 /**
  * Labels that contain digits but are not figures. A year counts as a label only
  * in a date or period context (after a month, quarter, half or FY, or as an ISO
- * date), so "There are 2025 leads" is still a figure.
+ * date, or after a time word at a clause end or before punctuation), so
+ * "There are 2025 leads" and "in 2026 units" are still figures.
  */
 const TEMPORAL = 'in|since|during|through|throughout|until|till|before|after|from';
-const LABEL_TOKENS = new RegExp(`\\b\\d{4}-\\d{2}(-\\d{2})?\\b|\\b(?:${MONTHS}|[QH][1-4]|FY)\\.?\\s+(19|20)\\d{2}\\b|\\b(?:${TEMPORAL})\\s+(19|20)\\d{2}\\b|\\b(19|20)\\d{2}\\s+(?:YTD|year-to-date)\\b|\\b[QH][1-4]\\b|\\bP\\d{2}\\b|\\bD-[0-9a-f]{8,16}\\b`, 'gi');
+const LABEL_TOKENS = new RegExp(`\\b\\d{4}-\\d{2}(-\\d{2})?\\b|\\b(?:${MONTHS}|[QH][1-4]|FY)\\.?\\s+(19|20)\\d{2}\\b|\\b(?:${TEMPORAL})\\s+(19|20)\\d{2}\\b(?=\\s*(?:[.,;:!?)]|$))|\\b(19|20)\\d{2}\\s+(?:YTD|year-to-date)\\b|\\b[QH][1-4]\\b|\\bP\\d{2}\\b|\\bD-[0-9a-f]{8,16}\\b`, 'gi');
 /** Roman numerals of two or more letters, upper case only (so the words "mix" or "did" are not caught). */
 const ROMAN = /\b(?=[MDCLXVI]{2,}\b)M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})\b/;
 /** Numbers written in words are figures too. */
