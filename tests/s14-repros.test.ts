@@ -68,7 +68,7 @@ for (const q of ['Spend at Kedzie Works in Q3 2026, f-y-i?', 'Spend at Kedzie Wo
 }
 
 for (const [q, re] of [
-  ['Concessions at Kedzie Works in July 2026?', /\$583\.33/],
+  ['Concessions at Kedzie Works in July 2026?', /\$1,750\.00/],
   ['What is the occupancy at Kedzie Works?', /87\.3%/],
   ['Occupancy at Printers Row?', /95\.3%.*162 of 170/],
   ['How many units are at Kedzie Works on floor 3?', /18 matching units/],
