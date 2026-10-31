@@ -24,7 +24,7 @@ import { loadPortfolioStore } from '../src/data/loader.ts';
 import type { AnswerEnvelope } from '../src/data/schema.ts';
 import { executeCompositionalPlan } from '../src/agent/planner.ts';
 import { parseQueryIntent } from '../src/agent/intent.ts';
-import { sealNonAnswer, sealProof } from '../src/agent/envelope.ts';
+import { nonAnswerKind, sealNonAnswer, sealProof } from '../src/agent/envelope.ts';
 import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
 
 const SEED = Number(process.env.SEED ?? 7311);
@@ -165,10 +165,21 @@ const FORGE: Record<string, (e: AnswerEnvelope) => AnswerEnvelope | null> = {
     const result = Object.fromEntries(Object.entries(e.result).map(([k, v]) => [k, typeof v === 'number' ? 0 : v]));
     return { ...e, citations, result, answer: e.answer.replace(/\$?\d[\d,.]*/g, '0'), proof: e.query ? { ...sealProof(e.query, result, []) } : e.proof } as unknown as AnswerEnvelope;
   }])),
-  to_unknown_sealed: (e) => (e.query ? { ...e, result: { unknown: true }, answer: "I don't know.", citations: [], ...sealNonAnswer(e.query.question, { answer: "I don't know.", result: { unknown: true } }) } : null),
+  // Non-answers sealed with this process's key: only re-rendering can reject them.
+  ...Object.fromEntries(([
+    ['to_unknown_sealed', { unknown: true }, "I don't know."],
+    ['to_refused_sealed', { refused: true }, 'Refused.'],
+    ['unknown_small_figure', { unknown: true }, "I don't know. Fulton Yards has 7 vacant units."],
+    ['unknown_spelled_figure', { unknown: true }, "I don't know. Spend was forty thousand dollars."],
+    ['unknown_sci_figure', { unknown: true }, "I don't know. It was 1.1e5 USD."],
+    ['clarify_with_figure', { unknown: true, clarification_needed: true }, 'Spend was $40,000 — did you mean Q2 or Q3?'],
+    ['clarify_candidates', { unknown: true, clarification_needed: true, candidates: ['$40,000'] }, 'Did you mean Q2 or Q3?'],
+  ] as const).map(([name, result, answer]) => [name, (e: AnswerEnvelope) => (e.query ? { ...e, result, answer, citations: [], ...sealNonAnswer({ question: e.query.question, origin: 'deterministic' }, { answer, result, citations: [] }) } as AnswerEnvelope : null)])),
   to_unknown_bare: (e) => ({ id: e.id, result: { unknown: true }, answer: "I don't know.", citations: [] }) as AnswerEnvelope,
-  to_refused_sealed: (e) => (e.query ? { ...e, result: { refused: true }, answer: 'Refused.', citations: [], ...sealNonAnswer(e.query.question, { answer: 'Refused.', result: { refused: true } }) } : null),
-  unknown_with_figure: (e) => (e.query ? (() => { const answer = `I don't know. ${e.answer}`; return { ...e, result: { unknown: true }, answer, citations: [], ...sealNonAnswer(e.query.question, { answer, result: { unknown: true } }) }; })() : null),
+  unknown_with_figure: (e) => (e.query ? (() => { const answer = `I don't know. ${e.answer}`; const result = { unknown: true }; return { ...e, result, answer, citations: [], ...sealNonAnswer({ question: e.query.question, origin: 'deterministic' }, { answer, result, citations: [] }) }; })() : null),
+  // A genuine non-answer from another question, resealed onto this one.
+  moved_idk: (e) => (e.query ? (() => { const answer = "I don't know — the requested valuation, noi, debt service & unmodeled fields are not in the exports."; const result = { unknown: true }; return { ...e, result, answer, citations: [], ...sealNonAnswer({ question: e.query.question, origin: 'deterministic' }, { answer, result, citations: [] }) }; })() : null),
+  model_origin_clarify: (e) => (e.query ? (() => { const answer = 'I am not sure which question you mean. Did you mean: (1) $40,000; (2) nothing?'; const result = { unknown: true, clarification_needed: true }; return { ...e, result, answer, citations: [], ...sealNonAnswer({ question: e.query.question, origin: 'model', model_intent: e.query.intent }, { answer, result, citations: [] }) }; })() : null),
   intent: (e) => { const i = e.query?.intent as { unitStatus?: string } | undefined; return i ? { ...e, query: { ...e.query!, intent: { ...i, unitStatus: i.unitStatus === 'notice' ? 'vacant' : 'notice' } } } : null; },
 };
 
@@ -177,6 +188,7 @@ const restatesQuery = (r: string, p: { name: string; propertyId: string }, key: 
   (r.includes(p.name) || r.includes(p.propertyId)) && ({ count: /\bunits?\b|count/i, usd: /rent/i, sqft: /sq|square/i } as Record<string, RegExp>)[key].test(r);
 let restateWeak = 0;
 let deadEndsAnswerable = 0, answerable = 0;
+let nonAnswers = 0, nonAnswerFalseReject = 0;
 let answered = 0, wrong = 0, clarified = 0, deadEnds = 0, truthClar = 0, rescued = 0, falseReject = 0, restateMissing = 0;
 const negUnapp = { asked: 0, wrong: 0 };
 const forg: Record<string, { tried: number; accepted: number }> = Object.fromEntries(Object.keys(FORGE).map((k) => [k, { tried: 0, accepted: 0 }]));
@@ -196,6 +208,11 @@ for (let i = 0; i < N; i++) {
   const special = fsel.some((f) => f.tag === 'negation' || f.tag === 'unappliable');
   if (special) negUnapp.asked++;
   const t = await ask(q);
+  // TENACITY f2424a7 finding 1: a non-answer turn must verify too.
+  if (nonAnswerKind(t.envelope.result as Record<string, unknown>)) {
+    nonAnswers++;
+    if (!t.verification.valid || !verifyAnswerEnvelope(t.envelope, store).valid) { nonAnswerFalseReject++; if (nonAnswerFalseReject <= 3) console.log(`NONANSWER-REJECT ${q} :: ${t.verification.errors.join('; ')}`); }
+  }
   paths[t.parsePath ?? 'deterministic'] = (paths[t.parsePath ?? 'deterministic'] ?? 0) + 1;
   const r = t.envelope.result as Record<string, unknown>;
   if (r.unknown === true || r.refused === true || r.clarification_needed === true) {
@@ -257,7 +274,7 @@ const out = {
   coveragePct: pct(answered - wrong + rescued, N),
   clarified, deadEndPct: pct(deadEnds, N), deadEnds, answerable, deadEndsAnswerable, deadEndAnswerablePct: pct(deadEndsAnswerable, answerable), correctAfterOneClarifyPct: pct(rescued, truthClar), clarifyWithTruth: truthClar,
   negationUnappliable: negUnapp, restatementMissing: restateMissing, restatementWeak: restateWeak, modelDivergedAnswers: modelDiverged,
-  forgeryAcceptancePct: pct(acc, tried), forgeriesTried: tried, forgeryByClass: forg, falseRejections: falseReject,
+  forgeryAcceptancePct: pct(acc, tried), forgeriesTried: tried, forgeryByClass: forg, falseRejections: falseReject, nonAnswers, nonAnswerFalseRejections: nonAnswerFalseReject,
 };
 console.log(JSON.stringify(out));
-if (wrong > 0 || acc > 0 || falseReject > 0 || modelDiverged > 0) process.exitCode = 1;
+if (wrong > 0 || acc > 0 || falseReject > 0 || nonAnswerFalseReject > 0 || modelDiverged > 0) process.exitCode = 1;
