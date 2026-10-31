@@ -44,3 +44,16 @@ test('two measures: any link between two measures asks for two figures (S3 F1)',
 test('two measures: one measure phrase with a state or verb is still answered', async () => {
   for (const q of ['How many vacant units at Kedzie Works?', 'How many leases renewed at Kedzie Works?']) assert.ok(answered(await turn(q)), q);
 });
+
+test('two measures: a building or prepositional phrase between the measures still needs two figures (S3 39f1288 F1)', async () => {
+  for (const q of [
+    'vacancy rate at Kedzie Works and renewal rate',
+    'renewal rate for Kedzie Works and vacancy rate',
+    'Show vacancy at Kedzie Works and, if you can, also the renewal rate',
+    'occupancy at Fulton Yards and the vacancy rate',
+  ]) assert.ok(!answered(await turn(q)), q);
+});
+
+test('two measures: one measure with a building is still answered (S3 39f1288 F1 negatives)', async () => {
+  for (const q of ['Vacancy rate at Kedzie Works?', 'Renewal rate at Kedzie Works?', 'Occupancy at Fulton Yards?']) assert.ok(answered(await turn(q)), q);
+});
