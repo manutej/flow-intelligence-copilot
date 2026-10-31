@@ -285,10 +285,12 @@ describe('Scale Benchmark · 100,000 Relational Rows in < 250ms (O(N) Indexed Ha
     // this process's CPU time (immune to run-queue waits) and keep the
     // fastest. The 250 ms and 400k rows/s bars are unchanged.
     verifySheafConsistency(FLOW_PORTFOLIO_SCHEMA, synthetic100k);
+    // The pinned @types/node predates cpuUsage; it exists at runtime.
+    const cpu = (process as unknown as { cpuUsage(prev?: { user: number; system: number }): { user: number; system: number } }).cpuUsage;
     const runs = [0, 1, 2].map(() => {
-      const c0 = process.cpuUsage();
+      const c0 = cpu();
       const report = verifySheafConsistency(FLOW_PORTFOLIO_SCHEMA, synthetic100k);
-      const c = process.cpuUsage(c0);
+      const c = cpu(c0);
       return { report, cpuMs: (c.user + c.system) / 1000 };
     });
     const best = runs.reduce((x, r) => (r.cpuMs < x.cpuMs ? r : x));
