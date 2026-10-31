@@ -27,6 +27,13 @@ import { parseQueryIntent } from '../src/agent/intent.ts';
 import { nonAnswerKind, sealNonAnswer, sealProof } from '../src/agent/envelope.ts';
 import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
 
+// Seals the exact forged envelope (id and all), as an insider holding the
+// process key would, so a rejection comes from the re-render, not the seal.
+const sealAs = (input: Parameters<typeof sealNonAnswer>[0], env: AnswerEnvelope): AnswerEnvelope => {
+  const { query: _q, proof: _p, ...bare } = env;
+  return { ...bare, ...sealNonAnswer(input, bare) } as AnswerEnvelope;
+};
+
 const SEED = Number(process.env.SEED ?? 7311);
 const N = Number(process.argv[2] ?? 1000);
 const mi = process.argv.indexOf('--model');
@@ -174,12 +181,17 @@ const FORGE: Record<string, (e: AnswerEnvelope) => AnswerEnvelope | null> = {
     ['unknown_sci_figure', { unknown: true }, "I don't know. It was 1.1e5 USD."],
     ['clarify_with_figure', { unknown: true, clarification_needed: true }, 'Spend was $40,000 — did you mean Q2 or Q3?'],
     ['clarify_candidates', { unknown: true, clarification_needed: true, candidates: ['$40,000'] }, 'Did you mean Q2 or Q3?'],
-  ] as const).map(([name, result, answer]) => [name, (e: AnswerEnvelope) => (e.query ? { ...e, result, answer, citations: [], ...sealNonAnswer({ question: e.query.question, origin: 'deterministic' }, { answer, result, citations: [] }) } as AnswerEnvelope : null)])),
+  ] as const).map(([name, result, answer]) => [name, (e: AnswerEnvelope) => (e.query ? sealAs({ question: e.query.question, origin: 'deterministic' }, { ...e, result, answer, citations: [] }) as AnswerEnvelope : null)])),
   to_unknown_bare: (e) => ({ id: e.id, result: { unknown: true }, answer: "I don't know.", citations: [] }) as AnswerEnvelope,
-  unknown_with_figure: (e) => (e.query ? (() => { const answer = `I don't know. ${e.answer}`; const result = { unknown: true }; return { ...e, result, answer, citations: [], ...sealNonAnswer({ question: e.query.question, origin: 'deterministic' }, { answer, result, citations: [] }) }; })() : null),
+  unknown_with_figure: (e) => (e.query ? (() => { const answer = `I don't know. ${e.answer}`; const result = { unknown: true }; return sealAs({ question: e.query.question, origin: 'deterministic' }, { ...e, result, answer, citations: [] }); })() : null),
   // A genuine non-answer from another question, resealed onto this one.
-  moved_idk: (e) => (e.query ? (() => { const answer = "I don't know — the requested valuation, noi, debt service & unmodeled fields are not in the exports."; const result = { unknown: true }; return { ...e, result, answer, citations: [], ...sealNonAnswer({ question: e.query.question, origin: 'deterministic' }, { answer, result, citations: [] }) }; })() : null),
-  model_origin_clarify: (e) => (e.query ? (() => { const answer = 'I am not sure which question you mean. Did you mean: (1) $40,000; (2) nothing?'; const result = { unknown: true, clarification_needed: true }; return { ...e, result, answer, citations: [], ...sealNonAnswer({ question: e.query.question, origin: 'model', model_intent: e.query.intent }, { answer, result, citations: [] }) }; })() : null),
+  moved_idk: (e) => (e.query ? (() => { const answer = "I don't know — the requested valuation, noi, debt service & unmodeled fields are not in the exports."; const result = { unknown: true }; return sealAs({ question: e.query.question, origin: 'deterministic' }, { ...e, result, answer, citations: [] }); })() : null),
+  // Every sealable origin forged onto this answerable question (343668c finding 2).
+  session_refusal_moved: (e) => (e.query ? sealAs({ question: e.query.question, origin: 'session' }, { ...e, result: { refused: true }, answer: 'Refused: earlier in this conversation I refused a request to treat a group of people differently, and this refers back to those people. I can answer the same question without them, for example "How many studios are vacant at Kedzie Works?".', citations: [] }) : null),
+  frame_refusal_moved: (e) => (e.query ? sealAs({ question: e.query.question, origin: 'frame', frame: { group: 'none', treatment: true } }, { ...e, result: { refused: true }, answer: 'Refused: this asks to treat people differently based on none, which the Fair Housing Act and the Illinois Human Rights Act prohibit. I can help with the same task without that criterion.', citations: [] }) : null),
+  frame_idk_with_figure: (e) => (e.query ? sealAs({ question: e.query.question, origin: 'frame', frame: { group: 'age', treatment: true } }, { ...e, result: { unknown: true }, answer: `I don't know. ${e.answer}`, citations: [] }) : null),
+  unknown_origin: (e) => (e.query ? sealAs({ question: e.query.question, origin: 'harness' as never }, { ...e, result: { unknown: true }, answer: "I don't know.", citations: [] }) : null),
+  model_origin_clarify: (e) => (e.query ? (() => { const answer = 'I am not sure which question you mean. Did you mean: (1) $40,000; (2) nothing?'; const result = { unknown: true, clarification_needed: true }; return sealAs({ question: e.query.question, origin: 'model', model_intent: e.query.intent }, { ...e, result, answer, citations: [] }); })() : null),
   intent: (e) => { const i = e.query?.intent as { unitStatus?: string } | undefined; return i ? { ...e, query: { ...e.query!, intent: { ...i, unitStatus: i.unitStatus === 'notice' ? 'vacant' : 'notice' } } } : null; },
 };
 
