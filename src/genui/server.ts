@@ -113,9 +113,10 @@ export function createServer() {
         const it = await body(req);
         const all = readJson<DraftAction[]>(ACTIONS, []); const d = all.find((x) => x.id === m[1]);
         if (!d) return send(res, 404, { error: 'no such draft' });
-        // re-validate every state change except a reject and the undo of a reject: those can never
-        // enable an approval, so a stale draft can always be cleared (TENACITY L4)
-        const rejecting = (it.kind === 'set_state' && it.to === 'rejected') || (it.kind === 'undo' && d.state === 'rejected');
+        // re-validate only a move to approved. A reject, the undo of a reject and the undo of an
+        // approval can never enable an approval, so a stale draft can always be withdrawn or cleared
+        // (TENACITY L4, M1)
+        const rejecting = (it.kind === 'set_state' && it.to === 'rejected') || (it.kind === 'undo' && (d.state === 'rejected' || d.state === 'approved'));
         if (!rejecting && (await isStale(d, readJson<any[]>(PANELS, []))))
           return send(res, 409, { error: 'source panel no longer matches the verified spec; nothing changed', state: d.state });
         if (it.kind === 'set_state' && (it.to === 'approved' || it.to === 'rejected') && (d.state === 'draft' || d.state === 'pending_approval')) { d.prev_state = d.state; d.state = it.to; }

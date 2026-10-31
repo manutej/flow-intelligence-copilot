@@ -36,18 +36,21 @@ test('N4: draft ids are 12 hex, and an id hit with a different spec is a 409, no
   } finally { srv.close(); fs.rmSync(ACTIONS, { force: true }); fs.rmSync(PANELS, { force: true }); }
 });
 
-test('N5: approve and undo re-validate the source panel', async () => {
+test('N5: approve re-validates the source panel', async () => {
   const { srv, post } = await boot();
   try {
     const p = await (await post('/api/ask', { question: REC })).json();
     await post('/api/panels', p);
     const d = await (await post('/api/actions', { panel_id: p.id })).json();
     assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'approved' })).status, 200);
-    // the saved panel goes stale (or is tampered with on disk): undo and approve must refuse
+    // the saved panel goes stale (or is tampered with on disk): approve must refuse. Undo of an
+    // approval only withdraws it, so since TENACITY M1 it is allowed without re-validation.
     const panels = JSON.parse(fs.readFileSync(PANELS, 'utf8'));
     panels[0].spec.props.impacts[0].value.v = 9999; fs.writeFileSync(PANELS, JSON.stringify(panels));
-    assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'undo' })).status, 409);
+    assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'undo' })).status, 200);
+    assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'approved' })).status, 409);
     panels[0].spec.props.impacts[0].value.v = p.spec.props.impacts[0].value.v; fs.writeFileSync(PANELS, JSON.stringify(panels));
+    assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'approved' })).status, 200);
     assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'undo' })).status, 200);
     fs.writeFileSync(PANELS, '[]');
     assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'approved' })).status, 409);
@@ -76,5 +79,27 @@ test('L4: a stale draft is flagged stale and can still be rejected (and that rej
     assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'approved' })).status, 409);
     const html = await (await fetch(base + '/')).text();
     assert.match(html, /stale:'⚠ STALE/);
+  } finally { srv.close(); }
+});
+
+test('M1: an approved draft that goes stale can be withdrawn by undo and is shown stale', async () => {
+  const { srv, post } = await boot();
+  const base = `http://127.0.0.1:${(srv.address() as { port: number }).port}`;
+  try {
+    fs.writeFileSync(PANELS, '[]'); fs.writeFileSync(ACTIONS, '[]');
+    const p = await (await post('/api/ask', { question: REC })).json();
+    await post('/api/panels', p);
+    const d = await (await post('/api/actions', { panel_id: p.id })).json();
+    assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'approved' })).status, 200);
+    const panels = JSON.parse(fs.readFileSync(PANELS, 'utf8'));
+    panels[0].spec.props.impacts[0].value.v = 9999; fs.writeFileSync(PANELS, JSON.stringify(panels));
+    const ac = async () => (await (await fetch(base + '/api/action-center')).json()).drafts.find((x: any) => x.id === d.id);
+    assert.equal((await ac()).stale, true);
+    const u = await post(`/api/actions/${d.id}/intent`, { kind: 'undo' });
+    assert.equal(u.status, 200); assert.equal((await u.json()).state, 'pending_approval');
+    assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'approved' })).status, 409);
+    assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'rejected' })).status, 200);
+    const html = await (await fetch(base + '/')).text();
+    assert.match(html, /d\.state==='approved'\)\?'stale'/);
   } finally { srv.close(); }
 });
