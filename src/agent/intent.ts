@@ -978,7 +978,7 @@ function parseQueryIntentRaw(
       measure === 'dead_spend_pairs' ||
       measure === 'reallocation_leases' ||
       measure === 'apply_rate' ||
-      /\bpaid\s+(?:listing\s+|ad\s+|marketing\s+)?(?:sources?|channels?)\b/i.test(
+      /\bpaid\s+(?:listing\s+|ad\s+|marketing\s+)?(?:sources?|channels?)\b|\bILS(?:es)?\b|\b(?:internet\s+)?listing\s+(?:sites?|services?)\b/i.test(
         question,
       );
 
@@ -1344,6 +1344,15 @@ const NUMERAL = String.raw`(?:\d+|one|two|three|four|five|six|seven|eight|nine|t
 const RANK_VERB = String.raw`(?:rank(?:ed|ing|s)?|sort(?:ed|s)?|order(?:ed)?|list|compare|comparison|leaderboard)`;
 
 /** The breakdowns a question asks for: [dimension, words, ranked?]. */
+/** The dimension a "by <noun>" or "for each <noun>" grouping names, within three words ("by marketing source"). */
+export function groupedBy(question: string): Dimension | null {
+  for (const m of question.matchAll(/\b(?:by|(?:for\s+)?each|broken\s+down\s+by|split\s+by)\s+([^?.!,;]*)/gi)) {
+    const h = firstHeadIn(m[1].split(/\s+/).slice(0, 3).join(' '));
+    if (h) return h.dim;
+  }
+  return null;
+}
+
 /** The dimension a "which/what <noun>" question asks to be named ("which channel"), or null. */
 export function askedDimension(question: string): Dimension | null {
   for (const m of question.matchAll(/\b(?:which|what)\b\s+([^?.!,;]*)/gi)) {

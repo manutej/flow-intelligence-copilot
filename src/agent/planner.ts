@@ -18,7 +18,7 @@ import type {
   UnitQuerySummary,
 } from '../domain/metrics.ts';
 import type { PropertyResolutionResult } from '../domain/resolver.ts';
-import { droppedBreakdownOf, scalarLeftoverOf, parseQueryIntent, requestedBreakdowns, askedDimension, type ParsedQueryIntent } from './intent.ts';
+import { droppedBreakdownOf, scalarLeftoverOf, parseQueryIntent, requestedBreakdowns, askedDimension, groupedBy, type ParsedQueryIntent } from './intent.ts';
 import {
   dataCoverage,
   describeCoverage,
@@ -481,10 +481,37 @@ export function executeCompositionalPlan(
       intent.aggregation !== 'value' ||
       intent.mentionedSources.length > 0 ||
       requestedBreakdowns(question).some((b) => b.dim === 'source') ||
-      askedDimension(question) === 'source';
+      askedDimension(question) === 'source' ||
+      groupedBy(question) === 'source';
     const scope = !matchedPropIds || matchedPropIds.length === 0 ? 'Across the operating portfolio' : matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)}` : `Across the ${matchedPropIds.length} matching buildings`;
     const noOverall = (what: string) =>
       unknown(`FlowIQ reports ${what} by listing source; it does not carry one overall ${what} for "${question.trim()}", so it will not answer a different question in its place.`);
+    // Which sources the figure covers, said as the filter actually applied.
+    const sourceSet = intent.mentionedSources.length > 0
+      ? intent.mentionedSources.join(' and ')
+      : intent.paidOnly ? 'paid sources' : 'all sources';
+    // How a source-shaped question picks its rows: one named source, several
+    // named sources pooled, a ranking, or a labelled breakdown. Never row 0.
+    const sourceMode: 'one' | 'pooled' | 'ranked' | 'list' | 'none' =
+      intent.mentionedSources.length === 1 ? 'one'
+        : intent.mentionedSources.length > 1 ? 'pooled'
+          : intent.aggregation === 'argmin' || intent.aggregation === 'argmax' ? 'ranked'
+            : requestedBreakdowns(question).some((b) => b.dim === 'source' && !b.ranked) || groupedBy(question) === 'source' ? 'list'
+              : 'none';
+    const unrankedWhich = (what: string) =>
+      unknown(`"${question.trim()}" asks which source but not by what ranking, so FlowIQ will not name one source's ${what} in its place. Ask for the lowest or highest ${what}, or for ${what} by source.`);
+    // Per-source tour and lease counts over every matched building.
+    const funnelBySource = () => {
+      const m = new Map<string, { source: string; isPaid: boolean; toured: number; leased: number; citations: CitationId[] }>();
+      for (const r of mkt.byPropertySource) {
+        const g = m.get(r.source) ?? { source: r.source, isPaid: r.isPaidSource, toured: 0, leased: 0, citations: [] };
+        g.toured += r.touredCount;
+        g.leased += r.leasedFromCreatedLeadsCount;
+        g.citations.push(...r.citations.slice(0, 2));
+        m.set(r.source, g);
+      }
+      return [...m.values()];
+    };
 
     if (intent.measure === 'reallocation_leases') {
       const realloc = mkt.deadSpendReallocation;
@@ -549,32 +576,59 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'tour_to_lease_rate') {
-      if (!sourceShaped) {
-        const toured = mkt.byPropertySource.reduce((a, r) => a + r.touredCount, 0);
-        const leased = mkt.byPropertySource.reduce((a, r) => a + r.leasedFromCreatedLeadsCount, 0);
+      const groups = funnelBySource();
+      const rateOf = (toured: number, leased: number) => Math.round((leased / toured) * 1000) / 10;
+      if (!sourceShaped || sourceMode === 'pooled') {
+        const toured = groups.reduce((a, r) => a + r.toured, 0);
+        const leased = groups.reduce((a, r) => a + r.leased, 0);
         if (toured === 0) return noOverall('tour-to-lease rate');
-        const pct = Math.round((leased / toured) * 1000) / 10;
+        const pct = rateOf(toured, leased);
         return finalize(
-          `${scope} in ${mkt.windowLabel}, ${leased} of ${plural(toured, 'toured deduplicated lead')} signed a lease, an overall tour-to-lease rate of ${pct.toFixed(1)}% across all sources.`,
-          { percent: pct },
+          `${scope} in ${mkt.windowLabel}, ${leased} of ${plural(toured, 'toured deduplicated lead')} from ${sourceSet} signed a lease, an overall tour-to-lease rate of ${pct.toFixed(1)}%.`,
+          sourceMode === 'pooled' ? { sources: [...intent.mentionedSources], percent: pct } : { percent: pct },
           mkt.citations.slice(0, 12),
         );
       }
-      const row = mkt.byPropertySource[0];
-      if (!row) {
-        const src = intent.mentionedSources[0] ?? 'the requested source';
+      if (sourceMode === 'none') return unrankedWhich('tour-to-lease rate');
+      if (sourceMode === 'list' || sourceMode === 'ranked') {
+        const rows = groups.filter((g) => g.toured > 0).map((g) => ({ ...g, pct: rateOf(g.toured, g.leased) }));
+        if (rows.length === 0) return noOverall('tour-to-lease rate');
+        if (sourceMode === 'list') {
+          return finalize(
+            `${scope} in ${mkt.windowLabel}, tour-to-lease rate by source: ${rows.map((r) => `${r.source} ${r.pct.toFixed(1)}% (${r.leased}/${r.toured})`).join(', ')}.`,
+            { by_source: rows.map((r) => ({ source: r.source, percent: r.pct })) },
+            rows.flatMap((r) => r.citations).slice(0, 12),
+          );
+        }
+        const best = [...rows].sort((x, y) => (intent.aggregation === 'argmin' ? x.pct - y.pct : y.pct - x.pct) || x.source.localeCompare(y.source))[0];
+        return finalize(
+          `${scope} in ${mkt.windowLabel}, ${best.source} had the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} tour-to-lease rate at ${best.pct.toFixed(1)}% (${best.leased} of ${best.toured} toured leads).`,
+          { source: best.source, percent: best.pct },
+          best.citations.slice(0, 12),
+        );
+      }
+      const row = mkt.byPropertySource.length === 1 ? mkt.byPropertySource[0] : undefined;
+      const g = groups.find((x) => x.source === intent.mentionedSources[0]);
+      if (!g || g.toured === 0) {
+        const src = intent.mentionedSources[0];
         return finalize(
           `At ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, ${src} had no tours, so a tour-to-lease rate is not defined.`,
           { percent: null },
           propRes?.citations ?? [],
         );
       }
+      if (row) {
+        return finalize(
+          `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${row.source} generated ${plural(row.leadsCreatedCount, 'deduplicated lead')}, of which ${row.touredCount} toured and ${row.leasedFromCreatedLeadsCount} signed a lease, giving a tour-to-lease conversion rate of ${row.tourToLeaseConversionPercent.toFixed(1)}%.`,
+          { percent: row.tourToLeaseConversionPercent },
+          row.citations.slice(0, 12),
+        );
+      }
+      const pct = rateOf(g.toured, g.leased);
       return finalize(
-        `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${row.source} generated ${plural(row.leadsCreatedCount, 'deduplicated lead')}, of which ${row.touredCount} toured and ${row.leasedFromCreatedLeadsCount} signed a lease, giving a tour-to-lease conversion rate of ${row.tourToLeaseConversionPercent.toFixed(1)}%.`,
-        {
-          percent: row.tourToLeaseConversionPercent,
-        },
-        row.citations.slice(0, 12),
+        `${scope} in ${mkt.windowLabel}, ${g.leased} of ${plural(g.toured, 'toured deduplicated lead')} from ${g.source} signed a lease, a tour-to-lease rate of ${pct.toFixed(1)}%.`,
+        { percent: pct },
+        g.citations.slice(0, 12),
       );
     }
 
@@ -618,8 +672,8 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_lead_and_tour') {
-      if (!sourceShaped) return noOverall('cost per lead and per tour');
-      const srcRow = mkt.bySource[0];
+      if (sourceMode !== 'one') return noOverall('cost per lead and per tour');
+      const srcRow = mkt.bySource.find((r) => r.source === intent.mentionedSources[0]);
       if (!srcRow) {
         return finalize(
           `No matching source had spend or leads in ${mkt.windowLabel}, so cost per lead and per tour are not defined.`,
@@ -641,19 +695,36 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_lead') {
-      if (!sourceShaped) {
+      if (!sourceShaped || sourceMode === 'pooled') {
         if (mkt.totalLeadsCreated === 0) return noOverall('cost per lead');
         const usd = Math.round((mkt.totalSpendUsd / mkt.totalLeadsCreated) * 100) / 100;
         return finalize(
-          `${scope} in ${mkt.windowLabel}, the overall cost per lead was ${fmtUsd(usd)} (${fmtUsd(mkt.totalSpendUsd)} posted spend / ${plural(mkt.totalLeadsCreated, 'deduplicated lead')} from all sources).`,
-          { usd },
+          `${scope} in ${mkt.windowLabel}, the overall cost per lead was ${fmtUsd(usd)} (${fmtUsd(mkt.totalSpendUsd)} posted spend / ${plural(mkt.totalLeadsCreated, 'deduplicated lead')} from ${sourceSet}).`,
+          sourceMode === 'pooled' ? { sources: [...intent.mentionedSources], usd } : { usd },
           mkt.citations.slice(0, 8),
         );
       }
-      const row =
-        matchedPropIds && matchedPropIds.length === 1
-          ? mkt.byPropertySource[0]
-          : mkt.bySource[0];
+      if (sourceMode === 'none') return unrankedWhich('cost per lead');
+      if (sourceMode === 'list' || sourceMode === 'ranked') {
+        const rows = mkt.bySource.filter((r) => r.costPerLeadUsd !== null);
+        if (rows.length === 0) return noOverall('cost per lead');
+        if (sourceMode === 'list') {
+          return finalize(
+            `${scope} in ${mkt.windowLabel}, cost per lead by source: ${rows.map((r) => `${r.source} ${fmtUsd(r.costPerLeadUsd!)} (${fmtUsd(r.spendUsd)} / ${plural(r.leadsCreatedCount, 'lead')})`).join(', ')}.`,
+            { by_source: rows.map((r) => ({ source: r.source, usd: r.costPerLeadUsd })) },
+            rows.flatMap((r) => r.citations.slice(0, 2)).slice(0, 12),
+          );
+        }
+        const paid = rows.filter((r) => r.isPaidSource);
+        const best = [...paid].sort((x, y) => (intent.aggregation === 'argmin' ? x.costPerLeadUsd! - y.costPerLeadUsd! : y.costPerLeadUsd! - x.costPerLeadUsd!) || x.source.localeCompare(y.source))[0];
+        if (!best) return noOverall('cost per lead');
+        return finalize(
+          `${scope} in ${mkt.windowLabel}, ${best.source} had the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} cost per lead among paid sources at ${fmtUsd(best.costPerLeadUsd!)} (${fmtUsd(best.spendUsd)} spend / ${plural(best.leadsCreatedCount, 'deduplicated lead')}).`,
+          { source: best.source, usd: best.costPerLeadUsd },
+          best.citations.slice(0, 8),
+        );
+      }
+      const row = mkt.bySource.find((r) => r.source === intent.mentionedSources[0]);
       if (!row) {
         const src = intent.mentionedSources[0] ?? null;
         return finalize(
@@ -682,8 +753,10 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_tour') {
-      if (!sourceShaped) return noOverall('cost per tour');
-      const eligible = mkt.byPropertySource.filter(
+      if (!sourceShaped || sourceMode === 'pooled') return noOverall('cost per tour');
+      if (sourceMode === 'none') return unrankedWhich('cost per tour');
+      // Per source over every matched building; one building's rows are never shown unlabelled.
+      const eligible = mkt.bySource.filter(
         (r) => r.isPaidSource && r.costPerTourUsd !== null,
       );
       const top = eligible[0];
