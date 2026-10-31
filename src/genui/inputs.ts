@@ -104,6 +104,26 @@ const SEP_AFTER = /^(?:[\s=:≈~→\n]|->|=>|\bof\b|\bto\b|\bset\b|\bis\b|\bequa
 const SEP_BEFORE = /^[\s-]*$/u;
 const NEAR_TOKENS = 8;
 
+// ---- the strict grammar of a stated setting (allow-list; anything else near a setting word is unreadable) ----
+//   statement := word SEP value END | value [-\s]+ word END-free
+//   value     := [CUR] NUMBER [CUR [per CAD]]       NUMBER := digits[,ddd][.d+][k]
+//   END       := end of turn | , ; ! ? . (not a decimal) | newline | turn marker | and / but / then / while
+const CUR = String.raw`(?:usd|us\$|us dollars?|cad|c\$|cad\$|canadian dollars?|dollars?|\$)`;
+const VALUE = String.raw`(?:(?<pre>${CUR})\s*)?(?<num>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?<k>\s?k)?(?:[\s-]*(?<post>${CUR})(?<per>\s+per\s+cad)?)?`;
+const SEP = String.raw`(?:\s*(?:=|:|≈|~|→|->|=>|\bof\b|\bset\s+to\b|\bto\b|\bis\b|\bat\b|\bequals?\b)\s*|\s+)+`;
+const END = String.raw`(?=\s*$|\s*[,;!?\n→]|\s*\.(?!\d)|\s*(?:->|=>|⟶)|\s+(?:and|but|then|while)\b)`;
+const STATEMENT_AFTER = new RegExp(String.raw`^${SEP}${VALUE}${END}`, 'iu');
+const STATEMENT_BEFORE = new RegExp(String.raw`(?:^|[\s,;(])${VALUE.replace(/\?<(\w+)>/g, '?<$1>')}[\s-]+$`, 'iu');
+const EXCHANGE = new RegExp(String.raw`(?<![\p{L}\p{N}.])1\s*cad\s*=\s*(?<num>\d+(?:\.\d+)?)\s*usd${END}`, 'giu');
+const UNITS_OK: Record<Parameter['id'], readonly SettingUnit[]> = { beta0: ['USD', 'none'], alpha0: ['none'], cadRate: ['none', 'USD'] };
+function statementValue(g: Record<string, string | undefined>): { value: number; unit: SettingUnit } {
+  const value = Number(g.num!.replace(/,/g, '')) * (g.k ? 1e3 : 1);
+  const cur = [g.pre, g.post].filter(Boolean).map((c) => (/cad|c\$|canadian/i.test(c!) ? 'CAD' : 'USD'));
+  // a currency on both sides must agree; "0.73 USD per CAD" is a rate in USD
+  const unit: SettingUnit = cur.length === 0 ? 'none' : new Set(cur).size > 1 ? 'percent' /* never matches a policy unit */ : (cur[0] as SettingUnit);
+  return { value, unit: g.per && unit === 'USD' ? 'USD' : g.per ? 'percent' : unit };
+}
+
 export interface Binding { readonly param: Parameter; readonly value: number; readonly unit: SettingUnit }
 export interface SettingReading {
   readonly bindings: readonly Binding[]; // settings stated with a value
@@ -121,7 +141,7 @@ function unitOf(t: string, n: StatedNumber): SettingUnit {
   return 'none';
 }
 // a rank (top 1, #1, rank 1, no. 1) is not a value
-const isRank = (t: string, n: StatedNumber) => n.surface.startsWith('#') || /(?:\btop|\bbottom|\brank(?:ed)?|\bno\.?|\bnumber|\bfirst|\blast)\s*$/i.test(t.slice(Math.max(0, n.start - 10), n.start));
+const isRank = (t: string, n: StatedNumber) => n.surface.startsWith('#') || /(?:\btop|\bbottom|\brank(?:ed)?|\bno\.?|\bnumber|\bfirst|\blast|\bwhich)\s*$/i.test(t.slice(Math.max(0, n.start - 10), n.start));
 // the end of a number with its unit word ("1800 USD", "3 months")
 const unitEnd = (t: string, n: StatedNumber) => n.end + (t.slice(n.end).match(new RegExp(String.raw`^(?:[\s-]*(?:%|percent|pct|cad|c\$|usd|dollars?|bucks|${PERIOD})\b|\s*%)?`, 'iu'))?.[0].length ?? 0);
 
@@ -137,18 +157,23 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
     // "prior beta0=...", "beta0 prior": the named setting carries the value
     if (kind === 'prior' && (/^[\s_-]*(?:beta|β|b_?0|alpha|α|a_?0)/iu.test(t.slice(we)) || /(?:beta|β|alpha|α)[\p{L}\p{N}_-]*[\s_-]*$/iu.test(t.slice(0, ws)))) continue;
     const free = nums.filter((n) => !(n.start < we && n.end > ws)); // beta-0, beta zero name the setting
-    const bound = free.find((n) => n.start >= we && SEP_AFTER.test(t.slice(we, n.start)) && n.unit !== 'duration' && !isRank(t, n))
-      ?? free.find((n) => n.end <= ws && SEP_BEFORE.test(t.slice(unitEnd(t, n), ws)) && n.unit !== 'duration' && !isRank(t, n));
-    if (bound) {
-      const param = kind === 'prior' ? (bound.unit === 'USD' || bound.unit === 'CAD' ? PARAMETERS.beta0 : null) : PARAMETERS[kind as Parameter['id']];
-      if (param) bindings.push({ param, value: bound.value, unit: bound.unit }); else ambiguous = true; // "a prior of 1": which prior?
+    // a number that runs past the setting's name ("beta zero one") is not a stated value we can read
+    if (nums.some((n) => n.start < we && n.end > we)) { ambiguous = true; continue; }
+    // fail closed: only a statement that parses fully under the strict grammar binds a value
+    const st = STATEMENT_AFTER.exec(t.slice(we)) ?? STATEMENT_BEFORE.exec(t.slice(0, ws));
+    if (st) {
+      const v = statementValue(st.groups!);
+      const param = kind === 'prior' ? (v.unit !== 'none' ? PARAMETERS.beta0 : null) : PARAMETERS[kind as Parameter['id']];
+      if (param) bindings.push({ param, value: v.value, unit: v.unit }); else ambiguous = true; // "a prior of 1": which prior?
       continue;
     }
     // a number near the setting word that is not its value (and not a rank or a duration): cannot tell
     const near = free.some((n) => !isRank(t, n) && n.unit !== 'duration' && (n.start >= we ? t.slice(we, n.start) : t.slice(n.end, ws)).trim().split(/\s+/).filter(Boolean).length <= NEAR_TOKENS);
     if (near) ambiguous = true;
   }
-  const matches = (b: Binding) => b.param.applies(intent) && b.value === b.param.value(store) && (b.unit === b.param.unit || (b.unit === 'none' && b.param.unit === 'USD' && b.param.id === 'beta0'));
+  // the rate written as an exchange, with no setting word: "1 CAD = 0.73 USD"
+  for (const m of t.matchAll(EXCHANGE)) bindings.push({ param: PARAMETERS.cadRate, value: Number(m.groups!.num), unit: 'USD' });
+  const matches = (b: Binding) => b.param.applies(intent) && b.value === b.param.value(store) && UNITS_OK[b.param.id].includes(b.unit);
   return { bindings, ambiguous, mismatch: bindings.find((b) => !matches(b)) ?? null };
 }
 /** The setting values a computation used, as stated in the question and equal to policy: the only setting numbers a title may echo. */

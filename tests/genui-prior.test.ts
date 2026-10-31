@@ -94,3 +94,18 @@ test('a title that would repeat an unused figure gives a neutral clarify, not an
     assert.ok(!/68|not supported/.test(a.spec.title ?? ''), q);
   }
 });
+test('strict grammar fails closed (TENACITY 228b925 1-4)', async () => {
+  const at = async (s: string) => (await askPanel(base(s), store)).spec;
+  // 1-3: a unit placed elsewhere, an operator or qualifier, a spelled form: neutral, never a chart or a setting card
+  for (const s of ['with prior beta0 = 3250 in CAD', 'with prior beta0 = $3250 (CAD)', 'with beta0 = 3250 + 1', 'with beta0 = 3250 or so', 'with beta0 of about 3250', 'with beta zero one']) {
+    const sp = await at(s); assert.equal(sp.template, 'clarify_card', s); assert.equal(sp.title, 'Could you restate the question?', s);
+  }
+  // fully parsed with another value or unit: that setting's card
+  for (const s of ['with beta0 = 3250 CAD', 'with beta0 = 1800 USD', 'with prior beta0 = 3250 Canadian dollars']) assert.equal((await at(s)).title, 'This prior is not supported', s);
+  // fully parsed policy value and unit: charts
+  for (const s of ['with prior beta0 = USD 3250', 'with prior beta0 = 3250 USD', 'with prior beta0 = 3,250 dollars']) assert.equal((await at(s)).template, 'sorted_bar', s);
+  const q = (s: string) => `${s}, was decision X001 in decisions.csv accepted, who decided it, and what was the monthly delta?`;
+  for (const s of ['Under 1 CAD = 0.73 USD', 'Under a CAD rate of 0.73 USD', 'Under CAD rate 0.73']) assert.equal((await askPanel(q(s), store)).spec.template, 'kpi', s);
+  // 4: a bare rank word is not a setting value
+  assert.equal((await askPanel('Which 1 channel has the highest spend after CAD rate conversion?', store)).spec.template, 'sorted_bar');
+});
