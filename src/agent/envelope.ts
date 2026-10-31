@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { AnswerEnvelope, AnswerProof, PortfolioStore, TypedQuery } from '../data/schema.ts';
-import type { ParsedQueryIntent } from './intent.ts';
+import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 import { executeCompositionalPlan } from './planner.ts';
 import { typedQueryErrors } from './typed-query.ts';
 
@@ -45,6 +45,11 @@ export function envelopeErrors(envelope: AnswerEnvelope, store: PortfolioStore):
   const schemaErrs = intent && typeof intent === 'object' ? typedQueryErrors(intent) : ['intent is missing'];
   if (schemaErrs.length > 0) return [`The typed query is not valid: ${schemaErrs.join('; ')}`];
   const errors: string[] = [];
+  // F3: the query must be the reading of its own question, so another
+  // question's render cannot be resealed under this one.
+  if (hashOf(parseQueryIntent(q.question, store)) !== hashOf(intent)) {
+    errors.push('The typed query is not the reading of its question');
+  }
   if (p.query_hash !== hashOf(q)) errors.push('query_hash does not match the typed query');
   if (p.result_hash !== hashOf(envelope.result ?? {})) errors.push('result_hash does not match the result');
   const ref = executeCompositionalPlan(

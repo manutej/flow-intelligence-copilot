@@ -7,10 +7,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
-
+import { sealProof } from '../src/agent/envelope.ts';
 import { parseConfigFromEnv } from '../src/agent/model-parse.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
-
+import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
 
 const store = loadPortfolioStore();
 const parse = parseConfigFromEnv({ FLOWIQ_PARSE_URL: 'http://stub.invalid/v1', FLOWIQ_PARSE_NO_CACHE: '1' });
@@ -48,4 +48,13 @@ test('F2: measure, paidOnly and period mutations never reach path=model', async 
       if (!same) assert.notEqual(t.parsePath, 'model', `${q} ${JSON.stringify(m)}`);
     }
   }
+});
+
+test("F3: another question's render resealed under this question is rejected", async () => {
+  const a = (await askFlowIqCopilot('What was total marketing spend in Q2 2026?', { store, parse: null })).envelope as any;
+  const b = (await askFlowIqCopilot('What was total marketing spend in Q3 2026?', { store, parse: null })).envelope as any;
+  const q = { ...b.query, question: a.query.question };
+  const resealed = { ...b, id: a.id, query: q, proof: sealProof(q, b.result, b.proof.row_ids) };
+  assert.equal(verifyAnswerEnvelope(resealed, store).valid, false);
+  assert.equal(verifyAnswerEnvelope(a, store).valid, true);
 });
