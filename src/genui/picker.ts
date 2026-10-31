@@ -6,7 +6,8 @@ import { hashOf } from '../agent/envelope.ts';
 import { verifyAnswerEnvelope } from '../domain/guards.ts';
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import type { ParseConfig } from '../agent/model-parse.ts';
-import { specErrors, type ChartSpec, type Evidence, type EvidenceItem, type Num, type PanelState, type Unit } from './spec.ts';
+import { priorNumbers, usedPriors } from './inputs.ts';
+import { inLabel, specErrors, type ChartSpec, type Evidence, type EvidenceItem, type Num, type PanelState, type Unit } from './spec.ts';
 
 /**
  * Deterministic intent-to-insight picker (rule table: docs/genui-rules.md).
@@ -274,18 +275,9 @@ export function intentGate(turn: CopilotTurnResult, core: string, store: Portfol
   return { ...clarify('clarify', turn, turn.envelope.proof.template_id, core), insight: 'The parsed reading differs from the question text', title: 'Which did you mean?' };
 }
 
-/**
- * A spend prior the user states in the question (TENACITY 59be53f HIGH). The learner always uses
- * the policy beta0, so a different stated prior is not applied and the numbers would not match it.
- * "beta0"/"β0" take any number; a bare "prior" needs a money marker so "prior 3 months" is not one.
- */
-const PRIOR_BETA = /(?:\bbeta[_ ]?0|β0)\s*(?:=|of|is|at|:)?\s*(?:usd\s*)?\$?\s*(\d[\d,]*(?:\.\d+)?)\s*(k\b)?/iu;
-const PRIOR_MONEY = /\bprior(?:\s+spend)?\s*(?:=|of|is|at|:)?\s*(?:(?:usd\s*)?\$\s*(\d[\d,]*(?:\.\d+)?)\s*(k\b)?|(\d[\d,]*(?:\.\d+)?)\s*(k\b)?\s*(?:dollars|usd)\b)/i;
-export function statedPrior(q: string): number | null {
-  const m = q.normalize('NFKC').match(PRIOR_BETA) ?? q.normalize('NFKC').match(PRIOR_MONEY);
-  if (!m) return null;
-  const n = m[1] ?? m[3], k = m[2] ?? m[4];
-  return Number(n.replace(/,/g, '')) * (k ? 1000 : 1);
+/** First number stated near a prior word in any turn that the computation did not use, or null. */
+export function statedPrior(input: string, used: ReadonlySet<number> = new Set()): number | null {
+  return priorNumbers(input, inLabel).find((n) => !used.has(n.value))?.value ?? null;
 }
 
 /** Full path: S2 parse (model if configured, deterministic otherwise) -> picker -> validated spec. */
@@ -298,9 +290,13 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   const question = turns[turns.length - 1];
   const gate = intentGate(turn, coreQuestion(question), store);
   if (gate) return { question: input, spec: gate, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
-  const prior = statedPrior(coreQuestion(question)), policyPrior = store.policy.priorSpendUsdBeta0;
-  if (prior !== null && prior !== policyPrior) {
-    const t = { ...turn, clarifyingQuestion: `This analysis uses the policy prior beta0 = $${policyPrior}. A prior stated in the question is not applied, so nothing is charted. Ask again without the prior, or change beta0 in the policy.`, clarifyOptions: [] };
+  // a number stated near a prior word (any turn, any match) that the computation did not use: the
+  // numbers would not reflect it, so nothing is charted (TENACITY 601bdfa HIGH)
+  const used = usedPriors(intentOf(turn) ?? parseQueryIntent(coreQuestion(question), store), store);
+  const unused = statedPrior(input, used);
+  if (unused !== null) {
+    const policyPrior = store.policy.priorSpendUsdBeta0;
+    const t = { ...turn, clarifyingQuestion: `A prior stated in the question is not an input this analysis used (it uses the policy prior beta0 = $${policyPrior} where a prior applies), so nothing is charted. Ask again without that prior, or change it in the policy.`, clarifyOptions: [] };
     return { question: input, spec: { ...clarify('unknown', t as CopilotTurnResult, turn.envelope.proof?.template_id ?? 'guard', question), insight: 'Stated prior is not applied', title: 'This prior is not supported' }, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
   }
   const { spec, evidence } = pick({ question, turn, store });

@@ -1,5 +1,6 @@
 import { hashOf } from '../agent/envelope.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from '../agent/intent.ts';
+import { identifierTokens, statedNumbers, usedInputs } from './inputs.ts';
 import { executeCompositionalPlan } from '../agent/planner.ts';
 import { verifyAnswerEnvelope } from '../domain/guards.ts';
 import type { PortfolioStore } from '../data/schema.ts';
@@ -75,6 +76,11 @@ const MONTHS = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?
  */
 const TEMPORAL = 'in|since|during|through|throughout|until|till|before|after|from';
 const LABEL_TOKENS = new RegExp(`\\b\\d{4}-\\d{2}(-\\d{2})?\\b|\\b(?:${MONTHS}|[QH][1-4]|FY)\\.?\\s+(19|20)\\d{2}\\b|\\b(?:${TEMPORAL})\\s+(19|20)\\d{2}\\b(?=\\s*(?:[.,;:!?)]|$))|\\b(19|20)\\d{2}\\s+(?:YTD|year-to-date)\\b|\\b[QH][1-4](?:\\b|(?=_))|\\bP\\d{2}\\b|\\bD-[0-9a-f]{8,16}\\b`, 'gi');
+/** True when [start, end) of text lies inside a date or period label (Q3 2026, 2026-09-30, since 2025.). */
+export function inLabel(text: string, start: number, end: number): boolean {
+  for (const m of text.matchAll(LABEL_TOKENS)) if (m.index! <= start && end <= m.index! + m[0].length) return true;
+  return false;
+}
 /**
  * Roman numerals: two or more letters in upper case, or four or more in any case
  * (so "mmxxv" is caught but the words "mix", "did" and "dim" are not).
@@ -88,7 +94,6 @@ export const UNITS: readonly Unit[] = ['count', '$', '%', 'sqft', 'leases'];
 /** Digits the user typed (e.g. "3-bedroom") may be echoed in a title or subtitle; nowhere else. */
 const ECHO_KEYS = new Set(['title', 'subtitle']);
 /** Whole numeric tokens as the user typed them, with a $ or # prefix and a % suffix kept attached. */
-const NUM_TOKEN = /[$#]?\p{N}+(?:[.,]\p{N}+)*%?/gu;
 const escRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Remove each echoed token where it stands whole: not inside a longer number or word ("$1800k"), same prefix and suffix. */
 const stripEcho = (t: string, echo: ReadonlySet<string>) => {
@@ -127,7 +132,16 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
   for (const it of ev.items) if (hashOf(it.result) !== it.result_hash) errs.push(`evidence ${it.key}: result hash mismatch`);
   let nums = 0;
   const mainQ = ev.items.find((i) => i.key === 'main')?.recipe?.question ?? '';
-  const echo = new Set([...(mainQ.normalize('NFKC').match(NUM_TOKEN) ?? []), ...(mainQ.match(new RegExp(NUMBER_WORD_SRC, 'gi')) ?? []).map((w) => w.toLowerCase())]);
+  // a title may echo a number from the question only if the computation used it (normalized:
+  // $1,800 = 1.8k = eighteen hundred = 1800); TENACITY 601bdfa HIGH
+  const mainItem = ev.items.find((i) => i.key === 'main');
+  const used = store && mainItem ? usedInputs(mainItem.recipe?.intent, store) : new Set<number>();
+  const echo = new Set<string>();
+  for (const id of identifierTokens(mainQ, mainItem?.recipe?.intent)) echo.add(id);
+  // vague quantity words with no value of their own ("pair", "couple", "first") echo as typed, as before
+  const valued = new Set(statedNumbers(mainQ).flatMap((n) => n.surface.toLowerCase().split(/[\s-]+/)));
+  for (const w of mainQ.match(new RegExp(NUMBER_WORD_SRC, 'gi')) ?? []) if (!valued.has(w.toLowerCase())) echo.add(w.toLowerCase());
+  for (const n of statedNumbers(mainQ)) if (used.has(n.value)) { if (/\p{N}/u.test(n.surface)) echo.add(n.surface); else for (const w of n.surface.toLowerCase().split(/[\s-]+/)) echo.add(w); }
   const walk = (x: unknown, path: string, exempt: boolean): void => {
     if (typeof x === 'number' && LAYOUT_NUM.test(path) && Number.isInteger(x)) return;
     if (typeof x === 'number') { errs.push(`${path}: bare number ${x} has no ref`); return; }
