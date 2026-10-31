@@ -45,9 +45,9 @@ Tooltips (`data-tip`) are shown on heatmap cells, scatter points and trend point
 | `POST /api/ask {question}` | panel `{id, question, spec, errors, parse_path, model_down}` |
 | `GET/POST /api/panels`, `DELETE /api/panels/:id` | JSON store (`GENUI_STORE`, default `.genui/`) |
 | `POST /api/panels` | 422 unless the spec equals the server's re-pick for its question |
-| `POST /api/actions {panel_id}` | draft from a saved recommendation panel only. It re-validates, and the id is `D-` plus the first 8 hex of the spec's sha256, so it is idempotent: the same spec returns the same draft. This replaces the Design draft's `D-0142` style below. |
+| `POST /api/actions {panel_id}` | draft from a saved recommendation panel only. It re-validates, and the id is `D-` plus the first 12 hex of the spec's sha256, so it is idempotent: the same spec returns the same draft. On an id hit the stored full sha256 must match, else 409 (collision). Approve, reject and undo re-run `panelErrors` on the source panel and return 409 if it no longer matches. This replaces the Design draft's `D-0142` style below. |
 | `GET /api/action-center` | `{template:'action_center', state, drafts}` |
-| `POST /api/actions/D-xxxxxxxx/intent {kind:'set_state', to}` or `{kind:'undo'}` | approved or rejected only from draft or pending_approval; undo restores the previous state |
+| `POST /api/actions/D-xxxxxxxxxxxx/intent {kind:'set_state', to}` or `{kind:'undo'}` | approved or rejected only from draft or pending_approval; undo restores the previous state |
 
 <!-- Proposed section for docs/genui-props.md (feat/genui-dashboard). Draft from genui-design v0.3. Paste as-is; do not treat as merged. -->
 ## Action Center (surface 11: draft review queue)

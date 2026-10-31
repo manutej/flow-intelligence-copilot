@@ -89,7 +89,7 @@ test('genui action center: approve only marks a draft, undo restores it, and not
     const id = d.id;
     assert.ok(d.cites.length > 0 && d.cites.every((c: { source: { template_id: string } }) => c.source.template_id === ask.id));
     assert.equal((await j('/api/actions', { panel_id: 'nope' })).error !== undefined, true);
-    assert.match(id, /^D-[0-9a-f]{8}$/);
+    assert.match(id, /^D-[0-9a-f]{12}$/);
     assert.equal(d.state, 'pending_approval');
     const ap = await j(`/api/actions/${id}/intent`, { kind: 'set_state', to: 'approved' });
     assert.equal(ap.state, 'approved');

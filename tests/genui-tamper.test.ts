@@ -79,7 +79,7 @@ test('N2: a forged panel cannot be saved or drafted; N8: drafts are idempotent a
     assert.equal((await post('/api/panels', p)).status, 200);
     const d1 = await (await post('/api/actions', { panel_id: p.id })).json();
     const d2 = await (await post('/api/actions', { panel_id: p.id })).json();
-    assert.match(d1.id, /^D-[0-9a-f]{8}$/);
+    assert.match(d1.id, /^D-[0-9a-f]{12}$/);
     assert.equal(d2.id, d1.id);
     assert.equal(d1.cites[0].value, p.spec.props.impacts[0].value.v);
   } finally { srv.close(); }

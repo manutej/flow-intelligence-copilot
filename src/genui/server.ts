@@ -24,7 +24,7 @@ const parse = parseConfigFromEnv();
 const readJson = <T>(f: string, d: T): T => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) as T; } catch { return d; } };
 const writeJson = (f: string, v: unknown) => { fs.mkdirSync(STORE_DIR, { recursive: true }); fs.writeFileSync(`${f}.tmp`, JSON.stringify(v, null, 2)); fs.renameSync(`${f}.tmp`, f); };
 type DraftState = 'draft' | 'pending_approval' | 'approved' | 'rejected';
-interface DraftAction { id: string; action_type: string; target: { label: string; entity_id?: string }; question: string; state: DraftState; created_at: string; updated_at?: string; draft_text: string; cites: Array<{ label: string; value: number; unit: string; source: { template_id: string; template: string; field: string } }>; prev_state?: DraftState }
+interface DraftAction { id: string; action_type: string; target: { label: string; entity_id?: string }; question: string; state: DraftState; created_at: string; updated_at?: string; draft_text: string; cites: Array<{ label: string; value: number; unit: string; source: { template_id: string; template: string; field: string } }>; prev_state?: DraftState; panel_id?: string; spec_sha256?: string }
 /** ISO 8601 with the box's own offset (UTC-6 for Manu). */
 const localIso = (d = new Date()) => { const o = -d.getTimezoneOffset(), a = Math.abs(o); return new Date(d.getTime() + o * 6e4).toISOString().slice(0, 19) + (o >= 0 ? '+' : '-') + String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0'); };
 const body = (req: IncomingMessage) => new Promise<any>((ok) => { let b = ''; req.on('data', (c: Buffer) => { b += c; if (b.length > 1e5) req.destroy(); }); req.on('end', () => { try { ok(JSON.parse(b || '{}')); } catch { ok({}); } }); });
@@ -32,8 +32,9 @@ const send = (res: ServerResponse, code: number, v: unknown, type = 'application
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.woff2': 'font/woff2', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain' };
 
 const canon = (x: unknown): string => JSON.stringify(x, (_k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v);
-/** Draft ids are keyed on the spec hash, so the same panel always maps to the same draft. */
-const draftId = (spec: unknown) => `D-${createHash('sha256').update(canon(spec)).digest('hex').slice(0, 8)}`;
+const specSha = (spec: unknown) => createHash('sha256').update(canon(spec)).digest('hex');
+/** Draft ids are keyed on the spec hash (48 bits), so the same panel always maps to the same draft. */
+const draftId = (spec: unknown) => `D-${specSha(spec).slice(0, 12)}`;
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost):\d+$/;
 
 /**
@@ -85,10 +86,12 @@ export function createServer() {
         if (!panel || panel.spec?.template !== 'recommendation_card') return send(res, 400, { error: 'a draft comes only from a saved recommendation panel' });
         if ((await panelErrors(panel.question, panel.spec, undefined, store)).length) return send(res, 422, { error: 'saved panel no longer matches the verified spec' });
         const id = draftId(panel.spec);
-        const existing = all.find((x) => x.id === id); if (existing) return send(res, 200, existing);
+        const sha = specSha(panel.spec);
+        const existing = all.find((x) => x.id === id);
+        if (existing) return existing.spec_sha256 === sha ? send(res, 200, existing) : send(res, 409, { error: 'draft id collision: a different spec holds this id' });
         const pr = panel.spec.props;
         const draft: DraftAction = {
-          id, action_type: panel.spec.intent.split('.')[1] ?? 'recommendation', target: { label: pr.title },
+          id, panel_id: panel.id, spec_sha256: sha, action_type: panel.spec.intent.split('.')[1] ?? 'recommendation', target: { label: pr.title },
           question: panel.question, state: 'pending_approval', created_at: localIso(),
           draft_text: [pr.title, pr.summary, ...pr.reasoning].join('\n'),
           cites: pr.impacts.map((im: any, k: number) => ({ label: im.label, value: im.value.v, unit: im.unit === '$' ? '$' : im.unit === '%' ? '%' : 'count', source: { template_id: panel.id, template: 'recommendation_card', field: `props.impacts[${k}].value` } })),
@@ -99,11 +102,15 @@ export function createServer() {
         const drafts = readJson<DraftAction[]>(ACTIONS, []);
         return send(res, 200, { template: 'action_center', state: drafts.length ? 'ready' : 'empty', drafts, filter: 'all' });
       }
-      const m = url.pathname.match(/^\/api\/actions\/(D-[0-9a-f]{8})\/intent$/);
+      const m = url.pathname.match(/^\/api\/actions\/(D-[0-9a-f]{12})\/intent$/);
       if (m && req.method === 'POST') {
         const it = await body(req);
         const all = readJson<DraftAction[]>(ACTIONS, []); const d = all.find((x) => x.id === m[1]);
         if (!d) return send(res, 404, { error: 'no such draft' });
+        // re-validate on every state change: the source panel must still exist and match a fresh re-pick
+        const src = readJson<any[]>(PANELS, []).find((x) => x.id === d.panel_id);
+        if (!src || specSha(src.spec) !== d.spec_sha256 || (await panelErrors(src.question, src.spec, undefined, store)).length)
+          return send(res, 409, { error: 'source panel no longer matches the verified spec; nothing changed', state: d.state });
         if (it.kind === 'set_state' && (it.to === 'approved' || it.to === 'rejected') && (d.state === 'draft' || d.state === 'pending_approval')) { d.prev_state = d.state; d.state = it.to; }
         else if (it.kind === 'undo' && d.prev_state) { d.state = d.prev_state; delete d.prev_state; }
         else return send(res, 409, { error: 'state change not allowed', state: d.state });
