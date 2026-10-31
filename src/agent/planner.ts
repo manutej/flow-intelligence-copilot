@@ -18,7 +18,7 @@ import type {
   UnitQuerySummary,
 } from '../domain/metrics.ts';
 import type { PropertyResolutionResult } from '../domain/resolver.ts';
-import { droppedBreakdownOf, scalarLeftoverOf, parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
+import { droppedBreakdownOf, scalarLeftoverOf, parseQueryIntent, requestedBreakdowns, askedDimension, type ParsedQueryIntent } from './intent.ts';
 import {
   dataCoverage,
   describeCoverage,
@@ -474,6 +474,17 @@ export function executeCompositionalPlan(
     );
     toolCalls.push(mktTrace);
     const mkt = mktTrace.rawOutput as MarketingQuerySummary;
+    // A per-source answer names one source. It answers only a question that
+    // ranks, names a source, or asks for a source breakdown; any other reads
+    // as the overall ratio for the matched scope.
+    const sourceShaped =
+      intent.aggregation !== 'value' ||
+      intent.mentionedSources.length > 0 ||
+      requestedBreakdowns(question).some((b) => b.dim === 'source') ||
+      askedDimension(question) === 'source';
+    const scope = !matchedPropIds || matchedPropIds.length === 0 ? 'Across the operating portfolio' : matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)}` : `Across the ${matchedPropIds.length} matching buildings`;
+    const noOverall = (what: string) =>
+      unknown(`FlowIQ reports ${what} by listing source; it does not carry one overall ${what} for "${question.trim()}", so it will not answer a different question in its place.`);
 
     if (intent.measure === 'reallocation_leases') {
       const realloc = mkt.deadSpendReallocation;
@@ -538,6 +549,17 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'tour_to_lease_rate') {
+      if (!sourceShaped) {
+        const toured = mkt.byPropertySource.reduce((a, r) => a + r.touredCount, 0);
+        const leased = mkt.byPropertySource.reduce((a, r) => a + r.leasedFromCreatedLeadsCount, 0);
+        if (toured === 0) return noOverall('tour-to-lease rate');
+        const pct = Math.round((leased / toured) * 1000) / 10;
+        return finalize(
+          `${scope} in ${mkt.windowLabel}, ${leased} of ${plural(toured, 'toured deduplicated lead')} signed a lease, an overall tour-to-lease rate of ${pct.toFixed(1)}% across all sources.`,
+          { percent: pct },
+          mkt.citations.slice(0, 12),
+        );
+      }
       const row = mkt.byPropertySource[0];
       if (!row) {
         const src = intent.mentionedSources[0] ?? 'the requested source';
@@ -596,6 +618,7 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_lead_and_tour') {
+      if (!sourceShaped) return noOverall('cost per lead and per tour');
       const srcRow = mkt.bySource[0];
       if (!srcRow) {
         return finalize(
@@ -618,6 +641,15 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_lead') {
+      if (!sourceShaped) {
+        if (mkt.totalLeadsCreated === 0) return noOverall('cost per lead');
+        const usd = Math.round((mkt.totalSpendUsd / mkt.totalLeadsCreated) * 100) / 100;
+        return finalize(
+          `${scope} in ${mkt.windowLabel}, the overall cost per lead was ${fmtUsd(usd)} (${fmtUsd(mkt.totalSpendUsd)} posted spend / ${plural(mkt.totalLeadsCreated, 'deduplicated lead')} from all sources).`,
+          { usd },
+          mkt.citations.slice(0, 8),
+        );
+      }
       const row =
         matchedPropIds && matchedPropIds.length === 1
           ? mkt.byPropertySource[0]
@@ -650,6 +682,7 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_tour') {
+      if (!sourceShaped) return noOverall('cost per tour');
       const eligible = mkt.byPropertySource.filter(
         (r) => r.isPaidSource && r.costPerTourUsd !== null,
       );
@@ -719,18 +752,6 @@ export function executeCompositionalPlan(
 
     // Default Marketing Measure: Cost Per Signed Lease (CPSL)
     const wantHighest = intent.aggregation === 'argmax';
-    // The CPSL answers below name one source. A question that neither ranks
-    // nor asks about sources wants the overall ratio, which they do not carry.
-    const asksSources =
-      intent.aggregation !== 'value' ||
-      intent.mentionedSources.length > 0 ||
-      /\b(?:sources?|channels?|listing\s+sites?|vendors?|platforms?|best|cheapest|which|what\s+paid)\b/i.test(question) ||
-      /\bhow\s+many\s+(?:signed\s+)?leases\b/i.test(question);
-    if (!asksSources) {
-      return unknown(
-        `FlowIQ ranks cost per signed lease by listing source; it does not carry one overall cost per signed lease for "${question.trim()}", so it will not answer a different question in its place.`,
-      );
-    }
     const isSingleBuilding =
       Boolean(matchedPropIds && matchedPropIds.length === 1);
 
@@ -759,6 +780,7 @@ export function executeCompositionalPlan(
           mkt.citations.slice(0, 8),
         );
       }
+      if (!sourceShaped) return noOverall('cost per signed lease');
       const named = intent.mentionedSources;
       if (named.length === 1 && !wantHighest) {
         // A question about one named source gets that source's figure, or
@@ -811,6 +833,7 @@ export function executeCompositionalPlan(
       );
     }
 
+    if (!sourceShaped) return noOverall('cost per signed lease');
     const eligible = mkt.bySource
       .filter(
         (s) =>
