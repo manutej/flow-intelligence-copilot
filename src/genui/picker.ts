@@ -1,5 +1,9 @@
 import { extreme } from '../domain/extreme.ts';
-import { currencyGuard, twoMeasureGuard, misspeltBuildingGuard } from './guards.ts';
+import { twoMeasureGuard, misspeltBuildingGuard } from './guards.ts';
+import { currencyAsk, withoutCurrency, type CurrencyAsk } from './currency.ts';
+import { rateProvider } from '../fx/provider.ts';
+import { convert, rateLabel } from '../fx/convert.ts';
+import { billedRows } from './spec.ts';
 import { askFlowIqCopilot, type CopilotTurnResult } from '../agent/copilot.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from '../agent/intent.ts';
 import { executeCompositionalPlan } from '../agent/planner.ts';
@@ -10,7 +14,7 @@ import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import type { ParseConfig } from '../agent/model-parse.ts';
 import { readSettings } from './inputs.ts';
 import { resolvePropertiesFromText } from '../domain/resolver.ts';
-import { inLabel, specErrors, type ChartSpec, type Evidence, type EvidenceItem, type Num, type PanelState, type Unit } from './spec.ts';
+import { inLabel, OVERALL, specErrors, type ChartSpec, type Evidence, type EvidenceItem, type Num, type PanelState, type Unit } from './spec.ts';
 
 /**
  * Deterministic intent-to-insight picker (rule table: docs/genui-rules.md).
@@ -290,7 +294,9 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
     items.push(...bd);
     const want = byDim === 'source' ? [...new Set([...store.paidSources, ...(intent.paidOnly ? [] : store.organicSources)] as string[])] : (namedBuildings(store, core) ?? store.operatingProperties).map((p) => p.name);
     const sorted = [...bd].sort((a, b) => (b.result[k!] as number) - (a.result[k!] as number) || a.label.localeCompare(b.label));
-    return done({ ...base, ...partial(want, bd.map((x) => x.label)), template: 'sorted_bar', props: { items: sorted.map((x) => ({ label: x.label, value: num(x, k!) })), unit, sort: 'desc', highlight: [], good_direction: gd } });
+    // the engine's answer is the pooled figure; labelled Overall so no bar is read as having it
+    const answer = base.answer === undefined ? undefined : OVERALL + base.answer;
+    return done({ ...base, ...(answer ? { answer } : {}), ...partial(want, bd.map((x) => x.label)), template: 'sorted_bar', props: { items: sorted.map((x) => ({ label: x.label, value: num(x, k!) })), unit, sort: 'desc', highlight: [], good_direction: gd } });
   }
   // argmax / argmin / compare: breakdown chart
   if (ag === 'argmax' || ag === 'argmin' || ag === 'compare' || intent.topK) {
@@ -375,9 +381,13 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   // shapes answered with another question's number: another currency, two measures, a misspelt building
   // (an answer the engine already declined keeps its own reason, except a misspelt building)
   const r0 = (turn.envelope.result ?? {}) as Record<string, unknown>;
+  // a currency other than USD: "billed in CAD" filters the currency column, "in CAD" converts
+  // through the currency tool; neither is answered with the USD figure alone
+  const ask = r0.refused ? null : currencyAsk(coreQuestion(question));
+  if (ask) return currencyPanel(input, question, ask, store, parse, turn);
   if (!r0.refused) {
     const answered = !r0.unknown && !r0.clarification_needed;
-    const why = (answered ? currencyGuard(question) ?? twoMeasureGuard(coreQuestion(question), intentOf(turn)) : null) ?? misspeltBuildingGuard(coreQuestion(question), store);
+    const why = (answered ? twoMeasureGuard(coreQuestion(question), intentOf(turn)) : null) ?? misspeltBuildingGuard(coreQuestion(question), store);
     if (why) {
       const t = { ...turn, clarifyingQuestion: why, clarifyOptions: [] } as CopilotTurnResult;
       return done({ ...clarify('unknown', t, tid, question), title: 'Not answered as asked' });
@@ -416,4 +426,57 @@ export function breakdownDimension(q: string): 'source' | 'building' | null {
   const m = /\b(?:by|per|for\s+each|each|broken\s+down\s+by|split\s+by)\s+(?:listing\s+|lead\s+|marketing\s+)?(sources?|channels?|buildings?|propert(?:y|ies)|assets?)\b(?!\s+(?:class|type|manager|management))/i.exec(q);
   if (!m) return null;
   return /^(?:source|channel)/i.test(m[1]) ? 'source' : 'building';
+}
+
+/**
+ * A currency ask. The engine answers the USD question beneath it; then
+ * - filter ("billed in CAD"): the spend rows whose currency column is the code, in native
+ *   currency, with their posted USD at the policy rate (labelled a fixed policy rate);
+ * - convert ("in CAD", "(CAD)", "CAD spend"): one USD figure converted by the currency tool at
+ *   the provider's daily rate, shown with its source and as-of date.
+ * Any failure (no rate, a stale rate, a non-money or multi-figure panel) is a typed IDK; there
+ * is never a fixed-rate or USD fallback.
+ */
+async function currencyPanel(input: string, question: string, ask: CurrencyAsk, store: PortfolioStore, parse: ParseConfig | null, turn0: CopilotTurnResult): Promise<Panel> {
+  let q2 = withoutCurrency(question, ask);
+  if (ask.mode === 'filter') q2 = q2.replace(/^(?:the\s+)?(?:invoices?|bills?|rows?)\b/i, 'Total marketing spend');
+  const session: FairHousingSession = { refusedEarlier: false };
+  const turn = await askFlowIqCopilot(coreQuestion(q2), { mode: 'deterministic', store, parse, session });
+  const tid = turn.envelope.proof?.template_id ?? turn0.envelope.proof?.template_id ?? 'guard';
+  const idk = (why: string, title: string): Panel => ({ question: input, spec: { ...clarify('unknown', { ...turn, clarifyingQuestion: why, clarifyOptions: [] } as CopilotTurnResult, tid, question), title }, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null });
+  const base = pick({ question: q2, turn, store });
+  const sp = base.spec;
+  const main = base.evidence.items.find((i) => i.key === 'main');
+  const usd = (main?.result as Record<string, unknown> | undefined)?.usd;
+  if (sp.template !== 'kpi' || sp.props.unit !== '$' || !main || typeof usd !== 'number' || sp.props.value.ref !== 'items.main.result.usd' || specErrors(sp, base.evidence, store).length)
+    return idk(`The question names a currency (${ask.surface}), and FlowIQ converts or filters one verified US-dollar figure at a time; this question does not have one, so nothing is charted.`, 'Currency not applied');
+  const out = (spec: ChartSpec, items: readonly EvidenceItem[]): Panel => {
+    const evidence = { items };
+    const errors = specErrors(spec, evidence, store);
+    return { question: input, spec: errors.length ? clarify('unknown', turn, spec.intent, question, 'error_data') : spec, evidence, errors, parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
+  };
+  if (ask.mode === 'filter') {
+    const intent = intentOf(turn)!;
+    const months = intent.dateWindow.months ?? [];
+    const named = resolvePropertiesFromText(store, coreQuestion(q2)).matched;
+    const ids = (named.length ? named : store.operatingProperties).map((p) => p.propertyId);
+    const sources = intent.mentionedSources ?? [];
+    const r = billedRows(store, ask.code, months, ids, sources);
+    if (r.rows === 0) return idk(`No posted spend rows in this window are billed in ${ask.code} (the currency column holds ${[...new Set(store.spend.map((x) => x.currency))].join(' and ')}), so there is nothing to total.`, `Nothing billed in ${ask.code}`);
+    const item: EvidenceItem = { key: 'billed', label: `spend billed in ${ask.code}`, template_id: main.template_id, result: r, result_hash: hashOf(r), citations: [], recipe: main.recipe, tool: { kind: 'billed', code: ask.code, months, propertyIds: ids, sources } };
+    const { answer: _drop, ...rest } = sp;
+    return out({ ...rest, title: `${sp.title}, billed in ${ask.code} only`, insight: `Only spend rows whose currency column is ${ask.code}`, template: 'kpi',
+      props: { value: { v: r.native, ref: 'items.billed.result.native' }, unit: ask.code, good_direction: sp.props.good_direction,
+        secondary: [{ label: `posted in USD at the FlowIQ policy rate (fixed, not a market rate)`, value: { v: r.usd_posted, ref: 'items.billed.result.usd_posted' }, unit: '$' }, { label: 'spend rows', value: { v: r.rows, ref: 'items.billed.result.rows' }, unit: 'count' }],
+        fx: { rate: { v: r.policy_rate, ref: 'items.billed.result.policy_rate' }, quote: ask.code, source: 'FlowIQ policy CAD rate (fixed)', as_of: null, rate_label: 'fixed policy rate, USD per CAD' } } }, [main, item]);
+  }
+  const got = await rateProvider().rate('USD', ask.code, new Date());
+  if (!got.ok) return idk(`No usable USD to ${ask.code} rate (${got.source}: ${got.reason.replace('_', ' ')}), so no converted figure is shown. FlowIQ never falls back to a fixed rate or to the US-dollar figure.`, `No ${ask.code} rate available`);
+  const q = got.quote;
+  const r = { usd, rate: q.rate, converted: convert(usd, q), base: 'USD', quote: ask.code, source: q.source, as_of: q.asOf, label: rateLabel(q), ...(q.fallbackFrom ? { fallback_from: q.fallbackFrom } : {}) };
+  const item: EvidenceItem = { key: 'fx', label: `USD to ${ask.code}`, template_id: main.template_id, result: r, result_hash: hashOf(r), citations: [], recipe: main.recipe, tool: { kind: 'fx' } };
+  return out({ ...sp, title: `${sp.title}, in ${ask.code}`, insight: `Converted from US dollars by the currency tool`,
+    props: { value: { v: r.converted, ref: 'items.fx.result.converted' }, unit: ask.code, good_direction: sp.props.good_direction,
+      secondary: [{ label: 'computed in USD', value: sp.props.value, unit: '$' }, { label: `${ask.code} per USD`, value: { v: q.rate, ref: 'items.fx.result.rate' }, unit: 'rate' }],
+      fx: { rate: { v: q.rate, ref: 'items.fx.result.rate' }, quote: ask.code, source: q.source, as_of: q.asOf, rate_label: r.label } } }, [...base.evidence.items, item]);
 }

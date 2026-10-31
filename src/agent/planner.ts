@@ -107,6 +107,21 @@ export function executeCompositionalPlan(
     };
   };
 
+  // "which building had the highest X": the text names the one building with the extreme
+  // per-building value (extreme(): a tie names every tied building, never one by input order)
+  const ranking = <T extends { propertyId: string; propertyName: string; citations: readonly CitationId[] }>(
+    rows: readonly T[], value: (r: T) => number, fmt: (v: number) => string, what: string, key: string, window: string, all: readonly CitationId[],
+  ): PlannerTurnOutput => {
+    const want = intent.aggregation === 'argmin' ? 'min' : 'max';
+    const ex = extreme(rows, value, want);
+    const list = ex.ranked.map((p) => `${p.propertyName} [${p.propertyId}]: ${fmt(value(p))}`).join(' vs. ');
+    const dir = want === 'max' ? 'highest' : 'lowest';
+    if (!ex.winner)
+      return finalize(`${window}${ex.tied.map((p) => `${p.propertyName} (${p.propertyId})`).join(' and ')} tied for the ${dir} ${what} at ${fmt(ex.best ?? 0)} (${list}).`, { tied: ex.tied.map((p) => p.propertyId), [key]: ex.best }, all.slice(0, 8));
+    return finalize(`${window}${ex.winner.propertyName} (${ex.winner.propertyId}) had the ${dir} ${what} at ${fmt(value(ex.winner))} (${list}).`, { property_id: ex.winner.propertyId, [key]: value(ex.winner) }, [...new Set([...ex.winner.citations.slice(0, 6), ...all.slice(0, 2)])]);
+  };
+  const ranked = intent.aggregation === 'argmax' || intent.aggregation === 'argmin';
+
   // Honest "I don't know" (FLOW-103): answer only what the exports can answer.
   const unknown = (
     reason: string,
@@ -1049,6 +1064,13 @@ export function executeCompositionalPlan(
       );
     }
 
+    if (ranked && intent.measure === 'renewal_rate' && leaseSummary.byProperty.length > 1) {
+      const rows = leaseSummary.byProperty.filter((p) => p.renewedCount + p.pendingCount + p.noticeGivenCount > 0);
+      return ranking(rows, (p) => p.renewalRatePercent, (v) => `${v.toFixed(1)}%`, 'renewal rate', 'percent', '', leaseSummary.citations);
+    }
+    if (ranked && intent.measure === 'lease_count' && leaseSummary.byProperty.length > 1) {
+      return ranking(leaseSummary.byProperty, (p) => p.matchingLeaseCount, (v) => String(v), 'count of matching leases', 'count', '', leaseSummary.citations);
+    }
     if (intent.measure === 'renewal_rate') {
       // the count in the text is the rate's own denominator: renewed + pending + notice given
       // (not-due leases have no decision yet), and the window is named only when leases were
@@ -1376,6 +1398,10 @@ export function executeCompositionalPlan(
   }
 
   if (intent.measure === 'avg_market_rent') {
+    if (ranked && unitSummary.byProperty.length > 1) {
+      const rows = unitSummary.byProperty.filter((p) => p.filteredUnitCount > 0);
+      return ranking(rows, (p) => p.filteredAvgMarketRentUsd, (v) => fmtUsd(v), 'average market rent', 'usd', '', unitSummary.citations);
+    }
     if (unitSummary.byProperty.length === 1) {
       const propRow = unitSummary.byProperty[0];
       return finalize(

@@ -757,8 +757,12 @@ function parseQueryIntentRaw(
         question,
       ));
 
+  // a renewal rate is better higher: "best" is the highest, "worst" the lowest
+  const renewalDir = /\b(best|worst)\s+(?:lease\s+)?renewal\s+rates?\b/i.exec(question)?.[1].toLowerCase();
   const aggregation: IntentAggregation = isClassComparison
     ? 'compare'
+    : renewalDir
+      ? (renewalDir === 'best' ? 'argmax' : 'argmin')
     : /\b(lowest|least|cheapest|minimum|fewest|best\s+cost|most\s+cost[-\s]effective|most\s+efficient)\b/i.test(
           question,
         )
@@ -1064,8 +1068,14 @@ function parseQueryIntentRaw(
 
     let measure: IntentMeasure = 'lease_count';
     if (
-      /\bhow\s+many\s+of\s+them\s+have\s+renewed\b/i.test(question) &&
-      /\bhow\s+many\s+leases\b/i.test(question)
+      (/\bhow\s+many\s+of\s+them\s+have\s+renewed\b/i.test(question) &&
+        /\bhow\s+many\s+leases\b/i.test(question)) ||
+      // "how many leases end in Q3 and how many have renewed": two counts, the ending set and
+      // the renewed share of it, not the renewed leases alone
+      (hasEndSignal &&
+        /\bhow\s+many\s+leases\b[^?]*?\b(?:and|,)\s+how\s+many\s+(?:of\s+(?:them|those)\s+)?(?:have\s+|had\s+|were\s+|got\s+)?renew(?:ed|als?)\b/i.test(question)) ||
+      (hasEndSignal && /\brenewed\b/i.test(question) &&
+        /\b(?:and|,)\s+how\s+many\s+(?:leases\s+)?(?:end|expire)/i.test(question))
     ) {
       measure = 'ending_and_renewed';
     } else if (isClassComparison && /\brenewal\s+rate\b/i.test(question)) {
@@ -1136,7 +1146,8 @@ function parseQueryIntentRaw(
     unitMeasure = 'occupied_share';
   } else if (
     /\b(average|avg\.?|mean)\b.*\b(?:market\s+)?rent\b/i.test(measureText(question)) &&
-    /\b(average|avg\.?|mean)\s+sq\.?\s*ft\b/i.test(question)
+    (/\b(average|avg\.?|mean)\s+sq\.?\s*ft\b/i.test(question) ||
+      /\brent\s+(?:and|&)\s+(?:the\s+)?(?:average\s+)?(?:sq\.?\s*ft|sqft|square\s+f(?:oo|ee)t(?:age)?)\b/i.test(question))
   ) {
     unitMeasure = 'avg_market_rent_and_sqft';
   } else if (/\b(average|avg\.?|mean)\s+(?:sq\.?\s*ft|square\s+f(?:oo|ee)t(?:age)?)\b/i.test(question)) {

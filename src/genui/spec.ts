@@ -5,6 +5,8 @@ import { boundPolicyValues, identifierTokens, statedNumbers, usedInputs } from '
 import { executeCompositionalPlan } from '../agent/planner.ts';
 import { verifyAnswerEnvelope } from '../domain/guards.ts';
 import type { PortfolioStore } from '../data/schema.ts';
+import { convert } from '../fx/convert.ts';
+import type { RateQuote } from '../fx/provider.ts';
 
 /**
  * GenUI ChartSpec: a closed set of templates. The picker fills a spec from
@@ -15,7 +17,9 @@ import type { PortfolioStore } from '../data/schema.ts';
 export const TEMPLATES = ['kpi', 'kpi_delta', 'sorted_bar', 'trend_line', 'ranked_table', 'stacked_bar',
   'grid_heatmap', 'scatter', 'recommendation_card', 'clarify_card'] as const;
 export type Template = (typeof TEMPLATES)[number];
-export type Unit = 'count' | '$' | '%' | 'sqft' | 'leases';
+/** '$' is USD; an ISO 4217 code is an amount in that currency (from the currency tool); 'rate' is units per USD. */
+export type Unit = 'count' | '$' | '%' | 'sqft' | 'leases' | 'rate' | (string & { readonly __iso4217?: true });
+const ISO = new Set((Intl as unknown as { supportedValuesOf(k: string): string[] }).supportedValuesOf('currency'));
 
 export interface Num { readonly v: number; readonly ref: string }
 /** One verified result: an answering envelope that passed verifyAnswerEnvelope. */
@@ -28,7 +32,11 @@ export interface EvidenceItem {
   readonly citations: readonly string[];
   /** How to recompute this item: the validator re-runs it and compares every value. */
   readonly recipe: { readonly question: string; readonly intent: ParsedQueryIntent };
+  /** A tool item (currency conversion or a currency-column filter): checked by its own rule, not re-run through the planner. */
+  readonly tool?: { readonly kind: 'fx' } | { readonly kind: 'billed'; readonly code: string; readonly months: readonly string[]; readonly propertyIds: readonly string[]; readonly sources: readonly string[] };
 }
+/** The rate shown on a converted panel: bound to the fx evidence item by specErrors. */
+export interface FxProp { readonly rate: Num; readonly quote: string; readonly source: string; readonly as_of: string | null; readonly rate_label: string }
 export interface Evidence { readonly items: readonly EvidenceItem[] }
 
 export type PanelState = 'ready' | 'loading' | 'empty' | 'partial' | 'error_data' | 'model_down';
@@ -39,7 +47,7 @@ interface Envelope {
 }
 type Col = { key: string; label: string; unit?: Unit; align: 'left' | 'right' };
 export type ChartSpec = Envelope & (
-  | { readonly template: 'kpi'; readonly props: { value: Num; unit?: Unit; secondary?: ReadonlyArray<{ label: string; value: Num; unit: Unit }>; good_direction: Dir } }
+  | { readonly template: 'kpi'; readonly props: { value: Num; unit?: Unit; secondary?: ReadonlyArray<{ label: string; value: Num; unit: Unit }>; good_direction: Dir; fx?: FxProp } }
   | { readonly template: 'kpi_delta'; readonly props: { value: Num; unit?: Unit; prior: Num; vs: string; current_label: string; good_direction: Dir } }
   | { readonly template: 'sorted_bar'; readonly props: { items: ReadonlyArray<{ label: string; value: Num }>; unit?: Unit; sort: 'desc'; highlight: readonly string[]; good_direction: Dir } }
   | { readonly template: 'trend_line'; readonly props: { x: readonly string[]; series: ReadonlyArray<{ name: string; values: readonly Num[]; primary?: boolean }>; unit?: Unit; good_direction: Dir } }
@@ -91,7 +99,7 @@ const ROMAN = { test: (t: string) => (t.match(/\p{L}+/gu) ?? []).some((w) => ROM
 /** Numbers written in words are figures too. */
 const NUMBER_WORD_SRC = '\\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen|half|quarter|double|triple|twice|thrice|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|couple|score|nil|several|few|handful|trio|quadruple|dozens|pairs?|myriad)\\b';
 const NUMBER_WORDS = new RegExp(NUMBER_WORD_SRC, 'i');
-export const UNITS: readonly Unit[] = ['count', '$', '%', 'sqft', 'leases'];
+export const UNITS: readonly Unit[] = ['count', '$', '%', 'sqft', 'leases', 'rate'];
 /** Digits the user typed (e.g. "3-bedroom") may be echoed in a title or subtitle; nowhere else. */
 const ECHO_KEYS = new Set(['title', 'subtitle']);
 const escRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -113,7 +121,9 @@ const LAYOUT_NUM = /\.props\.limit$/;
 // intent and source are ids, not text: id-shaped, intent equal to the main item's template id, and
 // source equal to intent or "guard" (checked below; TENACITY 59be53f MEDIUM).
 // unit is checked against the closed UNITS list instead; the rest are bound by panelErrors' full re-pick
-const TEXT_EXEMPT = new Set(['answer', 'options', 'restatement', 'question', 'citations']);
+/** The label on a breakdown's pooled answer, so it is not read as any one bar's figure. */
+export const OVERALL = 'Overall: ';
+const TEXT_EXEMPT = new Set(['answer', 'options', 'restatement', 'question', 'citations', 'as_of', 'rate_label']);
 /** Template ids such as "marketing.spend_h1_vs_q3.value", or "guard" for guard cards. */
 /** A clarify card names the template its own question parses to (or a guard id). */
 const clarifyId = (spec: ChartSpec, store?: PortfolioStore): string | undefined =>
@@ -129,7 +139,10 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
   if (spec.answer !== undefined && store) {
     const main = ev.items.find((i) => i.key === 'main');
     const fresh = main && runRecipe(main, store);
-    if (!fresh || fresh.answer !== spec.answer) errs.push('spec.answer: not the recomputed answer text');
+    // a breakdown (bars with no winner) may label the pooled answer "Overall: ", nothing else
+    const pooled = spec.template === 'sorted_bar' && spec.props.highlight.length === 0;
+    const text = pooled && spec.answer.startsWith(OVERALL) ? spec.answer.slice(OVERALL.length) : spec.answer;
+    if (!fresh || fresh.answer !== text) errs.push('spec.answer: not the recomputed answer text');
   }
   if (!TEMPLATES.includes(spec.template)) errs.push(`template ${String(spec.template)} is not in the closed set`);
   for (const it of ev.items) if (hashOf(it.result) !== it.result_hash) errs.push(`evidence ${it.key}: result hash mismatch`);
@@ -148,7 +161,7 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
   const walk = (x: unknown, path: string, exempt: boolean): void => {
     if (typeof x === 'number' && LAYOUT_NUM.test(path) && Number.isInteger(x)) return;
     if (typeof x === 'number') { errs.push(`${path}: bare number ${x} has no ref`); return; }
-    if (typeof x === 'string' && path.endsWith('.unit')) { if (!(UNITS as readonly string[]).includes(x)) errs.push(`${path}: unit ${JSON.stringify(x)} is not in the closed list`); return; }
+    if (typeof x === 'string' && path.endsWith('.unit')) { if (!(UNITS as readonly string[]).includes(x) && !(ISO.has(x) && x !== 'USD')) errs.push(`${path}: unit ${JSON.stringify(x)} is not in the closed list`); return; }
     if (path === 'spec.intent' || path === 'spec.source') {
       const main = ev.items.find((i) => i.key === 'main');
       if (typeof x !== 'string' || !ID_SHAPE.test(x)) errs.push(`${path}: not an id: ${JSON.stringify(x)}`);
@@ -170,6 +183,13 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
   };
   walk(spec, 'spec', false);
   errs.push(...highlightErrors(spec));
+  if (spec.template === 'kpi' && spec.props.fx) {
+    const fx = spec.props.fx, it = ev.items.find((i) => i.key === 'fx' || i.key === 'billed');
+    const r = (it?.result ?? {}) as Record<string, unknown>;
+    if (!it) errs.push('spec.props.fx: no rate evidence');
+    else if (it.key === 'fx' && (fx.source !== r.source || fx.as_of !== r.as_of || fx.quote !== r.quote || fx.rate_label !== r.label)) errs.push('spec.props.fx: rate source, date or label is not the fx evidence');
+    else if (it.key === 'billed' && (fx.as_of !== null || fx.quote !== r.code)) errs.push('spec.props.fx: a policy rate has no as-of date');
+  }
   if (spec.template !== 'clarify_card' && nums === 0) errs.push('a chart spec must carry at least one traced number');
   return errs;
 }
@@ -190,6 +210,7 @@ function runRecipe(it: EvidenceItem, store: PortfolioStore) {
 export function recomputeErrors(ev: Evidence, store: PortfolioStore): string[] {
   const errs: string[] = [];
   for (const it of ev.items) {
+    if (it.tool) { errs.push(...toolErrors(it, ev, store)); continue; }
     if (it.key === 'main' && it.recipe && JSON.stringify(sortKeys(it.recipe.intent)) !== JSON.stringify(sortKeys(parseQueryIntent(it.recipe.question, store))))
       errs.push('evidence main: recipe intent is not the lexicon reading of its question');
     const fresh = runRecipe(it, store);
@@ -199,6 +220,36 @@ export function recomputeErrors(ev: Evidence, store: PortfolioStore): string[] {
     if (h !== it.result_hash || hashOf(it.result) !== h) errs.push(`evidence ${it.key}: stored result differs from recomputed result`);
   }
   return errs;
+}
+
+/**
+ * Tool items. fx: the converted amount is the tool's arithmetic on the main item's USD figure
+ * (the rate itself is the provider's quote, carried with its source and as-of date). billed:
+ * the currency-column filter is recomputed from the spend rows.
+ */
+function toolErrors(it: EvidenceItem, ev: Evidence, store: PortfolioStore): string[] {
+  const errs: string[] = [];
+  const r = it.result as Record<string, unknown>;
+  if (hashOf(it.result) !== it.result_hash) errs.push(`evidence ${it.key}: result hash mismatch`);
+  if (it.tool!.kind === 'fx') {
+    const main = ev.items.find((i) => i.key === 'main')?.result as Record<string, unknown> | undefined;
+    if (!main || main.usd !== r.usd) errs.push(`evidence ${it.key}: converted USD is not the main item's usd`);
+    if (typeof r.rate !== 'number' || !(r.rate > 0) || typeof r.usd !== 'number' || r.converted !== convert(r.usd, { rate: r.rate } as RateQuote)) errs.push(`evidence ${it.key}: converted amount is not usd x rate`);
+    if (typeof r.source !== 'string' || typeof r.as_of !== 'string') errs.push(`evidence ${it.key}: a rate needs its source and as-of date`);
+  } else {
+    const t = it.tool as Extract<EvidenceItem['tool'], { kind: 'billed' }>;
+    const fresh = billedRows(store, t.code, t.months, t.propertyIds, t.sources);
+    if (hashOf(fresh) !== it.result_hash) errs.push(`evidence ${it.key}: stored filter result differs from the recomputed spend rows`);
+  }
+  return errs;
+}
+/** Spend rows whose currency column is `code`, in the months, buildings and (if any) sources given; void rows excluded. */
+export function billedRows(store: PortfolioStore, code: string, months: readonly string[], propertyIds: readonly string[], sources: readonly string[] = []) {
+  const ids = new Set(propertyIds), ms = new Set(months), src = new Set(sources);
+  const rows = store.spend.filter((r) => r.currency === code && !r.isVoid && ms.has(r.month) && ids.has(r.propertyId) && (!src.size || src.has(r.source)));
+  const native = Math.round(rows.reduce((a, r) => a + r.rawAmount, 0) * 100) / 100;
+  const usd = Math.round(rows.reduce((a, r) => a + r.effectiveUsd, 0) * 100) / 100;
+  return { code, rows: rows.length, native, usd_posted: usd, policy_rate: code === 'CAD' ? store.policy.cadToUsdRate : 1 };
 }
 
 /**
