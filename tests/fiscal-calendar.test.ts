@@ -25,5 +25,6 @@ test('FY used as a place resolves to Fulton Yards', async () => {
   const e = await ask('Total marketing spend at FY in Q2 2026?');
   assert.notEqual(r(e).unknown, true, e.answer);
   const byName = await ask('Total marketing spend at Fulton Yards in Q2 2026?');
-  assert.equal(e.answer, byName.answer);
+  assert.ok(e.answer.endsWith(byName.answer), e.answer);
+  assert.match(e.answer, /Fulton Yards \(P03\)/);
 });
