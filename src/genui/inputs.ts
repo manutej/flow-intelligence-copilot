@@ -43,7 +43,7 @@ function spelledValue(s: string): number | null {
 /** Every number stated in a text: numerals (with $ , . k m) and spelled-out numbers, normalized. */
 export function statedNumbers(raw: string): StatedNumber[] {
   const t = prep(raw), out: StatedNumber[] = [];
-  for (const m of t.matchAll(NUMERAL)) { const v = numeralValue(m[0]); if (v !== null) out.push({ start: m.index!, end: m.index! + m[0].length, value: v, surface: m[0].trim() }); }
+  for (const m of t.matchAll(NUMERAL)) { const v = numeralValue(m[0]); if (v !== null) { const lead = m[0].length - m[0].trimStart().length; out.push({ start: m.index! + lead, end: m.index! + m[0].length, value: v, surface: m[0].trim() }); } }
   for (const m of t.matchAll(SPELLED)) { const v = spelledValue(m[0]); if (v !== null) out.push({ start: m.index!, end: m.index! + m[0].length, value: v, surface: m[0] }); }
   return out.sort((a, b) => a.start - b.start);
 }
@@ -198,16 +198,27 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
       const own = nums.filter((n) => n.start >= a && n.end <= b && !isRank(t, n) && n.unit !== 'duration');
       if (i === last) { if (own.some((n) => !isConsumed(n) && !parserUsed(n))) ambiguous = true; return; }
       if (isSetting([a, b])) { if (own.some((n) => !isConsumed(n))) ambiguous = true; return; }
-      if (first >= 0 && i > first && !(standalone?.(t.slice(a, b)) ?? false)) ambiguous = true;
-      // the learner with no setting stated: a stray number in a non-question turn may be a prior
-      // ("Use 4 instead"), so fail closed; self-contained questions are not read (Q77)
-      else if (first < 0 && learner(intent) && own.length && !(standalone?.(t.slice(a, b)) ?? false)) ambiguous = true;
+      // standalone exempts a turn only from the referring check: its own numbers must still be read
+      // by its own parse (delete that mention and re-parse), else they are left over
+      const sa = standalone?.(t.slice(a, b)) ?? false, turnBase = parse?.(t.slice(a, b));
+      const leftover = own.filter((n) => !(parse && parse(t.slice(a, n.start) + t.slice(n.end, b)) !== turnBase));
+      if (first >= 0 && i > first) { if (!sa || leftover.length) ambiguous = true; return; }
+      // the learner with no setting stated (Q77 governs): a stray number in an earlier turn may be a
+      // prior ("Use 4 instead"); a count of a noun ("3 properties") or the pronoun "one" is not
+      if (first < 0 && learner(intent) && (sa ? leftover : own).some((n) => !isCount(t, n, b) && !/^(?:one|a|an)$/i.test(n.surface))) ambiguous = true;
     });
   }
   const equal = (b: Binding) => b.value === b.param.value(store) && UNITS_OK[b.param.id].includes(b.unit);
   // the policy value stated where the computation does not use that setting ("Is beta0 3250?"): neutral
   if (bindings.some((b) => equal(b) && !b.param.applies(intent))) ambiguous = true;
   return { bindings, ambiguous, mismatch: bindings.find((b) => !equal(b)) ?? null };
+}
+// a number directly followed by a plural noun counts things ("3 properties", "12 numbers"); a unit,
+// a setting name or an edit word after it ("4 instead", "1800 dollars", "4 leases") does not
+const NOT_COUNT = /^(?:usd|dollars|bucks|cads?|leases|pseudo|priors?|alphas?|betas?|instead|please|thanks|times|percent|points|ks)$/i;
+function isCount(t: string, n: StatedNumber, end: number): boolean {
+  const w = /^\s+(\p{L}{3,}s)\b/u.exec(t.slice(n.end, end));
+  return !!w && !NOT_COUNT.test(w[1]);
 }
 /** The setting values a computation used, as stated in the question and equal to policy: the only setting numbers a title may echo. */
 export function boundPolicyValues(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore): Set<number> {

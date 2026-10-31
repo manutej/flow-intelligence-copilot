@@ -133,10 +133,9 @@ test('accounting by mention, scoped to setting and referring turns (TENACITY bed
   }
   // earlier turns that do not refer back do not block (Q77 rule)
   assert.equal((await askPanel('beta0 = 3250 → How many units at P01 have 2 bedrooms? → ' + Q, store)).spec.template, 'sorted_bar');
-  // accepted trade-off (fail-closed decision on 7ce8377): before the learner, an earlier non-question
-  // turn holding a stray number cannot be told from "Use 4 instead", so these two now clarify
+  // earlier turns that do not refer back do not block (Q77 rule): a number counting a noun is not a prior
   for (const q of ['Show me 3 properties with highest vacancy → ' + Q, 'Thanks for the 12 numbers. → ' + Q])
-    assert.equal((await askPanel(q, store)).spec.title, 'Could you restate the question?', q);
+    assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
 });
 test('after a setting, only standalone questions may follow it; with no setting, earlier turns are not read (TENACITY cfd6ff3)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
@@ -160,4 +159,15 @@ test('learner with no setting: a non-question earlier turn with a stray number f
   // non-learner Q77 rows still chart; learner earlier turns with no number still chart
   assert.equal((await askPanel('Thanks for the 12 numbers. → How many vacant units are at Halsted & Lake?', store)).spec.template, 'kpi');
   for (const c of ['Thanks!', 'Use the marketing data', 'What was spend in 2025?']) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+});
+test('turn-leading numbers, standalone turns with tails, counts and the pronoun one (TENACITY 6ca99c4)', async () => {
+  const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
+  const P = 'How many units at P01 have 2 bedrooms?';
+  for (const q of ['Hi → 1800 → ' + Q, 'ok → 4 → ' + Q, 'thanks → 4 instead → ' + Q, 'Hi → 1800 please → ' + Q,
+    'beta0 = 3250 → ' + P + ' use 1800 instead → ' + Q, 'beta0 = 3250 → What was spend in 2025? 4 instead → ' + Q,
+    P + ' use 4 instead → ' + Q, 'What was spend in 2025? 4 instead → ' + Q, 'beta0 = 3250 → ' + P + ' also 1800 → ' + Q])
+    assert.equal((await askPanel(q, store)).spec.title, 'Could you restate the question?', q);
+  for (const q of ['Hello there, quick one → ' + Q, 'Show me 3 properties with highest vacancy and use that list → ' + Q,
+    'How many units at P01 have 2 bedrooms, actually? → ' + Q, P + ' → ' + Q, 'beta0 = 3250 → ' + P + ' → ' + Q])
+    assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
 });
