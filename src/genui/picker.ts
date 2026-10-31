@@ -78,9 +78,18 @@ const CUT: readonly RegExp[] = [
   /\s*\b(vs\.?|versus|against) (unit )?(size|sq ?ft|square (feet|footage))( by (building|property))?/gi,
   /,?\s*\b(as a )?(ranked( table)?|ranking|leaderboard)\b/gi,
 ];
+/** Wordings that mean the same as one the engine reads: a joiner is "and", a unit size is its
+ * square footage, and the highest or lowest "vacancy" of a building is its vacancy rate. */
+const SAME_AS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\s+(?:along\s+with|together\s+with|as\s+well\s+as)\s+/gi, ' and '],
+  [/\band\s+(?:its|their)\s+/gi, 'and '],
+  [/\bunit\s+sizes?\b/gi, 'square footage'],
+  [/\b((?:highest|lowest|most|least|best|worst)\s+vacancy)\b(?!\s+(?:rates?|units?|counts?|%|percent))/gi, '$1 rate'],
+];
 export function coreQuestion(q: string): string {
   let s = q;
   for (const re of CUT) s = s.replace(re, '');
+  for (const [re, to] of SAME_AS) s = s.replace(re, to);
   s = s.replace(/\s+([?.,])/g, '$1').replace(/\s{2,}/g, ' ').trim();
   return s ? s[0].toUpperCase() + s.slice(1) : q;
 }
@@ -461,12 +470,12 @@ async function currencyPanel(input: string, question: string, ask: CurrencyAsk, 
     const errors = specErrors(spec, evidence, store);
     return { question: input, spec: errors.length ? clarify('unknown', turn, spec.intent, question, 'error_data') : spec, evidence, errors, parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
   };
+  const intent = intentOf(turn)!;
+  const months = intent.dateWindow.months ?? [];
+  const named = resolvePropertiesFromText(store, coreQuestion(q2)).matched;
+  const ids = (named.length ? named : store.operatingProperties).map((p) => p.propertyId);
+  const sources = intent.mentionedSources ?? [];
   if (ask.mode === 'filter') {
-    const intent = intentOf(turn)!;
-    const months = intent.dateWindow.months ?? [];
-    const named = resolvePropertiesFromText(store, coreQuestion(q2)).matched;
-    const ids = (named.length ? named : store.operatingProperties).map((p) => p.propertyId);
-    const sources = intent.mentionedSources ?? [];
     const r = billedRows(store, ask.code, months, ids, sources);
     if (r.rows === 0) return idk(`No posted spend rows in this window are billed in ${ask.code} (the currency column holds ${[...new Set(store.spend.map((x) => x.currency))].join(' and ')}), so there is nothing to total.`, `Nothing billed in ${ask.code}`);
     const item: EvidenceItem = { key: 'billed', label: `spend billed in ${ask.code}`, template_id: main.template_id, result: r, result_hash: hashOf(r), citations: [], recipe: main.recipe, tool: { kind: 'billed', code: ask.code, months, propertyIds: ids, sources } };
@@ -480,7 +489,9 @@ async function currencyPanel(input: string, question: string, ask: CurrencyAsk, 
   if (!got.ok) return idk(`No usable USD to ${ask.code} rate (${got.source}: ${got.reason.replace('_', ' ')}), so no converted figure is shown. FlowIQ never falls back to a fixed rate or to the US-dollar figure.`, `No ${ask.code} rate available`);
   const q = got.quote;
   // spend with CAD-billed rows was posted to USD at the kit's fixed rate (KIT_README); said so, not undone
-  const kit = /\bCAD converted at\b/.test(sp.answer ?? '') ? { kit_rate: store.policy.cadToUsdRate } : {};
+  // only when the figure is built from spend rows and some of its rows were billed in CAD
+  const cadRows = main.template_id.startsWith('marketing.') ? billedRows(store, 'CAD', months.length ? months : [...new Set(store.spend.map((x) => x.month))], ids, sources).rows : 0;
+  const kit = cadRows > 0 ? { kit_rate: store.policy.cadToUsdRate, kit_cad_rows: cadRows } : {};
   const r = { usd, rate: q.rate, converted: convert(usd, q), base: 'USD', quote: ask.code, source: q.source, as_of: q.asOf, label: rateLabel(q), ...kit, ...(q.fallbackFrom ? { fallback_from: q.fallbackFrom } : {}) };
   const item: EvidenceItem = { key: 'fx', label: `USD to ${ask.code}`, template_id: main.template_id, result: r, result_hash: hashOf(r), citations: [], recipe: main.recipe, tool: { kind: 'fx' } };
   return out({ ...sp, answer: fxAnswer(r), title: `${sp.title}, in ${ask.code}`, insight: `Converted from US dollars by the currency tool`,

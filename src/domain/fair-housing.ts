@@ -22,6 +22,8 @@ export interface ProtectedClassRule {
   readonly protectedClass: string;
   readonly legalBasis: string;
   readonly pattern: RegExp;
+  /** Plain spellings of the category's terms; a word one typo from one of them reads as it. */
+  readonly terms?: readonly string[];
 }
 
 const FHA = 'Fair Housing Act, 42 U.S.C. § 3604';
@@ -31,54 +33,63 @@ const CHICAGO = 'Chicago Fair Housing Ordinance (Municipal Code § 5-8-030)';
 export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
   {
     protectedClass: 'familial status',
+    terms: ['children', 'pregnant', 'pregnancy', 'expecting', 'families', 'mothers', 'toddlers', 'teenagers'],
     legalBasis: FHA,
     pattern:
-      /\b(famil(?:y|ies)|children|child|kids?|minors|toddlers?|little\s+ones|babies|baby|prams?|buggies|moms?|mothers?|kid[-\s]?free|teen(?:ager)?s?|pregnan\w*|expecting\s+mothers?|strollers?|school[-\s]?age|parents?|adults?[-\s]only|no[-\s]kids|child[-\s]?free|empty[-\s]?nesters?|dinks?)\b/i,
+      /\b(famil(?:y|ies)|children|child|kids?|minors|toddlers?|little\s+ones|babies|baby|prams?|buggies|moms?|mothers?|kid[-\s]?free|teen(?:ager)?s?|pregnan\w*|expecting\s+mothers?|expecting(?=\s*(?:[?.!;,]|$|a\s+(?:baby|child)|twins))|strollers?|school[-\s]?age|parents?|adults?[-\s]only|no[-\s]kids|child[-\s]?free|empty[-\s]?nesters?|dinks?)\b/i,
   },
   {
     protectedClass: 'race or color',
+    terms: ['hispanic', 'african', 'caucasian', 'ethnicity', 'minorities', 'racial'],
     legalBasis: FHA,
     pattern:
       /\b(race|racial\w*|color(?:ed)?\s+(?:people|tenants|renters|residents|applicants)|people\s+of\s+color|blacks?|whit(?:es?|er|est)|asian|hispanic|latin[oax]s?|african[-\s]american|caucasian|native\s+americans?|indigenous|pacific\s+islanders?|biracial|mixed[-\s]race|ethnic\w*|minorit(?:y|ies)|demographics?|[\w]+[-\s]skinned|skin\s+(?:colou?r|tone)s?)\b/i,
   },
   {
     protectedClass: 'national origin, ancestry, or language',
+    terms: ['immigrant', 'immigrants', 'immigration', 'foreigner', 'foreigners', 'citizen', 'citizens', 'citizenship', 'undocumented', 'mexican', 'ancestry'],
     legalBasis: `${FHA} and ${IHRA}`,
     pattern:
-      /\b(national\s+origin|ancestry|immigrants?|immigration(?:\s+status)?|visa\s+status|(?:legal\s+)?status\s+in\s+the\s+(?:us|u\.s\.|country)|foreign(?:ers)?|citizens?(?:hip)?|non[-\s]?citizens?|undocumented|green\s+card|accents?|english[-\s]speak\w*|(?:first|native)\s+language|mother\s+tongue|perfect\s+english|from\s+(?:mexico|china|india|poland|another\s+country|abroad)|native\s+english|speaks?\s+(?:good\s+|fluent\s+)?english|spanish[-\s]speak\w*|non[-\s]english|esl|mexican\w*|indian|chinese|polish|arab\w*|middle\s+eastern|puerto\s+ricans?|somalis?|nigerians?|koreans?|vietnamese|filipin[oa]s?|russians?|ukrainians?|haitians?|syrians?|afghans?|(?:people|tenants|renters|applicants|callers|families)\s+from\s+(?!the\s+(?:website|portal|ils|ad)\b)[a-z]+)\b/i,
+      /\b(national\s+origin|ancestry|immigrants?|immigration(?:\s+status)?|visa\s+status|(?:legal\s+)?status\s+in\s+the\s+(?:us|u\.s\.|country)|foreign(?:ers)?|citizens?(?:hip)?|non[-\s]?citizens?|undocumented|green\s+card|accents?|english[-\s]speak\w*|(?:first|native)\s+language|mother\s+tongue|perfect\s+english|from\s+(?:mexico|china|india|poland|another\s+country|abroad)|born\s+(?:abroad|overseas|outside\s+(?:the\s+)?(?:us|u\.s\.|country|united\s+states))|(?:foreign|overseas)[-\s]born|native\s+english|speaks?\s+(?:good\s+|fluent\s+)?english|spanish[-\s]speak\w*|non[-\s]english|esl|mexican\w*|indian|chinese|polish|arab\w*|middle\s+eastern|puerto\s+ricans?|somalis?|nigerians?|koreans?|vietnamese|filipin[oa]s?|russians?|ukrainians?|haitians?|syrians?|afghans?|(?:people|tenants|renters|applicants|callers|families)\s+from\s+(?!the\s+(?:website|portal|ils|ad)\b)[a-z]+)\b/i,
   },
   {
     protectedClass: 'religion',
+    terms: ['religion', 'religious', 'muslim', 'muslims', 'christian', 'christians', 'catholic', 'catholics', 'jewish', 'church', 'synagogue', 'mosque'],
     legalBasis: FHA,
     pattern:
       /\b(religio(?:n|us)|church[-\s]?go\w*|churchgo\w*|church|christians?|catholics?|protestants?|muslims?|islamic|jewish|jews?|hindus?|sikhs?|mormons?|evangelicals?|orthodox|hasidi?c?m?|amish|quakers?|jehovah\w*|buddhists?|atheists?|synagogue|mosque|temple[-\s]go\w*|faith[-\s]based|devout|pray\w*|hijabs?|turbans?|yarmulkes?|kippahs?)\b/i,
   },
   {
     protectedClass: 'sex, gender identity, or sexual orientation',
+    terms: ['transgender', 'lesbian', 'lesbians', 'gender', 'female', 'females'],
     legalBasis: `${FHA} and ${IHRA}`,
     pattern:
       /\b(men|women|males?|females?|guys|ladies|gentlemen|gender|sex|transgender|trans\s+(?:people|tenants|renters)|gay|lesbians?|lgbt\w*|queer|sexual\s+orientation)\b/i,
   },
   {
     protectedClass: 'disability',
+    terms: ['disabled', 'disability', 'disabilities', 'wheelchair', 'wheelchairs', 'handicapped', 'medical', 'conditions', 'illness', 'impaired'],
     legalBasis: `${FHA}(f)`,
     pattern:
       /\b(disab(?:ility|ilities|led)|handicap\w*|wheelchairs?|walkers?|canes?|crutches|mobility\s+aids?|service\s+(?:animals?|dogs?)|emotional\s+support\s+animals?|esas?|blind|deaf|mental(?:ly)?\s+ill\w*|mental\s+health|hiv|aids\s+patients?|recovering\s+addicts?|medical\s+(?:needs?|conditions?|issues?|histor(?:y|ies)|records?)|health\s+(?:conditions?|issues?|problems?)|illness\w*|chronic(?:ally)?\s+ill\w*|impair\w*)\b/i,
   },
   {
     protectedClass: 'age',
+    terms: ['elderly', 'seniors', 'retirees'],
     legalBasis: `${IHRA} and ${CHICAGO}`,
     pattern:
       /\b((?:over|under)\s+\d{2}(?!\s*(?:lbs?|pounds?|kg|kilos?|sq|sqft|square|feet|ft|%|percent|units?|dollars?|usd|\$|k\b|days?|months?|minutes?))|(?:older|younger)\s+than\s+[\w-]+|born\s+(?:before|after|in)\s+\d{4}|mature\s+(?:people|tenants|renters|residents|applicants)|age[sd]?\s+\d{2}|seniors?|elderly|older\s+(?:people|tenants|renters|residents|applicants|adults)|retirees?|young(?:er)?\s+(?:people|tenants|renters|residents|applicants|professionals|adults|crowd)|millennials?|gen[-\s]?z|boomers?)\b/i,
   },
   {
     protectedClass: 'marital status',
+    terms: ['married', 'unmarried', 'divorced', 'widowed'],
     legalBasis: `${IHRA} and ${CHICAGO}`,
     pattern:
       /\b(marital\s+status|married(?:\s+couples?)?|unmarried|singles|single\s+(?:people|tenants|renters|women|men|mothers?|fathers?|parents?)|divorc\w*|widow\w*|couples?)\b/i,
   },
   {
     protectedClass: 'source of income',
+    terms: ['voucher', 'vouchers', 'welfare'],
     legalBasis: `${CHICAGO} and ${IHRA}`,
     pattern:
       /\b(section[-\s]?(?:8|eight)|(?:housing|rental|public)\s+assistance|on\s+assistance|subsidi[sz]ed|housing\s+choice\s+vouchers?|vouchers?|voucher\s+holders?|hcv|welfare|ssi|ssdi|disability\s+income|source\s+of\s+income)\b/i,
@@ -93,6 +104,7 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
   },
   {
     protectedClass: 'military or veteran status',
+    terms: ['veteran', 'veterans', 'military'],
     legalBasis: IHRA,
     pattern: /\b(military|veterans?|active[-\s]duty|discharge\s+status)\b/i,
   },
@@ -108,6 +120,12 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
 const CLASS_TERM = PROTECTED_CLASS_RULES.map((r) => r.pattern.source.replace(/^\\b/, '').replace(/\\b$/, '')).join('|');
 
 const ACTION_RULES: ReadonlyArray<{ readonly action: FairHousingAction; readonly pattern: RegExp }> = [
+  {
+    // Identification with the trait as the subject: "list the non-citizens", "who at Fulton Yards
+    // is an immigrant"; the people are named by the trait itself
+    action: 'identification',
+    pattern: new RegExp(`\\b(?:list|show|find|name|identify|flag|count|which|how\\s+many)\\s+(?:all\\s+)?(?:of\\s+)?(?:the\\s+|our\\s+)?(?:${CLASS_TERM})\\b(?!\\s+(?:units?|apartments?|offices?|leases?|vouchers?|programs?|leave|lawyers?)\\b)|\\bwho\\b[^.?!;]*?\\b(?:is|are)\\s+(?:an?\\s+)?(?:${CLASS_TERM})\\b`, 'i'),
+  },
   {
     action: 'exclusion',
     pattern:
@@ -141,7 +159,7 @@ const ACTION_RULES: ReadonlyArray<{ readonly action: FairHousingAction; readonly
     // have medical needs", "list tenants who are pregnant"); a protected trait is not a column
     action: 'identification',
     pattern:
-      /\b(?:which|who|whom|whose|what|list|identify|find|flag|show|count|name|how\s+many)\b[^.?!;]*?\b(?:residents?|tenants?|renters?|applicants?|occupants?|households?|prospects?|people|persons|callers|lessees|leaseholders)\b|\b(?:residents?|tenants?|renters?|applicants?|occupants?|households?|people)\s+(?:who|that|with)\b/i,
+      /\b(?:which|who|whom|whose|list|identify|find|flag|show|count|name|how\s+many)\b[^.?!;]*?\b(?:residents?|tenants?|renters?|applicants?|occupants?|households?|prospects?|people|persons|callers|lessees|leaseholders)\b|\bwhat\s+(?:residents?|tenants?|renters?|applicants?|occupants?|people)\b|\b(?:residents?|tenants?|renters?|applicants?|occupants?|households?|people)\s+(?:who|that|with)\b/i,
   },
   {
     action: 'targeting',
@@ -358,11 +376,37 @@ function unreadableInstruction(raw: string): boolean {
   });
 }
 
+/** The voucher terms of the source-of-income category. */
+const VOUCHER_RE = /\b(?:section[-\s]?(?:8|eight)|housing\s+choice\s+vouchers?|vouchers?|voucher\s+holders?|hcv)\b/i;
+
 /** Each word spelled backwards, so "milsuM" names its group too. */
 const reversedWords = (text: string) => text.split(' ').map((w) => [...w].reverse().join('')).join(' ');
 
+/** Edit distance where swapping two adjacent letters is one edit. */
+function typoDistance(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+  }
+  return d[a.length][b.length];
+}
+const CATEGORY_TERMS = [...new Set(PROTECTED_CLASS_RULES.flatMap((r) => r.terms ?? []))];
+/**
+ * A word one edit or one swap from a category term ("pregant", "disbled", "imigrants") reads as
+ * that term. Words of six or more letters only, same first letter, and never a word some category
+ * already matches as written.
+ */
+export function correctCategoryTypos(text: string): string {
+  return text.replace(/\b[a-z]{6,}\b/g, (w) => {
+    if (CATEGORY_TERMS.includes(w) || PROTECTED_CLASS_RULES.some((r) => r.pattern.test(w))) return w;
+    const hit = CATEGORY_TERMS.find((t) => t[0] === w[0] && Math.abs(t.length - w.length) <= 1 && typoDistance(w, t) === 1);
+    return hit ?? w;
+  });
+}
+
 export function classifyFairHousingRequest(rawQuestion: string): FairHousingClassification {
-  const text = translate(normalizeForFairHousing(rawQuestion), rawQuestion).replace(COMPARED_WITH_REST_RE, ' than others');
+  const text = correctCategoryTypos(translate(normalizeForFairHousing(rawQuestion), rawQuestion)).replace(COMPARED_WITH_REST_RE, ' than others');
   const restricted = RESTRICTION_OVERRIDE_RE.test(text);
   const clauses = text.split(CLAUSE_SPLIT_RE).filter((c) => c.trim());
   const isInclusive = (c: string) => !restricted && INCLUSIVE_RE.test(c);
@@ -386,12 +430,19 @@ export function classifyFairHousingRequest(rawQuestion: string): FairHousingClas
     return named && acts.length > 0 && !(DESCRIPTIVE_RE.test(x) && !acts.some((a) => a !== 'differential'));
   });
   const directed = personDirected(question);
+  // Manu's ruling (2026-10-31): every question about housing-choice vouchers or Section 8 is
+  // refused for now, aggregates included; the source-of-income category decides, not a phrase
+  // An inclusive instruction ("write a listing that says we accept vouchers") is not a question
+  // and keeps its allow; a question that welcomes vouchers is still a voucher question.
+  const asks = /\?\s*$/.test(text) || /^(?:do|does|did|is|are|was|were|what|which|who|how|can|could|list|show|count|find)\b/.test(text);
+  const voucher = VOUCHER_RE.test(question) || (asks && VOUCHER_RE.test(text));
+  if (voucher && !actions.includes('identification')) actions.push('identification');
   // Deny by default, whatever the script: an instruction FlowIQ cannot read
   // cannot be shown to be lawful.
   const unreadable = unreadableInstruction(rawQuestion);
   if ((directed || unreadable) && !actions.includes('differential')) actions.push('differential');
   return {
-    refused: refusedByClass || directed || unreadable,
+    refused: refusedByClass || directed || unreadable || voucher,
     actions,
     classes,
     inclusive,
