@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { classifyFrame, composeFrame, frameModelConfig, parseFrameAnswers } from '../src/agent/frame-model.ts';
+import { classifyFrame, composeFrame, frameModelClock, frameModelConfig, parseFrameAnswers, resetFrameModelState } from '../src/agent/frame-model.ts';
 
 describe('L2 frame model: typed sub-questions', () => {
   it('accepts only the closed schema', () => {
@@ -38,6 +38,7 @@ describe('L2 frame model: a fallback is reported, never hidden or retried', () =
     const realFetch = globalThis.fetch;
     const realError = console.error;
     let calls = 0;
+    resetFrameModelState();
     process.env.FLOWIQ_FRAME_MODEL = 'openrouter:test/model';
     process.env.OPENROUTER_API_KEY = 'test-key';
     globalThis.fetch = (async () => { calls++; return reply(); }) as typeof fetch;
@@ -53,15 +54,18 @@ describe('L2 frame model: a fallback is reported, never hidden or retried', () =
   const store = loadPortfolioStore();
 
   it('surfaces a 429 on the turn and does not call again during Retry-After', async () => {
-    await withModel(() => new Response('{}', { status: 429, headers: { 'retry-after': '1' } }), async (calls) => {
+    // The clock is frozen, so however slow a turn is under load, the second
+    // call lands inside the 1 s Retry-After window.
+    const realNow = frameModelClock.now;
+    frameModelClock.now = () => 1_000_000;
+    try { await withModel(() => new Response('{}', { status: 429, headers: { 'retry-after': '1' } }), async (calls) => {
       const t = await askFlowIqCopilot('How many vacant units at Kedzie Works?', { store });
       assert.deepEqual(t.envelope.result, { count: 14 });
       assert.match(t.llmFallbackReason ?? '', /HTTP 429/);
       const t2 = await askFlowIqCopilot('How many vacant units at Kedzie Works?', { store });
       assert.match(t2.llmFallbackReason ?? '', /429/);
       assert.equal(calls(), 1);
-    });
-    await new Promise((r) => setTimeout(r, 1100));
+    }); } finally { frameModelClock.now = realNow; resetFrameModelState(); }
   });
 
   it('labels a model-added refusal with the model that made it', async () => {
@@ -75,6 +79,7 @@ describe('L2 frame model: a fallback is reported, never hidden or retried', () =
 async function withModelRefusalOnly(store: ReturnType<typeof loadPortfolioStore>) {
   const env = { m: process.env.FLOWIQ_FRAME_MODEL, k: process.env.OPENROUTER_API_KEY };
   const realFetch = globalThis.fetch;
+  resetFrameModelState();
   process.env.FLOWIQ_FRAME_MODEL = 'openrouter:test/model';
   process.env.OPENROUTER_API_KEY = 'test-key';
   const body = JSON.stringify({ choices: [{ message: { content: '{"group":"age","treatment":true}' } }] });
