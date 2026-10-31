@@ -526,7 +526,9 @@ function closedVocabulary(
       ? `FlowIQ has no meaning for ${unparsed.map((w) => `"${w}"`).join(', ')} in this question`
       : /\bhow\s+many\b/i.test(qRecord.question) && !hasCount(r)
         ? 'the question asks "how many" but the plan computed no count'
-        : null;
+        : TWO_QUESTIONS_RE.test(asked) && figureCount(r) < 2
+          ? 'the question asks two "how many" questions but the plan computed one figure'
+          : null;
   if (leftover && unparsed.length === 0) return out;
   if (why === null) return namedAlias(out, qRecord.question, store);
   if (unparsed.length > 0) {
@@ -555,6 +557,14 @@ function closedVocabulary(
 
 function withoutMetaInstructions(question: string): string {
   return question.normalize('NFKC').replace(/[\p{Cf}]/gu, '').replace(META_INSTRUCTION_RE, ' ');
+}
+
+/** Two "how many" (or "how much") clauses joined in one question ask for two figures. */
+const TWO_QUESTIONS_RE = /\bhow\s+(?:many|much)\b[^?]*\b(?:and|&|plus)\s+how\s+(?:many|much)\b/i;
+
+/** Top-level figures in a result; a breakdown or id list is not a second figure. */
+function figureCount(r: Record<string, unknown>): number {
+  return Object.values(r).filter((v) => typeof v === 'number').length;
 }
 
 /** "How many" is answered by a whole-number count, not by money, a rate or a size. */
