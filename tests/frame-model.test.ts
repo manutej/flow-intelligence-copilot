@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { classifyFrame, composeFrame, frameModelConfig, parseFrameAnswers } from '../src/agent/frame-model.ts';
+import { classifyFrame, composeFrame, frameModelConfig, parseFrameAnswers, resetFrameModelPause, setFrameModelClock } from '../src/agent/frame-model.ts';
 
 describe('L2 frame model: typed sub-questions', () => {
   it('accepts only the closed schema', () => {
@@ -53,6 +53,9 @@ describe('L2 frame model: a fallback is reported, never hidden or retried', () =
   const store = loadPortfolioStore();
 
   it('surfaces a 429 on the turn and does not call again during Retry-After', async () => {
+    // a fixed injected clock: the pause cannot expire however slow the turn runs
+    let t0 = 1_000_000; setFrameModelClock(() => t0); resetFrameModelPause();
+    try {
     await withModel(() => new Response('{}', { status: 429, headers: { 'retry-after': '1' } }), async (calls) => {
       const t = await askFlowIqCopilot('How many vacant units at Kedzie Works?', { store });
       assert.deepEqual(t.envelope.result, { count: 14 });
@@ -60,11 +63,15 @@ describe('L2 frame model: a fallback is reported, never hidden or retried', () =
       const t2 = await askFlowIqCopilot('How many vacant units at Kedzie Works?', { store });
       assert.match(t2.llmFallbackReason ?? '', /429/);
       assert.equal(calls(), 1);
+      t0 += 1000; // Retry-After 1 s has now passed on the injected clock
+      await askFlowIqCopilot('How many vacant units at Kedzie Works?', { store });
+      assert.equal(calls(), 2);
     });
-    await new Promise((r) => setTimeout(r, 1100));
+    } finally { setFrameModelClock(); resetFrameModelPause(); }
   });
 
   it('labels a model-added refusal with the model that made it', async () => {
+    resetFrameModelPause();
     const t = await withModelRefusalOnly(store);
     assert.equal(t.modelUsed, 'test/model');
     assert.equal(t.providerUsed, 'openrouter');

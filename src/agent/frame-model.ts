@@ -72,6 +72,11 @@ export const composeFrame = (a: FrameAnswers): boolean => a.group !== 'none' && 
  * (1 s when the header is missing, 60 s when it is not a number) has passed, so a rate limit never turns into a retry storm.
  */
 let pausedUntil = 0;
+let now: () => number = () => Date.now();
+/** Test hook: inject a clock (omit to restore the wall clock). */
+export function setFrameModelClock(clock?: () => number): void { now = clock ?? (() => Date.now()); }
+/** Test hook: clear a Retry-After pause so one test's 429 cannot leak into the next. */
+export function resetFrameModelPause(): void { pausedUntil = 0; }
 
 export async function classifyFrame(question: string, timeoutMs = 8000): Promise<FrameVerdict> {
   const cfg = frameModelConfig();
@@ -89,7 +94,7 @@ export async function classifyFrame(question: string, timeoutMs = 8000): Promise
     }
     return { refuse: false, answers: null, fallbackReason: null };
   }
-  if (Date.now() < pausedUntil) {
+  if (now() < pausedUntil) {
     return off(`frame model rate-limited (HTTP 429), not called again until ${new Date(pausedUntil).toISOString()}`);
   }
   try {
@@ -110,7 +115,7 @@ export async function classifyFrame(question: string, timeoutMs = 8000): Promise
       // non-numeric value means 60 s (F-070).
       const raw = Number(res.headers.get('retry-after'));
       const wait = Number.isFinite(raw) ? Math.min(3600, Math.max(1, Math.ceil(raw))) : raw === Infinity ? 3600 : 60;
-      pausedUntil = Date.now() + wait * 1000;
+      pausedUntil = now() + wait * 1000;
       return off(`frame model rate-limited by OpenRouter (HTTP 429), not retried for ${wait} s`);
     }
     if (!res.ok) return off(`frame model HTTP ${res.status}`);
