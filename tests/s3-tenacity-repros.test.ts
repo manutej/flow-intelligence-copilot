@@ -113,3 +113,17 @@ test('fair housing runs before the measure check on the model path', async () =>
   const t = await askFlowIqCopilot(q, { store, parse, parseDeps: { runStore: null, fetch: async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) }) } } as never);
   assert.equal((t.envelope.result as Record<string, unknown>).refused, true);
 });
+
+// F6: a lone negated status is the set of the other statuses.
+test('F6: "not vacant and with exactly 3 bedrooms" is answered over notice and occupied', async () => {
+  const q = 'How many units are not vacant and with exactly 3 bedrooms at Marlowe Residences?';
+  const truth = store.units.filter((u) => u.propertyId === 'P02' && u.status !== 'vacant' && u.bedrooms === 3).length;
+  const t = await askFlowIqCopilot(q, { store, parse: null });
+  assert.equal((t.envelope.result as Record<string, unknown>).count, truth);
+  assert.ok(t.verification.valid);
+});
+
+test('F6: two statuses with a negation stay unanswered', async () => {
+  const t = await askFlowIqCopilot('How many units at Marlowe Residences are not vacant or occupied?', { store, parse: null });
+  assert.notEqual(typeof (t.envelope.result as Record<string, unknown>).count, 'number');
+});

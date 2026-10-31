@@ -8,17 +8,12 @@ const store = loadPortfolioStore();
 const ask = (question: string) => askFlowIqCopilot({ id: 't', type: 'adhoc', question }, { store, mode: 'deterministic', parse: null });
 const truth = (pid: string, ok: (s: string) => boolean) => store.units.filter((u) => u.propertyId === pid && ok(u.status)).length;
 
-test('S2 clarify: a negated status offers its complement as a typed status set, never the inverted status', async () => {
+test('S2 clarify: a lone negated status is answered as its complement set, never the inverted status (F6)', async () => {
   const t = await ask('How many units that are not vacant are at P02?');
-  assert.equal(t.envelope.result.unknown, true);
-  const opts = t.clarifyOptions ?? [];
-  assert.ok(opts.length >= 2 && opts.length <= 4);
-  assert.ok(opts.every((o) => o.query?.unitStatus !== 'vacant' && !(o.query?.unitStatusIn ?? []).includes('vacant')));
-  assert.deepEqual(opts[0].query?.unitStatusIn, ['notice', 'occupied']);
-  const r = await ask(opts[0].question);
-  assert.equal(r.verification.valid, true);
-  assert.equal((r.envelope.result as { count: number }).count, truth('P02', (s) => s !== 'vacant'));
-  assert.match(t.restatement ?? '', /no field/);
+  assert.equal(t.verification.valid, true);
+  assert.deepEqual((t.envelope.query?.intent as { unitStatusIn?: string[] }).unitStatusIn, ['notice', 'occupied']);
+  assert.equal((t.envelope.result as { count: number }).count, truth('P02', (s) => s !== 'vacant'));
+  assert.match(t.restatement ?? '', /status in \{notice, occupied\}/);
   assert.doesNotMatch(t.restatement ?? '', /status = vacant/);
 });
 

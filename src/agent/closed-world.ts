@@ -1,3 +1,4 @@
+import { stripNegatedStatus } from './intent.ts';
 import type { PortfolioStore } from '../data/schema.ts';
 import { AMENITY_SYNONYMS } from '../domain/resolver.ts';
 import { COMPARATOR_PHRASES } from '../domain/comparators.ts';
@@ -14,6 +15,8 @@ import { COMPARATOR_PHRASES } from '../domain/comparators.ts';
 // Phrases the unit filters parse (intent.ts parse* functions). Removing them
 // first means a word like "over" is understood only where a filter reads it.
 const FILTER_PHRASES: readonly RegExp[] = [
+  // "exactly 3 bedrooms" is the exact-value form the bedroom filter reads.
+  /\bexactly\b(?=\s+\d)/gi,
   // The rent noun of a rent comparator ("rent between $2,200 and $2,500").
   /\b(?:market\s+)?rents?\b(?=\s+(?:is\s+)?(?:between|from|at\s+least|at\s+most|under|over|below|above|no\s+more|no\s+less|less|more|greater|fewer|up\s+to|\$))/gi,
   // A status set, as parseUnitStatusSet reads it.
@@ -82,7 +85,7 @@ function tokens(text: string): string[] {
 
 /** Words of a unit question that no filter, store value or structure accounts for. */
 export function unresolvedUnitWords(question: string, store: PortfolioStore): string[] {
-  let rest = question;
+  let rest = stripNegatedStatus(question); // "not vacant" is read as a status set
   for (const re of FILTER_PHRASES) rest = rest.replace(re, ' ');
   const known = knownWords(store);
   const isKnown = (w: string) => known.has(w) || known.has(w.replace(/e?s$/, '')) || known.has(w.replace(/s$/, ''));
@@ -103,5 +106,6 @@ export function unresolvedUnitWords(question: string, store: PortfolioStore): st
 const NEGATOR_RE = /\b(?:not|non|excluding|exclude|except|without|other\s+than|besides|neither|nor)\b|n['’]t\b/gi;
 const VIEW_NONE_RE = /\b(?:with\s+no|without\s+(?:a\s+)?|no[-\s])views?\b/gi;
 export function unboundNegators(question: string): string[] {
-  return [...new Set(question.replace(VIEW_NONE_RE, ' ').match(NEGATOR_RE) ?? [])].map((w) => w.toLowerCase());
+  // "not vacant" is bound: it reads as the set of the other statuses.
+  return [...new Set(stripNegatedStatus(question).replace(VIEW_NONE_RE, ' ').match(NEGATOR_RE) ?? [])].map((w) => w.toLowerCase());
 }

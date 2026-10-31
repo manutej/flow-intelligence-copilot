@@ -214,6 +214,8 @@ export function parseFloorBounds(q: string): { floorMin?: number; floorMax?: num
 
 /** Every phrase some comparator rule reads, for the closed-world word check. */
 export const COMPARATOR_PHRASES: readonly RegExp[] = [
+  // "exactly 3 bedrooms" is the exact-value form of a unit field.
+  /\bexactly\b(?=\s+\d)/gi,
   ...Object.values(RULES).flat().map(({ re }) => new RegExp(re.source, 'gi')),
   new RegExp(GROUND.source, 'gi'),
 ];

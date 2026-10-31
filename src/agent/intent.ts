@@ -274,7 +274,21 @@ export function parseUnitViewFilter(
 
 const STATUS_SET_RE = /\bwhose\s+status\s+is\s+(occupied|notice|vacant)\s+or\s+(occupied|notice|vacant)\b/i;
 /** "units whose status is occupied or notice" -> ['notice', 'occupied'] (sorted, distinct). */
+const NEG_STATUS_RE = /\b(?:not|aren't|isn't|are\s+not|is\s+not|non-?)\s*(?:currently\s+)?(vacant|occupied|on\s+notice)\b/i;
+const ALL_STATUSES: readonly UnitStatus[] = ['notice', 'occupied', 'vacant'];
+const STATUS_WORD_RE_LOCAL = /\b(?:vacant|unoccupied|occupied|on\s+notice)\b/i;
+/** "not vacant" names the other statuses; stripped before status words are read. */
+export const stripNegatedStatus = (q: string) => {
+  const rest = q.replace(new RegExp(NEG_STATUS_RE.source, 'gi'), ' ');
+  // Only a lone negated status is a set; "not vacant or occupied" stays unbound.
+  return (q.match(new RegExp(NEG_STATUS_RE.source, 'gi')) ?? []).length === 1 && !STATUS_WORD_RE_LOCAL.test(rest) ? rest : q;
+};
 export function parseUnitStatusSet(question: string): UnitStatus[] | undefined {
+  const neg = question.match(NEG_STATUS_RE);
+  if (neg && stripNegatedStatus(question) !== question) {
+    const not = neg[1].toLowerCase().startsWith('on') ? 'notice' : (neg[1].toLowerCase() as UnitStatus);
+    return ALL_STATUSES.filter((x) => x !== not);
+  }
   const m = question.match(STATUS_SET_RE);
   if (!m) return undefined;
   const set = [...new Set([m[1], m[2]].map((s) => s.toLowerCase() as UnitStatus))].sort();
@@ -1270,7 +1284,7 @@ export function parseQueryIntent(question: string, store: PortfolioStore): Parse
   const produced = MEASURE_STATISTICS[intent.measure];
   const unmet = REQUESTED_STATISTIC.some(([stat, re]) => re.test(question) && !produced.includes(stat as Statistic));
   const statuses = new Set(
-    [...question.replace(/\boccupied\s+or\s+(?:on\s+)?notice\b/gi, 'occupied').matchAll(STATUS_WORD_RE)]
+    [...stripNegatedStatus(question).replace(/\boccupied\s+or\s+(?:on\s+)?notice\b/gi, 'occupied').matchAll(STATUS_WORD_RE)]
       .map((m) => { const w = m[0].toLowerCase().replace(/\s+/g, ' '); return STATUS_OF[w] ?? w; }),
   );
   // One exact value per field: two different ones cannot both hold.
