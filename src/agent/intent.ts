@@ -665,8 +665,10 @@ export function parseExplicitDateWindow(
     return DATE_WINDOWS.YEAR_2026;
   }
 
-  // A bare year other than the reporting year ("in 2025") is a whole calendar
-  // year; it must not silently become the default reporting window.
+  // A named bare year ("in 2025", "all of 2026", "for 2026") is that whole
+  // calendar year, the reporting year included; it must not silently become
+  // the default reporting window. The window's data-edge note then says
+  // which months have rows.
   // A money amount is not a year: skip numbers after a currency sign or
   // code, inside a larger figure, or before a currency word or k/m suffix.
   const bareYear = question.match(
@@ -674,9 +676,8 @@ export function parseExplicitDateWindow(
   );
   if (bareYear) {
     const yNum = Number.parseInt(bareYear[1], 10);
-    if (yNum !== defaultYear) {
-      return buildDynamicDateWindow(`YEAR_${yNum}`, `${yNum}`, yNum, 1, yNum, 12);
-    }
+    if (yNum === 2026 && DATE_WINDOWS.YEAR_2026) return DATE_WINDOWS.YEAR_2026;
+    return buildDynamicDateWindow(`YEAR_${yNum}`, `${yNum}`, yNum, 1, yNum, 12);
   }
 
   return null;
