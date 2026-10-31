@@ -1,5 +1,6 @@
 import type { DateWindowSpec } from '../config/rules.ts';
 import type { PortfolioStore } from '../data/schema.ts';
+import { resolvePropertiesFromText } from '../domain/resolver.ts';
 import { isDataWord } from '../domain/vocabulary.ts';
 
 /**
@@ -97,6 +98,63 @@ export function findUnresolvedPlace(question: string, store: PortfolioStore): st
     }
     if (!/^at\b/i.test(m[0])) continue;
     if (words.some((w) => w.length > 1 && !knownWords.has(w) && !isDataWord(store, w))) return phrase;
+  }
+  return findLowerCasePlace(question, store, known, knownWords);
+}
+
+const LOWER_LOCATIVE_RE =
+  /\b(?:at|for|in|of|from|about)\s+(?:the\s+)?([\p{L}&'’.-]+(?:\s+[\p{L}&'’.-]+){0,3})/giu;
+const GENERIC_PLACE_WORD = /^(?:the|and|&|buildings?|apartments?|units?|propert(?:y|ies)|communit(?:y|ies)|homes?)$/i;
+const PLACE_STOP_RE =
+  /^(?:in|for|at|of|from|to|about|on|during|by|with|over|and|or|vs\.?|versus|than|per|across|this|last|next|since|between|before|after|as|when|vs)$/i;
+
+/**
+ * Case does not decide whether a phrase names a place: "at printer row"
+ * names one as surely as "at Printer Row". A phrase that uses a building
+ * name word ("row", "annex", "clarendon") but does not resolve to exactly
+ * one property, because a word in it belongs to no property or its name
+ * words belong to different properties, is unresolved.
+ */
+function findLowerCasePlace(
+  question: string,
+  store: PortfolioStore,
+  known: Set<string>,
+  knownWords: Set<string>,
+): string | null {
+  const nameWords = (w: string) =>
+    store.properties.filter((p) => [p.name, ...p.aka].some((n) => n.toLowerCase().split(/\s+/).includes(w)));
+  for (const m of question.normalize('NFKC').matchAll(LOWER_LOCATIVE_RE)) {
+    const raw = m[1].split(/[?,!;:]|\.(?:\s|$)/u)[0].replace(/['’]s\b/gi, '').trim();
+    const words: string[] = [];
+    for (const w of raw.toLowerCase().split(/\s+/)) {
+      if (!w || PLACE_STOP_RE.test(w)) break;
+      words.push(w.replace(/[.'’]+$/u, ''));
+    }
+    if (words.length === 0) continue;
+    const phrase = words.join(' ');
+    if (known.has(phrase)) continue;
+    // A trailing generic noun ("the Lake property") is not part of the name.
+    while (words.length > 1 && GENERIC_PLACE_WORD.test(words[words.length - 1]) && words[words.length - 1] !== 'the') words.pop();
+    // Only a phrase that ends on a word of some building's name reads as a
+    // place; a generic noun ("apartments", "building") or "the" does not.
+    const last = words[words.length - 1];
+    if (GENERIC_PLACE_WORD.test(last) || nameWords(last).length === 0) continue;
+    // The place is the run of words up to that name word; earlier data
+    // words ("occupancy at kedzie works") are not part of it.
+    let start = words.length - 1;
+    while (start > 0 && (knownWords.has(words[start - 1]) || !isDataWord(store, words[start - 1]))) start--;
+    const place = words.slice(start);
+    if (known.has(place.join(' '))) continue;
+    const owners = place.map(nameWords).filter((o) => o.length > 0);
+    if (owners.length > 1 && !owners[0].some((p) => owners.every((o) => o.includes(p)))) return place.join(' ');
+    if (place.some((w) => w.length > 1 && !knownWords.has(w) && !isDataWord(store, w))) return place.join(' ');
+    // Every word fits one building, but the resolver bound none of the
+    // buildings it fits ("the Lake property"): the figure would fall back
+    // to the whole portfolio.
+    if (owners.length > 0) {
+      const matched = new Set(resolvePropertiesFromText(store, question, { includeOnboarding: true }).matched.map((p) => p.propertyId));
+      if (!owners[0].some((p) => matched.has(p.propertyId))) return place.join(' ');
+    }
   }
   return null;
 }
