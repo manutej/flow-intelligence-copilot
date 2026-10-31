@@ -60,7 +60,11 @@ export function resolveRef(ev: Evidence, ref: string): unknown {
 
 const isNum = (x: unknown): x is Num => !!x && typeof x === 'object' && 'v' in x && 'ref' in x && Object.keys(x).length === 2;
 // \p{N} with the u flag: any Unicode number, not only ASCII digits (text is NFKC-normalized first)
-const FIGURE_IN_TEXT = /[$%]|\p{N}/u;
+// \p{Sc} is any currency sign (¥, ₹, €); U+066A is the Arabic percent sign; U+2030/2031 per-mille
+const FIGURE_IN_TEXT = /[%\u066A\u2030\u2031]|\p{Sc}|\p{N}/u;
+/** Han and Cyrillic numerals are letters (Lo/Ll), so \p{N} misses them. */
+const HAN_NUMERALS = /[〇零一二两三四五六七八九十百千万萬亿億兆壹贰貳叁參肆伍陆陸柒捌玖拾佰仟]/u;
+const CYRILLIC_NUMBER = /(?<![\p{L}])(?:ноль|нуль|один|одна|одно|два|две|три|четыр|пят|шест|сем|восем|девят|десят|сорок|сто|двест|тысяч|миллион|миллиард|дюжин|пар[аыу])/iu;
 /** Labels that contain digits but are not figures: years, ISO dates, quarters, halves, property and draft ids. */
 const MONTHS = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
 /**
@@ -71,16 +75,22 @@ const MONTHS = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?
  */
 const TEMPORAL = 'in|since|during|through|throughout|until|till|before|after|from';
 const LABEL_TOKENS = new RegExp(`\\b\\d{4}-\\d{2}(-\\d{2})?\\b|\\b(?:${MONTHS}|[QH][1-4]|FY)\\.?\\s+(19|20)\\d{2}\\b|\\b(?:${TEMPORAL})\\s+(19|20)\\d{2}\\b(?=\\s*(?:[.,;:!?)]|$))|\\b(19|20)\\d{2}\\s+(?:YTD|year-to-date)\\b|\\b[QH][1-4]\\b|\\bP\\d{2}\\b|\\bD-[0-9a-f]{8,16}\\b`, 'gi');
-/** Roman numerals of two or more letters, upper case only (so the words "mix" or "did" are not caught). */
-const ROMAN = /\b(?=[MDCLXVI]{2,}\b)M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})\b/;
+/**
+ * Roman numerals: two or more letters in upper case, or four or more in any case
+ * (so "mmxxv" is caught but the words "mix", "did" and "dim" are not).
+ */
+const ROMAN_WORD = /^M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/i;
+const ROMAN = { test: (t: string) => (t.match(/\p{L}+/gu) ?? []).some((w) => ROMAN_WORD.test(w) && (w.length >= 4 || (w.length >= 2 && w === w.toUpperCase()))) };
 /** Numbers written in words are figures too. */
-const NUMBER_WORD_SRC = '\\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen|half|quarter|double|triple|twice|thrice|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|couple|score|nil|several|few|handful|trio|quadruple)\\b';
+const NUMBER_WORD_SRC = '\\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen|half|quarter|double|triple|twice|thrice|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|couple|score|nil|several|few|handful|trio|quadruple|dozens|pairs?|myriad)\\b';
 const NUMBER_WORDS = new RegExp(NUMBER_WORD_SRC, 'i');
 export const UNITS: readonly Unit[] = ['count', '$', '%', 'sqft', 'leases'];
 /** Digits the user typed (e.g. "3-bedroom") may be echoed in a title or subtitle; nowhere else. */
 const ECHO_KEYS = new Set(['title', 'subtitle']);
 const carriesFigure = (raw: string, echo: ReadonlySet<string> = new Set()) => {
-  const t = raw.normalize('NFKC');
+  // strip format characters (zero-width space, soft hyphen, joiners) and combining marks before matching
+  const t = raw.normalize('NFKD').replace(/[\p{Cf}\p{Mn}]/gu, '').normalize('NFKC');
+  if (HAN_NUMERALS.test(t) || CYRILLIC_NUMBER.test(t)) return true;
   return ROMAN.test(t.replace(LABEL_TOKENS, '')) || NUMBER_WORDS.test(t.replace(LABEL_TOKENS, '').replace(new RegExp(NUMBER_WORD_SRC, 'gi'), (w) => (echo.has(w.toLowerCase()) ? '' : w))) || FIGURE_IN_TEXT.test(t.replace(LABEL_TOKENS, '').replace(/\p{N}+/gu, (d) => (echo.has(d) ? '' : d)));
 };
 /** Free-text fields that may carry figures because they are the verified answer bytes or reviewed option text. */

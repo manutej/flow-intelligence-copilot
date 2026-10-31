@@ -33,3 +33,8 @@ test('L1: a temporal year is exempt only at a clause end or before punctuation',
   for (const t of ['during 2025 units sold', 'in 2026 units', 'in 1999 leases']) assert.ok(errs(t).length > 0, `accepted: ${t}`);
   for (const t of ['Leases rose in 2026.', 'since 2025', 'In 2026, leases rose', 'through 2026; then fell']) assert.deepEqual(errs(t), [], t);
 });
+test('L2: zero-width, accents, CJK, Cyrillic, any-case roman, currency signs and quantity words', () => {
+  for (const t of ['t\u200bwelve leases', 'tw\u00adelve leases', 'twelvé leases', '三 leases', '十二 leases', 'Три лизинга', 'mmxxv leases', 'MmXxV leases',
+    '¥ spend', '₹ spend', '٪ rate', 'dozens of leads', 'a pair of sources']) assert.ok(errs(t).length > 0, `accepted: ${t}`);
+  for (const t of ['a mix of sources', 'Leads did improve', 'civil and mild']) assert.deepEqual(errs(t), [], t);
+});

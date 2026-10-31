@@ -166,14 +166,14 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
     return done({ ...base, template: 'recommendation_card', title: 'Recommended budget move', props: {
       title: `Move dead spend to ${String(res.source)}`, summary: 'Reallocate paid spend that signed no leases to the lowest cost-per-lease source.', impact_level: 'high',
       impacts: [{ label: 'Added leases', value: num(main, 'leases'), unit: 'leases', good_direction: 'up' }], confidence: null, citations: env.citations.slice(0, 12),
-      reasoning: ['Source pairs that signed no leases in the window are the money to move.', `${String(res.source)} is the source the typed query selects for the move.`, 'Approve creates a draft record marked pending approval; nothing is sent.'],
+      reasoning: ['Source and building combinations that signed no leases in the window are the money to move.', `${String(res.source)} is the source the typed query selects for the move.`, 'Approve creates a draft record marked pending approval; nothing is sent.'],
       actions: ['approve', 'dismiss'] } });
   }
   if ((m === 'dead_spend_pairs' || m === 'dead_spend_building') && typeof res.usd === 'number' && CHANGE.test(question)) {
     return done({ ...base, template: 'recommendation_card', title: 'Where we are losing money', props: {
       title: 'Pause or reallocate paid spend that signed no leases', summary: 'Paid sources with spend and no signed leases in the window.', impact_level: 'high',
       impacts: [{ label: 'Spend with no leases', value: num(main, 'usd'), unit: '$', good_direction: 'down' }], confidence: null, citations: env.citations.slice(0, 12),
-      reasoning: ['Each pair is a paid source at a building with spend and no signed leases.', 'Rollback: restore spend if leads drop in the next month.', 'Approve creates a draft record marked pending approval; nothing is sent.'],
+      reasoning: ['Each row is a paid source at a building with spend and no signed leases.', 'Rollback: restore spend if leads drop in the next month.', 'Approve creates a draft record marked pending approval; nothing is sent.'],
       actions: ['approve', 'dismiss'] } });
   }
   // ranked_table: lists
