@@ -7,6 +7,7 @@ import { verifyAnswerEnvelope } from '../domain/guards.ts';
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import type { ParseConfig } from '../agent/model-parse.ts';
 import { readSettings } from './inputs.ts';
+import { resolvePropertiesFromText } from '../domain/resolver.ts';
 import { inLabel, specErrors, type ChartSpec, type Evidence, type EvidenceItem, type Num, type PanelState, type Unit } from './spec.ts';
 
 /**
@@ -302,7 +303,8 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   // card for that setting; a number we cannot place gives a neutral clarify (TENACITY f9a64d0)
   const tid = turn.envelope.proof?.template_id ?? 'guard';
   const settings = readSettings(input, intentOf(turn) ?? parseQueryIntent(coreQuestion(question), store), store, inLabel, (q) => canon(parseQueryIntent(coreQuestion(q), store)),
-    (q) => parseQueryIntent(coreQuestion(q), store).measure !== 'unsupported');
+    (q) => parseQueryIntent(coreQuestion(q), store).measure !== 'unsupported',
+    (q) => canon(parseQueryIntent(coreQuestion(q), store)) !== canon(parseQueryIntent('', store)) || resolvePropertiesFromText(store, q, { includeOnboarding: true }).matched.length > 0);
   const done = (spec: ChartSpec): Panel => ({ question: input, spec, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null });
   if (settings.mismatch) {
     const { name, policy } = settings.mismatch.param;

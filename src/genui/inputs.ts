@@ -146,7 +146,7 @@ const isRank = (t: string, n: StatedNumber) => n.surface.startsWith('#') || /(?:
 const unitEnd = (t: string, n: StatedNumber) => n.end + (t.slice(n.end).match(new RegExp(String.raw`^(?:[\s-]*(?:%|percent|pct|cad|c\$|usd|dollars?|bucks|${PERIOD})\b|\s*%)?`, 'iu'))?.[0].length ?? 0);
 
 /** Read every stated setting in every turn (turn markers count as separators). */
-export function readSettings(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore, isLabel: (t: string, start: number, end: number) => boolean = () => false, parse?: (turn: string) => string, standalone?: (turn: string) => boolean): SettingReading {
+export function readSettings(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore, isLabel: (t: string, start: number, end: number) => boolean = () => false, parse?: (turn: string) => string, standalone?: (turn: string) => boolean, subject?: (turn: string) => boolean): SettingReading {
   const t = prep(input);
   const nums: Num[] = statedNumbers(input).filter((n) => !isLabel(t, n.start, n.end)).map((n) => ({ ...n, unit: unitOf(t, n) }));
   const bindings: Binding[] = []; let ambiguous = false; const consumed: [number, number][] = [];
@@ -215,7 +215,15 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
           if (!all.some((n) => n.start < en && n.end > st)) all.push({ start: st, end: en, value: NaN, surface: m[0] } as Num);
         }
         const pool = sa ? all.filter((n) => leftover.includes(n) || n.unit === 'duration' && !(parse && parse(t.slice(a, n.start) + t.slice(n.end, b)) !== turnBase)) : all;
-        if (pool.some((n) => !(nonEditing(t, a, b, n) && (isCount(t, n, b) || /^(?:one|a|an)$/i.test(n.surface))))) ambiguous = true;
+        // a request parse (Q77): with its numbers deleted, the turn still names something the parser
+        // or the property resolver reads, and no number carries a currency, time or percent unit.
+        // Its numbers belong to that parse and the cue check does not apply. A turn that only names
+        // a value and a unit ("1800 dollars instead") reads as nothing once the value is gone.
+        let stripped = t.slice(a, b);
+        for (const n of [...all].sort((x, y) => y.start - x.start)) stripped = stripped.slice(0, n.start - a) + ' ' + stripped.slice(n.end - a);
+        const request = !!subject?.(stripped) && all.every((n) => !Number.isNaN(n.value) && (n as Num).unit === 'none');
+        const used = (n: StatedNumber) => !!parse && parse(t.slice(a, n.start) + t.slice(n.end, b)) !== turnBase;
+        if (request ? all.some((n) => !used(n) && !entityCount(t, a, b, n, false)) : pool.some((n) => !entityCount(t, a, b, n))) ambiguous = true;
       }
     });
   }
@@ -225,22 +233,18 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
   return { bindings, ambiguous, mismatch: bindings.find((b) => !equal(b)) ?? null };
 }
 const MAGNITUDE = /(?<![\p{L}\p{N}])(?:half\s+)?(?:an?\s+)?(?:dozen|hundred|thousand|million|billion)s?(?![\p{L}\p{N}])/giu;
-// a number directly followed by a plural word counts things ("3 properties", "12 numbers")
-function isCount(t: string, n: StatedNumber, end: number): boolean {
-  return /^\s+\p{L}{3,}s\b/u.test(t.slice(n.end, end));
-}
-// An edit cue (EN/ES/FR/DE). This list can only make a turn clarify, never chart: it gates the
-// count and pronoun exemptions, and a turn without those exemptions clarifies anyway.
+// Data entities a count may name with no setting stated: the portfolio's record nouns the schema
+// and grammar know (properties, buildings) and what an answer is made of (charts, numbers, rows).
+// Units are an entity only inside a request parse, which the standalone path already reads.
+const ENTITY = /^\s+(?:properties|property|buildings|building|charts|chart|numbers|number|rows|row)(?![\p{L}\p{N}])/iu;
+// Backstop only: an edit cue anywhere in the turn (EN/ES/FR/DE) denies the count exemption. It can
+// only make a turn clarify, never chart.
 const EDIT_CUE = /(?<![\p{L}\p{N}])(?:use|using|make|set|try|go|change|switch|let'?s|instead|actually|rather|more|less|lower|higher|raise|reduce|increase|decrease|halve|double|should|meant?|say|usa|usar|pon|poner|mejor|cambia|vez|mets|mettons|utilise|plutôt|fait|nimm|setze|verwende|lieber|stattdessen|eigentlich)(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])(?:more|less|más|menos|plus|moins|mehr|weniger)(?!\s*\p{L})/iu;
-// clearly non-editing: no edit cue, the number does not open the turn, and the turn has at least
-// three words besides its numbers
-function nonEditing(t: string, a: number, b: number, n: StatedNumber): boolean {
-  const text = t.slice(a, b);
-  if (EDIT_CUE.test(t.slice(a, n.start)) || EDIT_CUE.test(t.slice(n.end, b).replace(/^\s*\p{L}+/u, '')) && /^\s*$/u.test(t.slice(a, n.start))) return false;
-  if (/^(?:one|a|an)$/i.test(n.surface) && /^\s+\p{L}/u.test(t.slice(n.end, b)) && !EDIT_CUE.test(text)) return true; // "one question"
-  if (!/\p{L}/u.test(t.slice(a, n.start))) return false;
-  const rest = t.slice(a, n.start) + ' ' + t.slice(n.end, b);
-  return (rest.match(/\p{L}+/gu) ?? []).length >= 3;
+// a number passes only as the plain count of a data entity, in a turn with no edit cue; currency,
+// time, percent and magnitude words never pass, and anything uncertain clarifies
+function entityCount(t: string, a: number, b: number, n: StatedNumber, cue = true): boolean {
+  if (Number.isNaN(n.value) || (n as Num).unit !== undefined && (n as Num).unit !== 'none') return false;
+  return ENTITY.test(t.slice(n.end, b)) && !(cue && EDIT_CUE.test(t.slice(a, b)));
 }
 /** The setting values a computation used, as stated in the question and equal to policy: the only setting numbers a title may echo. */
 export function boundPolicyValues(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore): Set<number> {
