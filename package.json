@@ -24,7 +24,7 @@
     "repl": "node --no-warnings src/cli.ts repl",
     "mcp-config": "node --no-warnings src/cli.ts mcp-config",
     "mcp": "node --no-warnings src/mcp/server.ts",
-    "test": "node --no-warnings --test tests/*.test.ts",
+    "test": "node --no-warnings --import ./tests/support/no-network.ts --test tests/*.test.ts",
     "build-ui": "node --no-warnings scripts/build-dashboard.ts && node --no-warnings scripts/build-field-notebook.ts",
     "eval:operadic": "node --no-warnings src/operadic-eval.ts",
     "dashboard": "node --no-warnings src/dashboard-server.ts",

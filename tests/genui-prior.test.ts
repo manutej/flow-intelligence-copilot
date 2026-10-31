@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadPortfolioStore } from '../src/data/loader.ts';
+import { setRateProvider } from '../src/fx/provider.ts';
 import { askPanel } from '../src/genui/picker.ts';
 import { specErrors } from '../src/genui/spec.ts';
 
@@ -82,7 +83,9 @@ test('settings bind per parameter with value and unit (TENACITY f9a64d0 1-3, 5)'
     assert.ok(!/not supported/.test(a.spec.title ?? ''), q);
   }
   // 3: ranks and durations are not setting values
-  assert.equal((await askPanel('How much CAD spend converted at the CAD rate went to the top 1 channel?', store)).spec.template, 'kpi');
+  // (a CAD ask converts through the rate tool: a fake provider, never the network)
+  setRateProvider({ name: 'Fake', rate: async (base, quote, now) => ({ ok: true, quote: { base, quote, rate: 1.4, source: 'Fake', asOf: now.toISOString().slice(0, 10), basis: 'daily' } }) });
+  try { assert.equal((await askPanel('How much CAD spend converted at the CAD rate went to the top 1 channel?', store)).spec.template, 'kpi'); } finally { setRateProvider(null); }
   for (const q of ['Compare vacancy to the prior 3 months at P04', 'What was vacancy at P04 in the prior 30 days?', 'How did the prior 2 quarters compare at P04?', 'What is the CAD rate used for 1 property?', 'What prior is used for 2 bedroom leasing?'])
     assert.ok(!/not supported/.test((await askPanel(q, store)).spec.title ?? ''), q);
 });

@@ -31,8 +31,11 @@ test('fails closed: HTTP error, missing, non-numeric, zero, stale', async () => 
     const r = await new BankOfCanadaProvider(f).rate('USD', 'CAD', now);
     assert.equal(r.ok, false); assert.equal(!r.ok && r.reason, reason);
   }
-  const edge = await new BankOfCanadaProvider(boc('1.39', '2026-10-26')).rate('USD', 'CAD', now);
-  assert.ok(edge.ok, `a rate ${MAX_AGE_DAYS} days old (a long weekend) still answers`);
+  // at most MAX_AGE_DAYS: 3.6 days answers, 4.6 days fails closed
+  const edge = await new BankOfCanadaProvider(boc('1.39', '2026-10-27')).rate('USD', 'CAD', now);
+  assert.ok(edge.ok, 'a rate under 4 days old (a long weekend) still answers');
+  const over = await new BankOfCanadaProvider(boc('1.39', '2026-10-26')).rate('USD', 'CAD', now);
+  assert.equal(!over.ok && over.reason, 'stale_rate', 'a rate over 4 days old is stale');
 });
 test('Bank of Canada publishes USD/CAD only', async () => {
   const r = await new BankOfCanadaProvider(boc('1.39')).rate('USD', 'EUR', now);
