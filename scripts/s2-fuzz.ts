@@ -7,7 +7,15 @@
  *   answers, dead-end rate, correct-after-one-clarify (the best single option
  *   is re-asked and compared to the truth of the original question).
  * Exits 1 when any answer is wrong, any forgery is accepted or any true
- * answer is rejected. Usage: node --no-warnings scripts/s2-fuzz.ts [N] [--model URL]
+ * answer is rejected.
+ *
+ * Model path (TENACITY F1): --model URL runs a live endpoint; --adversarial
+ * runs a replay model that returns the lexicon reading on ~30% of turns and
+ * a wrong intent otherwise (period, scope, measure, status, bound, dropped
+ * or added filter), so the model path is gated without a live model.
+ * A rescue (F5) counts only when the option the asker intended, the one
+ * whose typed query selects the same rows with the same measure, answers
+ * the truth. Usage: node --no-warnings scripts/s2-fuzz.ts [N] [--model URL | --adversarial]
  */
 import fs from 'node:fs';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
@@ -15,13 +23,36 @@ import { parseConfigFromEnv } from '../src/agent/model-parse.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
 import type { AnswerEnvelope } from '../src/data/schema.ts';
 import { executeCompositionalPlan } from '../src/agent/planner.ts';
+import { parseQueryIntent } from '../src/agent/intent.ts';
 import { sealProof } from '../src/agent/envelope.ts';
 import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
 
 const SEED = Number(process.env.SEED ?? 7311);
 const N = Number(process.argv[2] ?? 1000);
 const mi = process.argv.indexOf('--model');
-const parse = mi > 0 ? parseConfigFromEnv({ ...process.env, FLOWIQ_PARSE_URL: process.argv[mi + 1], FLOWIQ_PARSE_NO_CACHE: '1' }) : null;
+const adversarial = process.argv.includes('--adversarial');
+const parse = mi > 0 ? parseConfigFromEnv({ ...process.env, FLOWIQ_PARSE_URL: process.argv[mi + 1], FLOWIQ_PARSE_NO_CACHE: '1' })
+  : adversarial ? parseConfigFromEnv({ FLOWIQ_PARSE_URL: 'http://adversarial.invalid/v1', FLOWIQ_PARSE_NO_CACHE: '1' }) : null;
+// The replay model's own stream, so the question stream is the same with and without it.
+let s2 = (SEED ^ 0x5bd1e995) >>> 0;
+const rnd2 = () => ((s2 = (s2 * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+const MUTATIONS: Array<(i: Record<string, any>) => Record<string, unknown>> = [
+  (i) => ({ dateWindow: i.dateWindow?.key === 'Q3_2026' ? 'Q2_2026' : 'Q3_2026', dateExplicit: true }),
+  (i) => ({ isWholePortfolioExplicit: !i.isWholePortfolioExplicit }),
+  (i) => ({ measure: i.measure === 'unit_count' ? 'avg_market_rent' : 'unit_count' }),
+  (i) => ({ unitStatus: i.unitStatus === 'vacant' ? 'occupied' : 'vacant', unitStatusIn: undefined }),
+  (i) => (i.bedroomsMin !== undefined ? { bedroomsMin: i.bedroomsMin + 1 } : { floorMin: (i.floorMin ?? 1) + 1 }),
+  (i) => { const k = ['bedrooms', 'bedroomsMin', 'bedroomsMax', 'sqftMin', 'sqftMax', 'floorMin', 'floorMax', 'rentMin', 'rentMax', 'unitStatus', 'unitStatusIn'].find((x) => i[x] !== undefined); return k ? { [k]: undefined } : { bedrooms: 2 }; },
+  () => ({ paidOnly: true }),
+];
+const replay = (question: string) => {
+  const det = parseQueryIntent(question, store) as unknown as Record<string, any>;
+  const exact = rnd2() < 0.3;
+  const m = exact ? {} : MUTATIONS[Math.floor(rnd2() * MUTATIONS.length)](det);
+  const intent = { ...det, dateWindow: det.dateWindow?.key, ...(det.leaseStartWindow ? { leaseStartWindow: det.leaseStartWindow.key } : {}), ...(det.leaseEndWindow ? { leaseEndWindow: det.leaseEndWindow.key } : {}), ...m };
+  const content = JSON.stringify({ kind: 'query', question, intent });
+  return { runStore: null, fetch: async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) }) };
+};
 let s = SEED >>> 0;
 const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 const pick = <T,>(a: readonly T[]) => a[Math.floor(rnd() * a.length)];
@@ -90,9 +121,15 @@ const measures = [
   { q: (w: string, b: string) => `What is the average market rent of units ${w} at ${b}?`, v: (x: Row[]) => (x.length ? x.reduce((a, u) => a + u.rent, 0) / x.length : null), key: 'usd' },
   { q: (w: string, b: string) => `What is the average sq ft of units ${w} at ${b}?`, v: (x: Row[]) => (x.length ? x.reduce((a, u) => a + u.sqft, 0) / x.length : null), key: 'sqft' },
 ];
+const MEASURE_ID: Record<string, string> = { count: 'unit_count', usd: 'avg_market_rent', sqft: 'avg_sqft' };
+const inR = (v: number, eq?: number, lo?: number, hi?: number) => (eq === undefined || v === eq) && (lo === undefined || v >= lo) && (hi === undefined || v <= hi);
+const rowMatches = (i: Record<string, any>, u: Row) => inR(u.bed, i.bedrooms, i.bedroomsMin, i.bedroomsMax) && inR(u.bath, i.bathrooms, i.bathroomsMin, i.bathroomsMax)
+  && inR(u.sqft, undefined, i.sqftMin, i.sqftMax) && inR(u.floor, undefined, i.floorMin, i.floorMax) && inR(u.rent, undefined, i.rentMin, i.rentMax)
+  && (i.unitStatus === undefined || u.status === i.unitStatus) && (i.unitStatusIn === undefined || i.unitStatusIn.includes(u.status));
 const close = (a: unknown, b: number | null) => typeof a === 'number' && b !== null && Math.abs(a - b) <= 0.06 + Math.abs(b) * 1e-6;
 
 // Forgery classes, each a small edit of a true envelope.
+const lastTrue: AnswerEnvelope[] = [];
 const FORGE: Record<string, (e: AnswerEnvelope) => AnswerEnvelope | null> = {
   digit: (e) => (/\d/.test(e.answer) ? { ...e, answer: e.answer.replace(/\d(?!.*\d)/, (d) => String((+d + 1) % 10)) } : null),
   building: (e) => { const p = props.find((x) => e.answer.includes(x.name)); const o = props.find((x) => x !== p); return p && o ? { ...e, answer: e.answer.replaceAll(p.name, o.name) } : null; },
@@ -114,15 +151,28 @@ const FORGE: Record<string, (e: AnswerEnvelope) => AnswerEnvelope | null> = {
     return re.answer === e.answer ? null : { ...e, query, proof: sealProof(query, e.result, e.citations) };
   },
   resealed_result: (e) => { const k = ['count', 'usd', 'sqft'].find((x) => typeof e.result[x] === 'number'); if (!k || !e.query) return null; const result = { ...e.result, [k]: (e.result[k] as number) + 1 }; return { ...e, result, answer: e.answer.replace(String(e.result[k]), String(result[k])), proof: sealProof(e.query, result, e.citations) }; },
+  // F3: a coherent forgery: another question's true render, relabelled
+  // with this question and resealed, so answer, result and proof agree.
+  coherent_resealed: (e) => {
+    const o = lastTrue.find((x) => x.query?.question !== e.query?.question && x.answer !== e.answer);
+    if (!o || !o.query || !e.query) return null;
+    const query = { ...o.query, question: e.query.question };
+    return { ...o, id: e.id, query, proof: sealProof(query, o.result, o.proof?.row_ids ?? o.citations) };
+  },
   intent: (e) => { const i = e.query?.intent as { unitStatus?: string } | undefined; return i ? { ...e, query: { ...e.query!, intent: { ...i, unitStatus: i.unitStatus === 'notice' ? 'vacant' : 'notice' } } } : null; },
 };
 
+// F7: a restatement names the building and the measure, not just exists.
+const restatesQuery = (r: string, p: { name: string; propertyId: string }, key: string) =>
+  (r.includes(p.name) || r.includes(p.propertyId)) && ({ count: /\bunits?\b|count/i, usd: /rent/i, sqft: /sq|square/i } as Record<string, RegExp>)[key].test(r);
+let restateWeak = 0;
 let deadEndsAnswerable = 0, answerable = 0;
 let answered = 0, wrong = 0, clarified = 0, deadEnds = 0, truthClar = 0, rescued = 0, falseReject = 0, restateMissing = 0;
 const negUnapp = { asked: 0, wrong: 0 };
 const forg: Record<string, { tried: number; accepted: number }> = Object.fromEntries(Object.keys(FORGE).map((k) => [k, { tried: 0, accepted: 0 }]));
 const paths: Record<string, number> = {};
-const ask = (q: string) => askFlowIqCopilot(q, { store, parse });
+const ask = (q: string) => askFlowIqCopilot(q, { store, parse, ...(adversarial ? { parseDeps: replay(q) } : {}) } as never);
+let modelDiverged = 0;
 for (let i = 0; i < N; i++) {
   const p = pick(props);
   const fsel = [pick(filters)(), ...(rnd() < 0.5 ? [pick(filters)()] : [])].filter((f, k, a) => a.findIndex((g) => g.tag === f.tag) === k);
@@ -152,10 +202,20 @@ for (let i = 0; i < N; i++) {
     if (truth === null) continue;
     truthClar++;
     if (process.env.SHOW_CLARIFY) console.log(`CLARIFY ${q} -> ${opts.map((o) => o.question).join(' | ')}`);
+    // F5: the asker picks the option whose typed query means what they asked:
+    // same measure, same building, and the same selected rows across the portfolio.
+    const want = rows.filter((u) => fsel.every((f) => f.ok!(u))).map((u) => rows.indexOf(u)).join(',');
+    const intended = opts.find((o) => {
+      const iq = o.query as unknown as Record<string, any> | undefined;
+      if (!iq || iq.measure !== MEASURE_ID[m.key]) return false;
+      return rows.filter((u) => rowMatches(iq, u)).map((u) => rows.indexOf(u)).join(',') === want;
+    });
     let ok = false;
-    for (const o of opts) {
-      const r2 = (await ask(o.question)).envelope.result as Record<string, unknown>;
-      if (close(r2[m.key], truth)) { ok = true; break; }
+    if (intended) {
+      // A pick runs the option's typed query (as the UI does) and must verify.
+      const pe = executeCompositionalPlan({ id: 'PICK', type: 'adhoc', question: intended.question }, store, { intent: intended.query as never });
+      const r2 = pe.envelope.result as Record<string, unknown>;
+      ok = pe.verification.valid && close(r2[m.key], truth);
     }
     if (ok) rescued++;
     else if (process.env.SHOW_CLARIFY) console.log(`NORESCUE ${q} -> ${opts.map((o) => o.question).join(' | ')}`);
@@ -163,12 +223,15 @@ for (let i = 0; i < N; i++) {
   }
   answered++;
   if (!t.restatement) restateMissing++;
+  else if (!restatesQuery(t.restatement, p, m.key)) restateWeak++;
+  if (t.parsePath === 'model' && JSON.stringify(t.parse?.intent) !== JSON.stringify(t.parse?.deterministic)) modelDiverged++;
   if (!verifyAnswerEnvelope(t.envelope, store).valid) falseReject++;
   if (!close(r[m.key], truth)) {
     wrong++;
     if (special) negUnapp.wrong++;
     if (wrong <= 10) console.log(`WRONG got=${r[m.key]} true=${truth} | ${q}`);
   }
+  if (verifyAnswerEnvelope(t.envelope, store).valid) { lastTrue.unshift(t.envelope); lastTrue.length = Math.min(lastTrue.length, 5); }
   for (const [k, f] of Object.entries(FORGE)) {
     const e = f(t.envelope);
     if (!e) continue;
@@ -183,8 +246,8 @@ const out = {
   wrongPctOfAnswered: pct(wrong, answered),
   coveragePct: pct(answered - wrong + rescued, N),
   clarified, deadEndPct: pct(deadEnds, N), deadEnds, answerable, deadEndsAnswerable, deadEndAnswerablePct: pct(deadEndsAnswerable, answerable), correctAfterOneClarifyPct: pct(rescued, truthClar), clarifyWithTruth: truthClar,
-  negationUnappliable: negUnapp, restatementMissing: restateMissing,
+  negationUnappliable: negUnapp, restatementMissing: restateMissing, restatementWeak: restateWeak, modelDivergedAnswers: modelDiverged,
   forgeryAcceptancePct: pct(acc, tried), forgeriesTried: tried, forgeryByClass: forg, falseRejections: falseReject,
 };
 console.log(JSON.stringify(out));
-if (wrong > 0 || acc > 0 || falseReject > 0) process.exitCode = 1;
+if (wrong > 0 || acc > 0 || falseReject > 0 || modelDiverged > 0) process.exitCode = 1;

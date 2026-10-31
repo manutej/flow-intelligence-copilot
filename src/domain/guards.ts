@@ -271,8 +271,13 @@ export function verifyAnswerEnvelope(
     }
   }
   if (!Array.isArray(envelope.citations) || envelope.citations.length === 0) {
-    // A refusal or "I don't know" has no figure to source, so it may cite nothing.
-    if (!isNonAnswer) {
+    // A refusal or "I don't know" has no figure to source, so it may cite
+    // nothing. Neither does a sealed zero over an empty row set: the proof
+    // re-executes the typed query, so the empty set is checked, not trusted.
+    const provenEmptyZero =
+      !!envelope.query && Array.isArray(envelope.proof?.row_ids) && envelope.proof.row_ids.length === 0 &&
+      Object.values(envelope.result ?? {}).every((v) => typeof v !== 'number' || v === 0);
+    if (!isNonAnswer && !provenEmptyZero) {
       errors.push('Answer must include at least one row citation');
     }
   } else {
