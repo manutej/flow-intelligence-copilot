@@ -6,7 +6,7 @@ import { hashOf } from '../agent/envelope.ts';
 import { verifyAnswerEnvelope } from '../domain/guards.ts';
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import type { ParseConfig } from '../agent/model-parse.ts';
-import { priorNumbers, usedPriors } from './inputs.ts';
+import { MODEL_PARAMETERS, unusedParameter } from './inputs.ts';
 import { inLabel, specErrors, type ChartSpec, type Evidence, type EvidenceItem, type Num, type PanelState, type Unit } from './spec.ts';
 
 /**
@@ -276,8 +276,10 @@ export function intentGate(turn: CopilotTurnResult, core: string, store: Portfol
 }
 
 /** First number stated near a prior word in any turn that the computation did not use, or null. */
+/** The first prior stated in the question that `used` does not hold (kept for the TENACITY repro). */
 export function statedPrior(input: string, used: ReadonlySet<number> = new Set()): number | null {
-  return priorNumbers(input, inLabel).find((n) => !used.has(n.value))?.value ?? null;
+  const prior = MODEL_PARAMETERS.find((p) => p.name === 'prior')!;
+  return unusedParameter(input, null, { policy: {} } as PortfolioStore, inLabel, [{ ...prior, used: () => used }])?.value ?? null;
 }
 
 /** Full path: S2 parse (model if configured, deterministic otherwise) -> picker -> validated spec. */
@@ -290,14 +292,13 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   const question = turns[turns.length - 1];
   const gate = intentGate(turn, coreQuestion(question), store);
   if (gate) return { question: input, spec: gate, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
-  // a number stated near a prior word (any turn, any match) that the computation did not use: the
-  // numbers would not reflect it, so nothing is charted (TENACITY 601bdfa HIGH)
-  const used = usedPriors(intentOf(turn) ?? parseQueryIntent(coreQuestion(question), store), store);
-  const unused = statedPrior(input, used);
-  if (unused !== null) {
-    const policyPrior = store.policy.priorSpendUsdBeta0;
-    const t = { ...turn, clarifyingQuestion: `A prior stated in the question is not an input this analysis used (it uses the policy prior beta0 = $${policyPrior} where a prior applies), so nothing is charted. Ask again without that prior, or change it in the policy.`, clarifyOptions: [] };
-    return { question: input, spec: { ...clarify('unknown', t as CopilotTurnResult, turn.envelope.proof?.template_id ?? 'guard', question), insight: 'Stated prior is not applied', title: 'This prior is not supported' }, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
+  // a model parameter (prior, CAD rate) stated with a number the computation did not use, in any
+  // turn and any match: the numbers would not reflect it, so nothing is charted (TENACITY 601bdfa HIGH)
+  const unused = unusedParameter(input, intentOf(turn) ?? parseQueryIntent(coreQuestion(question), store), store, inLabel);
+  if (unused) {
+    const { name, policy } = unused.param;
+    const t = { ...turn, clarifyingQuestion: `A ${name} stated in the question is not an input this analysis used (it uses the policy ${policy(store)} where a ${name} applies), so nothing is charted. Ask again without that ${name}, or change it in the policy.`, clarifyOptions: [] };
+    return { question: input, spec: { ...clarify('unknown', t as CopilotTurnResult, turn.envelope.proof?.template_id ?? 'guard', question), insight: `Stated ${name} is not applied`, title: `This ${name} is not supported` }, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
   }
   const { spec, evidence } = pick({ question, turn, store });
   const errors = specErrors(spec, evidence, store);

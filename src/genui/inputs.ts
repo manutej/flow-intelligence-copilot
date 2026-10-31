@@ -64,7 +64,7 @@ export function usedInputs(intent: ParsedQueryIntent | null | undefined, store: 
   if (!intent) return used;
   walk(intent);
   if (intent.aggregation === 'argmin' || intent.aggregation === 'argmax') used.add(1); // the single best: "ranks #1"
-  if (intent.measure === 'decision_outcome_learning') { used.add(store.policy.priorSpendUsdBeta0); used.add(store.policy.priorLeasesAlpha0); }
+  for (const p of MODEL_PARAMETERS) for (const v of p.used(intent, store)) used.add(v); // the policy parameters in force
   return used;
 }
 
@@ -73,15 +73,15 @@ const PRIOR_WORD = /(?<![\p{L}\p{N}])(?:priors?|(?:beta|β)(?:[\s_-]?(?:zero|nou
 const CLAUSE = /[,;.!?()\n→]/u;
 const NEAR_TOKENS = 5;
 
-/** Every number (not a date or period label) stated within a few words of a prior word, in the same clause, in every turn. */
-export function priorNumbers(input: string, isLabel: (t: string, start: number, end: number) => boolean = () => false): StatedNumber[] {
+/** Every number (not a date or period label) stated within a few words of a word matching `word`, in the same clause, in every turn. */
+export function nearNumbers(input: string, word: RegExp, isLabel: (t: string, start: number, end: number) => boolean = () => false): StatedNumber[] {
   const out: StatedNumber[] = [];
   for (const turn of input.split(/\s*→\s*/)) {
     const t = prep(turn), nums = statedNumbers(turn).filter((n) => !isLabel(t, n.start, n.end)); // dates and periods are labels
-    for (const w of t.matchAll(PRIOR_WORD)) {
+    for (const w of t.matchAll(word)) {
       const ws = w.index!, we = ws + w[0].length;
       for (const n of nums) {
-        if (n.start < we && n.end > ws) continue; // part of the prior's name (beta-0, beta zero)
+        if (n.start < we && n.end > ws) continue; // part of the parameter's name (beta-0, beta zero)
         const gap = n.start >= we ? t.slice(we, n.start) : t.slice(n.end, ws);
         if (CLAUSE.test(gap.replace(/(?<=\d)[,.](?=\d)/g, ''))) continue;
         if (gap.trim().split(/\s+/).filter(Boolean).length <= NEAR_TOKENS) out.push(n);
@@ -89,6 +89,34 @@ export function priorNumbers(input: string, isLabel: (t: string, start: number, 
     }
   }
   return out;
+}
+export const priorNumbers = (input: string, isLabel?: (t: string, start: number, end: number) => boolean) => nearNumbers(input, PRIOR_WORD, isLabel);
+
+/**
+ * The numeric policy parameters a question can state. Each names the words that call it, the
+ * policy values the computation uses for it (none when it does not apply), and how to say them.
+ */
+export interface ModelParameter {
+  readonly name: string;
+  readonly word: RegExp;
+  readonly used: (intent: ParsedQueryIntent | null | undefined, store: PortfolioStore) => ReadonlySet<number>;
+  readonly policy: (store: PortfolioStore) => string;
+}
+const CAD_RATE_WORD = /(?<![\p{L}\p{N}])(?:(?:cad|fx|exchange|conversion)(?:[\s_/-]*(?:to[\s_-]*)?usd)?[\s_-]*rate|cad[\s_/-]*(?:to[\s_-]*)?usd)(?![\p{L}\p{N}])/giu;
+export const MODEL_PARAMETERS: readonly ModelParameter[] = [
+  { name: 'prior', word: PRIOR_WORD, used: (i, s) => usedPriors(i, s), policy: (s) => `prior beta0 = $${s.policy.priorSpendUsdBeta0}` },
+  // the loader converts every CAD amount at the policy rate; no question can change it
+  { name: 'CAD rate', word: CAD_RATE_WORD, used: (_i, s) => new Set([s.policy.cadToUsdRate]), policy: (s) => `CAD rate 1 CAD = ${s.policy.cadToUsdRate} USD` },
+];
+
+/** The first parameter stated with a number the computation did not use, in any turn and any match. */
+export function unusedParameter(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore, isLabel?: (t: string, start: number, end: number) => boolean, params: readonly ModelParameter[] = MODEL_PARAMETERS): { param: ModelParameter; value: number } | null {
+  for (const param of params) {
+    const used = param.used(intent, store);
+    const n = nearNumbers(input, param.word, isLabel).find((x) => !used.has(x.value));
+    if (n) return { param, value: n.value };
+  }
+  return null;
 }
 
 /** Words in the question that name things with digits (beta0, P04, X001): echoed verbatim, never as numbers. */

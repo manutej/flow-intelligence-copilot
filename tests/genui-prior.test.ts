@@ -51,3 +51,18 @@ test('LOW residuals: clarify ids, guard source, glued echoes', async () => {
   const w = structuredClone(c.spec) as any; w.intent = 'leasing.vacancy.count';
   assert.ok(specErrors(w, c.evidence, store).some((e) => e.includes('spec.intent')));
 });
+test('one mechanism: any stated model parameter the computation did not use gives a clean clarify naming the policy value', async () => {
+  const q = (s: string) => `${s}, was decision X001 in decisions.csv accepted, who decided it, and what was the monthly delta?`;
+  for (const [stated, policy] of [['Under CAD rate 0.7', '1 CAD = 0.73 USD'], ['Under CAD rate 1', '1 CAD = 0.73 USD'], ['Using fx rate 0.8', '1 CAD = 0.73 USD']] as const) {
+    const a = await askPanel(q(stated), store);
+    assert.equal(a.spec.template, 'clarify_card', stated);
+    assert.equal(a.spec.state, 'ready', stated); // not error_data
+    assert.equal(a.spec.title, 'This CAD rate is not supported');
+    assert.ok((a.spec as any).props.restatement.includes(policy), stated);
+    assert.deepEqual(specErrors(a.spec, a.evidence, store), []);
+  }
+  assert.equal((await askPanel(q('Under CAD rate 0.73'), store)).spec.template, 'kpi');
+  const p = await askPanel(base('with prior beta0=$1800'), store); // the prior card is the same mechanism
+  assert.equal(p.spec.title, 'This prior is not supported');
+  assert.ok((p.spec as any).props.restatement.includes('policy prior beta0 = $3250'));
+});
