@@ -33,6 +33,28 @@ function knownLabels(store: PortfolioStore): Set<string> {
   return known;
 }
 
+/** Every word of a property's name, aliases and neighbourhood. */
+function propertyWords(p: PortfolioStore['properties'][number]): Set<string> {
+  return new Set([p.name, ...p.aka, p.neighborhood].flatMap((l) => l.toLowerCase().replace(/^the\s+/, '').split(/\s+/)));
+}
+
+/**
+ * The one property an unknown building phrase most likely means: the only
+ * property whose name or alias holds the phrase's distinctive words (not a
+ * generic building word such as "Park" or "Tower"). "Kedzie Park" points to
+ * Kedzie Works; "Lakeview Tower" points to none.
+ */
+export function partialBuildingMatch(phrase: string, store: PortfolioStore): { propertyId: string; name: string } | null {
+  const words = phrase.toLowerCase().split(/\s+/).filter((w) => w !== 'the' && !BUILDING_SUFFIX_RE.test(w));
+  if (words.length === 0) return null;
+  const nameWords = (p: PortfolioStore['properties'][number]) => new Set([p.name, ...p.aka].flatMap((l) => l.toLowerCase().replace(/^the\s+/, '').split(/\s+/)));
+  const owners = store.properties.filter((p) => words.some((w) => nameWords(p).has(w)));
+  if (owners.length !== 1) return null;
+  // Every distinctive word must be that property's or no property's.
+  if (!words.every((w) => nameWords(owners[0]).has(w) || !store.properties.some((p) => propertyWords(p).has(w)))) return null;
+  return { propertyId: owners[0].propertyId, name: owners[0].name };
+}
+
 /** Returns a building-like proper name that matches no property, alias, or neighborhood. */
 export function findUnknownBuildingReference(
   question: string,
@@ -52,10 +74,12 @@ export function findUnknownBuildingReference(
       .replace(/['’]s$/i, '');
     if (!BUILDING_SUFFIX_RE.test(phrase)) continue;
     if (known.has(phrase.toLowerCase())) continue;
-    // Descriptive combinations of known words ("South Loop Point") are fine;
-    // a word no property uses ("Lakeview Tower") is not.
-    const words = phrase.toLowerCase().split(/\s+/);
-    if (words.every((w) => knownWords.has(w))) continue;
+    // Descriptive combinations of one property's words ("South Loop Point":
+    // its neighbourhood and its name) are fine; a word no property uses
+    // ("Lakeview Tower"), or words of different properties ("Kedzie Park":
+    // a P06 name word and a P05 or P09 neighbourhood word), are not.
+    const words = phrase.toLowerCase().split(/\s+/).filter((w) => w !== 'the');
+    if (words.every((w) => knownWords.has(w)) && store.properties.some((p) => words.every((w) => propertyWords(p).has(w)))) continue;
     return phrase;
   }
   return null;

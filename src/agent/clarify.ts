@@ -1,6 +1,6 @@
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import { resolvePropertiesFromText } from '../domain/resolver.ts';
-import { findUnknownBuildingReference, findUnresolvedPlace } from './recognition.ts';
+import { findUnknownBuildingReference, findUnresolvedPlace, partialBuildingMatch } from './recognition.ts';
 import { isMeasureNoun, onlyInFilterClause } from './intent.ts';
 import { unboundNegators } from './closed-world.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
@@ -185,7 +185,14 @@ function readings(question: string, unbound: readonly string[], store: Portfolio
   // widening to the portfolio, answers a different question.
   const typo = nearMissBuilding(question, store);
   if (typo) return didYouMean(question, typo, unbound, store);
-  if (findUnknownBuildingReference(question, store)) return [];
+  const unknown = findUnknownBuildingReference(question, store);
+  if (unknown) {
+    // A phrase whose distinctive word belongs to one building ("Kedzie Park")
+    // gets that building as its one did-you-mean, never a silent answer.
+    const meant = partialBuildingMatch(unknown, store);
+    const start = question.indexOf(unknown);
+    return meant && start >= 0 ? didYouMean(question, { start, end: start + unknown.length, written: unknown, name: meant.name }, unbound, store) : [];
+  }
   if (dropsPlaceOrAsk(question, unbound, store)) return [];
   if (unboundNegators(question).length > 0) return negatedStatusOptions(question, store);
   const quoted = unbound.map((w) => `"${w}"`).join(', ');
