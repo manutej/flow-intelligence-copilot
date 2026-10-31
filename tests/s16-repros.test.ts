@@ -27,7 +27,7 @@ for (const q of [
 
 // Finding 5: every reading here would drop the place or the ask, so none is offered.
 for (const q of [
-  'average rent at the marlow?', 'How many units are under construction near Summit Ridge? Keep it to 3 bullets.',
+  'How many units are under construction near Summit Ridge? Keep it to 3 bullets.',
   'Since Harbor View has no vacancies, why is exposure so high? Keep it to 3 bullets.',
   'Which property has the highest vacancy? Keep it to 3 bullets.',
   'Does the Market Square retail vacancy affect apartment leasing? Keep it to 3 bullets.',
@@ -73,3 +73,12 @@ for (const q of ['For my monthly review: Unit count and vacancy at The Clarendon
     assert.doesNotMatch(text, /across the portfolio|all operating buildings/);
   });
 }
+
+// "the marlow" is one edit from Marlowe Residences and from no other
+// building, so it now gets a did-you-mean that keeps the building; the
+// portfolio-wide reading this row once guarded against is never offered.
+test('s16: the marlow is offered Marlowe Residences only', async () => {
+  const t = await askFlowIqCopilot('average rent at the marlow?', { store, parse: null });
+  assert.equal(r(t.envelope).clarification_needed, true);
+  assert.deepEqual(t.clarifyOptions?.map((o) => /Marlowe Residences/.test(o.question)), [true]);
+});
