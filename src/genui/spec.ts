@@ -74,7 +74,7 @@ const MONTHS = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?
  * "There are 2025 leads" and "in 2026 units" are still figures.
  */
 const TEMPORAL = 'in|since|during|through|throughout|until|till|before|after|from';
-const LABEL_TOKENS = new RegExp(`\\b\\d{4}-\\d{2}(-\\d{2})?\\b|\\b(?:${MONTHS}|[QH][1-4]|FY)\\.?\\s+(19|20)\\d{2}\\b|\\b(?:${TEMPORAL})\\s+(19|20)\\d{2}\\b(?=\\s*(?:[.,;:!?)]|$))|\\b(19|20)\\d{2}\\s+(?:YTD|year-to-date)\\b|\\b[QH][1-4]\\b|\\bP\\d{2}\\b|\\bD-[0-9a-f]{8,16}\\b`, 'gi');
+const LABEL_TOKENS = new RegExp(`\\b\\d{4}-\\d{2}(-\\d{2})?\\b|\\b(?:${MONTHS}|[QH][1-4]|FY)\\.?\\s+(19|20)\\d{2}\\b|\\b(?:${TEMPORAL})\\s+(19|20)\\d{2}\\b(?=\\s*(?:[.,;:!?)]|$))|\\b(19|20)\\d{2}\\s+(?:YTD|year-to-date)\\b|\\b[QH][1-4](?:\\b|(?=_))|\\bP\\d{2}\\b|\\bD-[0-9a-f]{8,16}\\b`, 'gi');
 /**
  * Roman numerals: two or more letters in upper case, or four or more in any case
  * (so "mmxxv" is caught but the words "mix", "did" and "dim" are not).
@@ -87,17 +87,27 @@ const NUMBER_WORDS = new RegExp(NUMBER_WORD_SRC, 'i');
 export const UNITS: readonly Unit[] = ['count', '$', '%', 'sqft', 'leases'];
 /** Digits the user typed (e.g. "3-bedroom") may be echoed in a title or subtitle; nowhere else. */
 const ECHO_KEYS = new Set(['title', 'subtitle']);
+/** Whole numeric tokens as the user typed them, with a $ or # prefix and a % suffix kept attached. */
+const NUM_TOKEN = /[$#]?\p{N}+(?:[.,]\p{N}+)*%?/gu;
+const escRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Remove each echoed token where it stands whole (not inside a longer number, and with the same prefix and suffix). */
+const stripEcho = (t: string, echo: ReadonlySet<string>) => {
+  const toks = [...echo].filter((x) => /\p{N}/u.test(x)).sort((a, b) => b.length - a.length);
+  for (const k of toks) t = t.replace(new RegExp(`(?<![\\p{N}.,$#])${escRe(k)}(?![\\p{N}%]|[.,]\\p{N})`, 'gu'), ' ');
+  return t;
+};
 const carriesFigure = (raw: string, echo: ReadonlySet<string> = new Set()) => {
   // strip format characters (zero-width space, soft hyphen, joiners) and combining marks before matching
   const t = raw.normalize('NFKD').replace(/[\p{Cf}\p{Mn}]/gu, '').normalize('NFKC');
   if (HAN_NUMERALS.test(t) || CYRILLIC_NUMBER.test(t)) return true;
-  return ROMAN.test(t.replace(LABEL_TOKENS, '')) || NUMBER_WORDS.test(t.replace(LABEL_TOKENS, '').replace(new RegExp(NUMBER_WORD_SRC, 'gi'), (w) => (echo.has(w.toLowerCase()) ? '' : w))) || FIGURE_IN_TEXT.test(t.replace(LABEL_TOKENS, '').replace(/\p{N}+/gu, (d) => (echo.has(d) ? '' : d)));
+  return ROMAN.test(t.replace(LABEL_TOKENS, '')) || NUMBER_WORDS.test(t.replace(LABEL_TOKENS, '').replace(new RegExp(NUMBER_WORD_SRC, 'gi'), (w) => (echo.has(w.toLowerCase()) ? '' : w))) || FIGURE_IN_TEXT.test(stripEcho(t.replace(LABEL_TOKENS, ''), echo));
 };
 /** Free-text fields that may carry figures because they are the verified answer bytes or reviewed option text. */
 /** Layout settings, not data: the only bare numbers allowed. */
 const LAYOUT_NUM = /\.props\.limit$/;
+// intent is an id, not text: it must equal the main evidence item's intent (checked below) (TENACITY M2).
 // unit is checked against the closed UNITS list instead; the rest are bound by panelErrors' full re-pick
-const TEXT_EXEMPT = new Set(['answer', 'options', 'restatement', 'question', 'citations']);
+const TEXT_EXEMPT = new Set(['answer', 'options', 'restatement', 'question', 'citations', 'intent']);
 
 /** Why a spec fails the closed-template and number-fidelity rules; empty when it passes. */
 export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore): string[] {
@@ -114,11 +124,13 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
   for (const it of ev.items) if (hashOf(it.result) !== it.result_hash) errs.push(`evidence ${it.key}: result hash mismatch`);
   let nums = 0;
   const mainQ = ev.items.find((i) => i.key === 'main')?.recipe?.question ?? '';
-  const echo = new Set([...(mainQ.match(/\d+/g) ?? []), ...(mainQ.match(new RegExp(NUMBER_WORD_SRC, 'gi')) ?? []).map((w) => w.toLowerCase())]);
+  const echo = new Set([...(mainQ.normalize('NFKC').match(NUM_TOKEN) ?? []), ...(mainQ.match(new RegExp(NUMBER_WORD_SRC, 'gi')) ?? []).map((w) => w.toLowerCase())]);
   const walk = (x: unknown, path: string, exempt: boolean): void => {
     if (typeof x === 'number' && LAYOUT_NUM.test(path) && Number.isInteger(x)) return;
     if (typeof x === 'number') { errs.push(`${path}: bare number ${x} has no ref`); return; }
     if (typeof x === 'string' && path.endsWith('.unit')) { if (!(UNITS as readonly string[]).includes(x)) errs.push(`${path}: unit ${JSON.stringify(x)} is not in the closed list`); return; }
+    // the panel's source is its intent id when built by the picker; an id, bound to the main item, not text
+    if (typeof x === 'string' && path === 'spec.source' && x === (spec as { intent?: unknown }).intent) return;
     if (typeof x === 'string') { if (!exempt && carriesFigure(x, ECHO_KEYS.has(path.split('.').pop()!) ? echo : undefined)) errs.push(`${path}: text carries a figure: ${JSON.stringify(x)}`); return; }
     if (isNum(x)) {
       nums++;

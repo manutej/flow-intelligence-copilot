@@ -38,3 +38,18 @@ test('L2: zero-width, accents, CJK, Cyrillic, any-case roman, currency signs and
     '¥ spend', '₹ spend', '٪ rate', 'dozens of leads', 'a pair of sources']) assert.ok(errs(t).length > 0, `accepted: ${t}`);
   for (const t of ['a mix of sources', 'Leads did improve', 'civil and mild']) assert.deepEqual(errs(t), [], t);
 });
+
+// TENACITY VERDICT-GENUI-7672cd4 M2: the server's own specs must pass the detector.
+test('M2: intent ids are not text, and whole numeric tokens from the question (with $ % #) echo in titles', async () => {
+  for (const q of ['What was H1 spend versus Q3 spend for Facebook Ads at class B buildings?',
+    'At The Clarendon (P04) with prior beta0=$1800, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD']) {
+    const a = await askPanel(q, store);
+    assert.deepEqual(a.errors, [], q); assert.notEqual(a.spec.state, 'error_data', q);
+  }
+  // the echo is the whole token only: a bare figure the question wrote with $ is still a figure
+  const q = 'At The Clarendon (P04) with prior beta0=$1800, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD';
+  const a = await askPanel(q, store);
+  const t = (title: string) => { const s = structuredClone(a.spec) as any; s.title = title; return specErrors(s, a.evidence, store); };
+  assert.deepEqual(t('Prior $1800, ranked #1'), []);
+  for (const bad of ['Prior 1800 leases', 'Prior $18000', 'Prior $1800.5', 'Prior 1800%', '#2 channel']) assert.ok(t(bad).length > 0, `accepted: ${bad}`);
+});
