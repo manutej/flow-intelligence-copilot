@@ -48,7 +48,7 @@ export function questionFor(f: Fact): string | null {
     return `Which ${bySrc ? 'listing source' : 'building'} had the ${hi} ${B}${n}${P}?`;
   }
   switch (f.measure) {
-    case 'leads': return `How many leads${S} did${A.replace(' at ', ' ').replace(' across the portfolio', ' the portfolio')} get${P}?`;
+    case 'leads': return `How many leads${S}${f.filters.bedrooms === undefined ? '' : ` for ${B}units`} did${A.replace(' at ', ' ').replace(' across the portfolio', ' the portfolio')} get${P}?`;
     case 'tours': return `How many tours${S}${A}${P}?`;
     case 'applications': return `How many applications${S}${A}${P}?`;
     case 'leads_leased': return `How many leads${S}${A} leased${P}?`;
