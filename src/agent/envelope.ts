@@ -128,8 +128,13 @@ const sealed = (env: Rendered & Record<string, unknown>) => {
 };
 const seal = (input: NonAnswerInput, env: Rendered) =>
   createHmac('sha256', SEAL_KEY).update(hashOf({ input, envelope: sealed(env as Rendered & Record<string, unknown>) })).digest('hex');
+// Both sides must be lowercase hex of the same length before the compare:
+// Buffer.from(x, 'hex') stops at the first non-hex pair, and timingSafeEqual
+// throws on unequal lengths. Malformed input is invalid, never an exception.
+const HEX_RE = /^(?:[0-9a-f]{2})+$/;
 const sameHex = (a: unknown, b: string) =>
-  typeof a === 'string' && a.length === b.length && timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
+  typeof a === 'string' && a.length === b.length && HEX_RE.test(a) && HEX_RE.test(b) &&
+  timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
 const rendered = (env: Rendered) => hashOf({ answer: env.answer, result: env.result, citations: env.citations ?? null });
 
 let renderer: Renderer | null = null;
