@@ -47,6 +47,7 @@ export type IntentMeasure =
   | 'renewal_rate_class_comparison'
   | 'new_vs_renewal_and_concession'
   | 'average_concession'
+  | 'total_concession'
   | 'rent_at_risk'
   | 'lease_count'
   | 'vacancy_rate'
@@ -696,6 +697,9 @@ const UNIT_NOUN_RE =
 
 /** A renewal-outcome word that modifies "renewal" ("pending renewal") rather than naming a lease type. */
 const RENEWAL_STATUS_PHRASE_RE = /\b(?:pending|undecided|renewed|not[-\s]due|notice[-\s]given)\s+renewals?\b/gi;
+/** Words that ask for a per-item mean rather than a sum. */
+const AVERAGE_WORD_RE = /\b(?:average|avg|mean|typical|per\s+lease|per[-\s]lease)\b/i;
+
 /** The renewal outcome a lease count is restricted to, from the outcome's own word. */
 function countedRenewalStatus(question: string): RenewalStatus | undefined {
   if (/\bnot[-\s_]?due\b/i.test(question)) return 'not_due';
@@ -1130,7 +1134,9 @@ function parseQueryIntentRaw(
     ) {
       measure = 'new_vs_renewal_and_concession';
     } else if (isConcessionQuery) {
-      measure = 'average_concession';
+      // A concession sum is the default reading of "how much" or "total"; only
+      // an averaging word asks for the per-lease mean.
+      measure = AVERAGE_WORD_RE.test(question) || aggregation === 'argmax' || aggregation === 'argmin' ? 'average_concession' : 'total_concession';
     } else if (isRentAtRiskOrLeaseRent) {
       measure = 'rent_at_risk';
     }
@@ -1272,6 +1278,7 @@ const MEASURE_STATISTICS: Readonly<Record<IntentMeasure, readonly Statistic[]>> 
   renewal_rate_class_comparison: ['share'],
   new_vs_renewal_and_concession: ['count', 'average'],
   average_concession: ['average'],
+  total_concession: ['sum'],
   rent_at_risk: ['sum'],
   lease_count: ['count'],
   vacancy_rate: ['share'],
@@ -1350,7 +1357,7 @@ function answerLayout(i: ParsedQueryIntent, question?: string): ReadonlySet<Dime
     case 'decision_outcome_learning': if (ranked) out.add('source'); break;
     case 'applied_without_tour': case 'signed_leases_ranking': out.add('building'); break;
     case 'cost_per_signed_lease': if (ranked) out.add('source'); break;
-    case 'average_concession': case 'rent_at_risk': case 'vacancy_rate': case 'unit_count': if (ranked) out.add('building'); break;
+    case 'average_concession': case 'total_concession': case 'rent_at_risk': case 'vacancy_rate': case 'unit_count': if (ranked) out.add('building'); break;
     default: break;
   }
   return out;
