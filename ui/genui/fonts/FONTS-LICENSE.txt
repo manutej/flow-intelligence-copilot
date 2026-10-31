@@ -1,0 +1,2 @@
+Cormorant Garamond, Inter and JetBrains Mono are licensed under the SIL Open Font License 1.1 (https://openfontlicense.org).
+Subset to Latin-1 plus arrows and delta glyphs with pyftsubset, from the Google Fonts variable TTFs.
