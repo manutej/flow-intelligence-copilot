@@ -208,6 +208,8 @@ test('f2424a7: a genuine non-answer verifies and re-sealing it unchanged still v
     assert.equal((sr.result as Record<string, unknown>).refused, true);
     assert.equal(verifyAnswerEnvelope(sr, store).valid, true);
     const { query: _q, proof: _p, ...bare } = sr;
-    assert.equal(verifyAnswerEnvelope(sealAs({ question: Q2, origin: 'session' }, { ...bare, id: 'Q2' } as never), store).valid, false);
+    assert.equal(verifyAnswerEnvelope(sealAs({ question: Q2, origin: 'session', refused_question: 'Which tenants with kids should we avoid renting to at Kedzie Works?' }, { ...bare, id: 'Q2' } as never), store).valid, false);
+    // A follow-up-shaped question with no refused earlier turn behind it.
+    assert.equal(verifyAnswerEnvelope(sealAs({ question: 'And how many of those people are on notice?', origin: 'session', refused_question: 'How many vacant units at Kedzie Works?' }, { ...bare } as never), store).valid, false);
   });
 }
