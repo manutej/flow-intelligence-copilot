@@ -68,6 +68,16 @@ export interface ModelParse {
   readonly latencyMs: number;
   readonly cacheHit: boolean;
   readonly runKey: string | null;
+  /** What the endpoint returned, for the run log (null when no call was made). */
+  readonly call?: ModelCall | null;
+}
+
+export interface ModelCall {
+  readonly finish_reason: string | null;
+  readonly completion_tokens: number | null;
+  readonly reasoning_chars: number;
+  readonly max_tokens: number;
+  readonly raw_head: string;
 }
 
 type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
@@ -138,8 +148,9 @@ export async function modelParse(
   deps: { readonly fetch?: Fetch; readonly runStore?: RunStore | null } = {},
 ): Promise<ModelParse> {
   const det = parseQueryIntent(question, store);
+  let call: ModelCall | null = null;
   const fallback = (reason: string, raw: string | null = null, latencyMs = 0, key: string | null = null): ModelParse => ({
-    path: 'deterministic', intent: det, deterministic: det, raw, coverage: { ok: true, unbound: [], fields_bound: [] }, fallbackReason: reason, latencyMs, cacheHit: false, runKey: key,
+    path: 'deterministic', intent: det, deterministic: det, raw, coverage: { ok: true, unbound: [], fields_bound: [] }, fallbackReason: reason, latencyMs, cacheHit: false, runKey: key, call,
   });
   if (!cfg) return fallback('model parse off (FLOWIQ_PARSE_URL unset)');
   let grammar: string;
@@ -156,7 +167,7 @@ export async function modelParse(
   let latencyMs = 0;
   let cacheHit = false;
   const hit = cfg.cache ? runs?.lookup(key) : null;
-  if (hit && typeof hit.raw_output === 'string') {
+  if (hit && typeof hit.raw_output === 'string' && hit.raw_output.trim()) {
     raw = hit.raw_output;
     cacheHit = true;
   } else {
@@ -168,7 +179,16 @@ export async function modelParse(
       max_tokens: params.max_tokens,
       stream: false,
     };
-    if (cfg.backend === 'llama') body.grammar = grammar;
+    if (cfg.backend === 'llama') {
+      // llama-server applies `grammar` on /v1/chat/completions, but a thinking
+      // chat template opens with <think>, which the grammar forbids, and with
+      // --reasoning-format auto the server moves the text into
+      // reasoning_content, leaving content "". Turn thinking off so the
+      // grammar constrains the whole reply.
+      body.grammar = grammar;
+      body.chat_template_kwargs = { enable_thinking: false };
+      body.reasoning_format = 'none';
+    }
     else body.response_format = { type: 'json_schema', json_schema: { name: 'flowiq', schema: JSON_SCHEMA } };
     try {
       const f = deps.fetch ?? (globalThis.fetch as unknown as Fetch);
@@ -180,8 +200,17 @@ export async function modelParse(
       });
       latencyMs = Math.round(performance.now() - t0);
       if (!res.ok) return fallback(`model endpoint HTTP ${res.status}`, null, latencyMs, key);
-      const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      raw = j.choices?.[0]?.message?.content ?? null;
+      const j = (await res.json()) as { usage?: { completion_tokens?: number }; choices?: Array<{ finish_reason?: string; message?: { content?: string | null; reasoning_content?: string | null } }> };
+      const c = j.choices?.[0];
+      const content = c?.message?.content ?? '';
+      const reasoning = c?.message?.reasoning_content ?? '';
+      // An empty content with reasoning_content still holds the object when
+      // the server split it out; keep both so the log shows what came back.
+      raw = content.trim() ? content : reasoning.trim() ? reasoning : null;
+      call = { finish_reason: c?.finish_reason ?? null, completion_tokens: j.usage?.completion_tokens ?? null, reasoning_chars: reasoning.length, max_tokens: params.max_tokens, raw_head: (raw ?? content).slice(0, 160) };
+      if (raw === null) {
+        return fallback(`model returned empty content (finish_reason=${c?.finish_reason ?? 'none'}, reasoning_content ${reasoning.length} chars, choices ${j.choices?.length ?? 0})`, content, latencyMs, key);
+      }
     } catch (e) {
       latencyMs = Math.round(performance.now() - t0);
       return fallback(`model unavailable: ${(e as Error).name === 'TimeoutError' ? `timeout after ${cfg.timeoutMs} ms` : (e as Error).message}`, null, latencyMs, key);
@@ -193,7 +222,7 @@ export async function modelParse(
   try {
     obj = JSON.parse(raw.replace(/^[\s\S]*?(?=\{"kind")/, ''));
   } catch {
-    return record(fallback('model output is not JSON', raw, latencyMs, key));
+    return record({ ...fallback(`model output is not JSON (${raw.length} chars, head ${JSON.stringify(raw.slice(0, 160))})`, raw, latencyMs, key), cacheHit });
   }
   const intent = toIntent(obj);
   if (typeof intent === 'string') {
@@ -202,11 +231,11 @@ export async function modelParse(
     return record({ ...fallback(`model output not a valid TypedQuery: ${intent}`, raw, latencyMs, key), cacheHit });
   }
   const cov = coverage(question, intent, det, store);
-  return record({ path: cov.ok ? 'model' : 'model-clarify', intent, deterministic: det, raw, coverage: cov, fallbackReason: null, latencyMs, cacheHit, runKey: key });
+  return record({ path: cov.ok ? 'model' : 'model-clarify', intent, deterministic: det, raw, coverage: cov, fallbackReason: null, latencyMs, cacheHit, runKey: key, call });
 
   function record(p: ModelParse): ModelParse {
     if (runs && !cacheHit) {
-      runs.append({ type: 'parse', key, ts: new Date().toISOString(), question_norm: normalizeQuestion(question), model: cfg!.model, raw_output: raw, typed_query: p.path === 'deterministic' ? null : p.intent, coverage: p.coverage, path: p.path, latency_ms: latencyMs });
+      runs.append({ type: 'parse', key, ts: new Date().toISOString(), question_norm: normalizeQuestion(question), model: cfg!.model, raw_output: raw, typed_query: p.path === 'deterministic' ? null : p.intent, coverage: p.coverage, path: p.path, latency_ms: latencyMs, fallback_reason: p.fallbackReason, call });
     }
     return p;
   }

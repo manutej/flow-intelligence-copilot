@@ -31,6 +31,8 @@ export interface RunRecord {
   readonly pick?: number;
   readonly answer_hash?: string | null;
   readonly latency_ms?: number;
+  readonly fallback_reason?: string | null;
+  readonly call?: unknown;
   readonly verdict?: 'correct' | 'wrong' | 'unknown';
   readonly correction?: unknown;
   /** Run-level fields, written by scripts/s2-live.ts for export-runs. */

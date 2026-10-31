@@ -52,10 +52,10 @@ for (const [k, line] of lines.entries()) {
   tally[outcome] = (tally[outcome] ?? 0) + 1;
   const mp = turn.parse;
   const row = {
-    qid, question: q.question, path: turn.parsePath ?? 'deterministic', fallback: turn.parseFallbackReason ?? null, cache_hit: mp?.cacheHit ?? false,
+    qid, question: q.question, path: turn.parsePath ?? 'deterministic', fallback: turn.parse ? (turn.parseFallbackReason ?? null) : `pre_model:${r.refused === true ? 'fair_housing' : r.unknown === true ? 'out_of_scope' : 'guard'}`, cache_hit: mp?.cacheHit ?? false,
     raw_output: mp?.raw ?? null, parsed_query: mp?.intent ?? null, coverage: mp?.coverage ?? null, outcome, answer: turn.envelope.answer,
     clarify_options: (turn.clarifyOptions ?? []).map((o) => o.question), restatement: turn.restatement ?? null,
-    model_latency_ms: mp?.latencyMs ?? null, total_latency_ms: Math.round(performance.now() - t0), verified: turn.verification.valid,
+    model_latency_ms: mp?.latencyMs ?? null, total_latency_ms: Math.round(performance.now() - t0), verified: answered && turn.verification.valid, call: mp?.call ?? null,
   };
   fs.appendFileSync(out, `${JSON.stringify(row)}\n`);
   runs.append({

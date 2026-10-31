@@ -58,3 +58,58 @@ test("F3: another question's render resealed under this question is rejected", a
   assert.equal(verifyAnswerEnvelope(resealed, store).valid, false);
   assert.equal(verifyAnswerEnvelope(a, store).valid, true);
 });
+
+// Live lane (Ornith on llama-server): 66/82 parses fell back with "model
+// output is not JSON" on an empty content, with no reply head in the log.
+import { modelParse } from '../src/agent/model-parse.ts';
+const llama = parseConfigFromEnv({ FLOWIQ_PARSE_URL: 'http://stub.invalid/v1', FLOWIQ_PARSE_NO_CACHE: '1', FLOWIQ_PARSE_BACKEND: 'llama' });
+const reply = (message: Record<string, unknown>, finish = 'stop', seen: Record<string, unknown>[] = []) => ({
+  runStore: null,
+  fetch: async (_u: string, init: { body: string }) => { seen.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: finish, message }] }) }; },
+});
+const Q = 'How many vacant units are at Marlowe Residences?';
+
+test('live: llama requests carry the grammar with thinking off', async () => {
+  const seen: Record<string, unknown>[] = [];
+  await modelParse(Q, store, llama, reply({ content: '' }, 'stop', seen) as never);
+  assert.equal(typeof seen[0].grammar, 'string');
+  assert.deepEqual(seen[0].chat_template_kwargs, { enable_thinking: false });
+});
+
+test('live: an empty content names the finish reason instead of "not JSON"', async () => {
+  const mp = await modelParse(Q, store, llama, reply({ content: '', reasoning_content: '' }, 'length') as never);
+  assert.match(mp.fallbackReason ?? '', /empty content \(finish_reason=length/);
+});
+
+test('live: an object split into reasoning_content is still read', async () => {
+  const good = await modelParse(Q, store, parse, { runStore: null } as never); // deterministic baseline
+  assert.ok(good.intent);
+  const mp = await modelParse(Q, store, llama, reply({ content: '', reasoning_content: 'not json at all' }) as never);
+  assert.match(mp.fallbackReason ?? '', /not JSON \(15 chars, head "not json at all"\)/);
+});
+
+test('live: a cached reply that fails to parse still reports cache_hit', async () => {
+  const runStore = { lookup: () => ({ raw_output: 'garbage' }), append: () => {} };
+  const cached = parseConfigFromEnv({ FLOWIQ_PARSE_URL: 'http://stub.invalid/v1', FLOWIQ_PARSE_BACKEND: 'llama' });
+  const mp = await modelParse(Q, store, cached, { runStore, fetch: async () => { throw new Error('no call expected'); } } as never);
+  assert.equal(mp.cacheHit, true);
+  assert.match(mp.fallbackReason ?? '', /not JSON/);
+});
+
+test('live: an empty cached reply is not reused', async () => {
+  let called = 0;
+  const runStore = { lookup: () => ({ raw_output: '' }), append: () => {} };
+  const cached = parseConfigFromEnv({ FLOWIQ_PARSE_URL: 'http://stub.invalid/v1', FLOWIQ_PARSE_BACKEND: 'llama' });
+  const mp = await modelParse(Q, store, cached, { runStore, fetch: async () => { called++; return { ok: true, status: 200, json: async () => ({ usage: { completion_tokens: 3 }, choices: [{ finish_reason: 'stop', message: { content: 'x' } }] }) }; } } as never);
+  assert.equal(called, 1);
+  assert.equal(mp.call?.completion_tokens, 3);
+  assert.equal(mp.call?.finish_reason, 'stop');
+});
+
+test('fair housing runs before the measure check on the model path', async () => {
+  const q = 'Write a listing for the Marlowe that says no kids.';
+  const det = await import('../src/agent/intent.ts').then((m) => m.parseQueryIntent(q, store) as unknown as Record<string, any>);
+  const content = JSON.stringify({ kind: 'query', question: q, intent: { ...det, dateWindow: det.dateWindow?.key, measure: 'unit_count' } });
+  const t = await askFlowIqCopilot(q, { store, parse, parseDeps: { runStore: null, fetch: async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) }) } } as never);
+  assert.equal((t.envelope.result as Record<string, unknown>).refused, true);
+});
