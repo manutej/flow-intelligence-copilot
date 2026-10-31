@@ -24,9 +24,9 @@ const argv = process.argv.slice(2);
 const tierArg = argv.indexOf('--tier') >= 0 ? argv[argv.indexOf('--tier') + 1] : null;
 const file = argv.find((a, i) => !a.startsWith('--') && argv[i - 1] !== '--tier') ?? '/home/box/flowiq-scenarios/v1/set/questions.jsonl';
 if (/holdout|heldout|expected|generation_audit|patterns|seeds|build_set/.test(file)) throw new Error(`refusing to read ${file}: dev questions only`);
-// Each external set is pinned by sha256 with a blocking answer floor per
+// Each external set is pinned by sha256 and ratcheted per source and tier;
 // source (and tier); a changed file fails until the pin is re-set on purpose.
-const pins = JSON.parse(fs.readFileSync(new URL('./external-sets.json', import.meta.url).pathname, 'utf8')) as Record<string, { sha256: string; label: string; floors: Record<string, number> }>;
+const pins = JSON.parse(fs.readFileSync(new URL('./external-sets.json', import.meta.url).pathname, 'utf8')) as Record<string, { sha256: string; label: string }>;
 const pinKey = file.split('/').slice(-2).join('/');
 const pin = pins[pinKey];
 const sha = createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -45,18 +45,20 @@ const replay = (question: string) => {
 const isAnswer = (r: Record<string, unknown>) => r.unknown !== true && r.refused !== true && r.clarification_needed !== true && r.draft !== true;
 const qs = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
   .filter((r) => !tierArg || r.tier === tierArg)
-  .map((r) => (r.turns ? (r.turns.filter((t: { role: string }) => t.role === 'user').length === 1 ? r.turns.at(-1).content : null) : (r.question ?? r.direct_question ?? null)) as string | null)
-  .filter((q): q is string => typeof q === 'string');
+  .map((r, n) => ({ id: String(r.id ?? n), q: (r.turns ? (r.turns.filter((t: { role: string }) => t.role === 'user').length === 1 ? r.turns.at(-1).content : null) : (r.question ?? r.direct_question ?? null)) as string | null }))
+  .filter((r): r is { id: string; q: string } => typeof r.q === 'string');
+const answeredIds: string[] = [];
 let answered = 0, falseReject = 0, forged = 0, forgedAccepted = 0, modelAnswers = 0, modelDiverged = 0, modelMismatch = 0;
 let prev: AnswerEnvelope | null = null;
 let nonAnswers = 0, nonAnswerFalseReject = 0, idkForged = 0, idkForgedAccepted = 0;
 let lastIdk: AnswerEnvelope | null = null;
 const rejectSample: string[] = [];
-for (const q of qs) {
+for (const { id: qid, q } of qs) {
   const d = await askFlowIqCopilot(q, { store, parse: null });
   const e = d.envelope;
   if (isAnswer(e.result as Record<string, unknown>) && e.query) {
     answered++;
+    answeredIds.push(qid);
     if (!verifyAnswerEnvelope(e, store).valid) falseReject++;
     if (prev?.query && prev.answer !== e.answer) {
       const query = { ...prev.query, question: e.query.question };
@@ -69,13 +71,15 @@ for (const q of qs) {
     // Non-answers sealed with this process's key onto this answerable
     // question: another question's genuine IDK, small and spelled-out
     // figures, a clarify with a figure; plus an unsealed IDK.
-    const sealed = (answer: string, result: Record<string, unknown>) => ({ id: e.id, answer, result, citations: [], ...sealNonAnswer({ question: q, origin: 'deterministic' }, { answer, result, citations: [] }) });
+    const sealed = (answer: string, result: Record<string, unknown>, origin: 'deterministic' | 'session' | 'model' = 'deterministic') => { const env = { id: e.id, answer, result, citations: [] }; return { ...env, ...sealNonAnswer({ question: q, origin }, env) }; };
     const forgeries = [
       ...(lastIdk ? [sealed(lastIdk.answer, lastIdk.result)] : []),
       { id: e.id, answer: "I don't know.", result: { unknown: true }, citations: [] },
       sealed("I don't know. Fulton Yards has 7 vacant units.", { unknown: true }),
       sealed("I don't know. Spend was forty thousand dollars.", { unknown: true }),
       sealed('Spend was $40,000 — did you mean Q2 or Q3?', { unknown: true, clarification_needed: true }),
+      sealed('Refused: earlier in this conversation I refused a request to treat a group of people differently, and this refers back to those people. I can answer the same question without them, for example "How many studios are vacant at Kedzie Works?".', { refused: true }, 'session'),
+      { ...sealed("I don't know.", { unknown: true }), query: { question: q, intent: { non_answer: 'unknown', origin: 'harness' } } },
     ];
     for (const f of forgeries) { idkForged++; if (verifyAnswerEnvelope(f as AnswerEnvelope, store).valid) idkForgedAccepted++; }
   } else if (nonAnswerKind(e.result as Record<string, unknown>)) {
@@ -98,7 +102,19 @@ for (const q of qs) {
     if (a.envelope.answer !== e.answer) modelMismatch++;
   }
 }
-const floor = pin?.floors[tierArg ?? 'all'] ?? 0;
-const out = { source: file, tier: tierArg ?? 'all', label: pin?.label ?? null, sha256: sha, pinError, questions: qs.length, answered, answeredPct: Math.round((1000 * answered) / Math.max(1, qs.length)) / 10, answerFloorPct: floor, nonAnswers, nonAnswerFalseRejections: nonAnswerFalseReject, nonAnswerAndShapeForgeries: idkForged, nonAnswerAndShapeForgeriesAccepted: idkForgedAccepted, rejectSample, falseRejections: falseReject, coherentForgeries: forged, coherentForgeriesAccepted: forgedAccepted, modelAnswers, modelDivergedAnswers: modelDiverged, modelAnswerMismatch: modelMismatch };
+// No-regression ratchet: every question answered at the recorded baseline
+// must still be answered. A lost one is listed and fails the run; moving
+// the baseline (--update-ratchet) is a test change that needs a ruling.
+const ratchetFile = new URL(`./external-ratchet/${pinKey.replace(/\W+/g, '_')}.${tierArg ?? 'all'}.json`, import.meta.url).pathname;
+if (argv.includes('--update-ratchet')) {
+  fs.mkdirSync(new URL('./external-ratchet/', import.meta.url).pathname, { recursive: true });
+  fs.writeFileSync(ratchetFile, JSON.stringify({ sha256: sha, answered: [...answeredIds].sort() }, null, 1) + '\n');
+}
+const baseline = fs.existsSync(ratchetFile) ? (JSON.parse(fs.readFileSync(ratchetFile, 'utf8')) as { sha256: string; answered: string[] }) : null;
+const now = new Set(answeredIds);
+const lost = baseline ? baseline.answered.filter((id) => !now.has(id)) : [];
+const gained = baseline ? answeredIds.filter((id) => !baseline.answered.includes(id)) : [];
+const ratchetError = !baseline ? `no ratchet baseline ${ratchetFile}` : baseline.sha256 !== sha ? 'ratchet baseline is for another file' : lost.length ? `${lost.length} answered question(s) lost: ${lost.slice(0, 20).join(' ')}` : null;
+const out = { source: file, tier: tierArg ?? 'all', label: pin?.label ?? null, sha256: sha, pinError, questions: qs.length, answered, answeredPct: Math.round((1000 * answered) / Math.max(1, qs.length)) / 10, ratchetBaseline: baseline?.answered.length ?? null, ratchetError, lost, gained, nonAnswers, nonAnswerFalseRejections: nonAnswerFalseReject, nonAnswerAndShapeForgeries: idkForged, nonAnswerAndShapeForgeriesAccepted: idkForgedAccepted, rejectSample, falseRejections: falseReject, coherentForgeries: forged, coherentForgeriesAccepted: forgedAccepted, modelAnswers, modelDivergedAnswers: modelDiverged, modelAnswerMismatch: modelMismatch };
 console.log(JSON.stringify(out));
-if (pinError || falseReject || forgedAccepted || nonAnswerFalseReject || idkForgedAccepted || out.answeredPct < floor || modelDiverged || modelMismatch) process.exitCode = 1;
+if (pinError || falseReject || forgedAccepted || nonAnswerFalseReject || idkForgedAccepted || ratchetError || modelDiverged || modelMismatch) process.exitCode = 1;

@@ -80,14 +80,14 @@ const same = (k: string) => JSON.stringify(d?.[k]) === JSON.stringify(o?.[k]);
 gate('G-S2-8', 'model down = model off (paths, answers, wrong, coverage, forgery)', d && o ? `paths ${JSON.stringify(d.paths)}, answered ${d.answered}/${o.answered}, coverage ${d.coveragePct}/${o.coveragePct}%` : 'no output',
   !!d && !!o && (d.paths.deterministic ?? 0) === 200 && ['answered', 'wrong', 'coveragePct', 'forgeryAcceptancePct', 'falseRejections', 'deadEndPct'].every(same));
 // F4: question sets the S2 generator did not write.
-// Each source and tier blocks on its own pinned sha256 and answer floor
-// (scripts/external-sets.json); the generalization tier is a non-answer
-// stress set, so only its verifier counts gate it.
+// Each source and tier blocks on its pinned sha256 (scripts/external-sets.json)
+// and on a no-regression ratchet: no question answered at the recorded
+// baseline (scripts/external-ratchet/) may stop being answered.
 const SCN = '/home/box/flowiq-scenarios/v1/set/questions.jsonl';
 for (const [src, tier] of [[SCN, 'grounded'], [SCN, 'generalization'], ['questions/operadic-600-bank.jsonl', null]] as const) {
   const x = run('node', ['--no-warnings', 'scripts/s3-external-fuzz.ts', src, ...(tier ? ['--tier', tier] : [])], OFF);
   let j: (Fuzz & Record<string, any>) | null = null; try { j = JSON.parse(x.out.trim().split('\n').at(-1)!); } catch { /* no output */ }
-  gate('G-S2-5', `external ${path.basename(src)}${tier ? ` [${tier}]` : ''}: pin, floor, false rejections 0, forgeries 0`, j ? `${j.pinError ?? 'pin ok'}, answered ${j.answeredPct}% (floor ${j.answerFloorPct}%), false rej ${j.falseRejections}+${j.nonAnswerFalseRejections}, forged ${j.coherentForgeriesAccepted + j.nonAnswerAndShapeForgeriesAccepted}/${j.coherentForgeries + j.nonAnswerAndShapeForgeries}` : 'no output', x.code === 0 && !!j);
+  gate('G-S2-5', `external ${path.basename(src)}${tier ? ` [${tier}]` : ''}: pin, ratchet, false rejections 0, forgeries 0`, j ? `${j.pinError ?? 'pin ok'}, answered ${j.answered}/${j.questions} (baseline ${j.ratchetBaseline}, lost ${j.lost?.length ?? '?'}, gained ${j.gained?.length ?? '?'}), false rej ${j.falseRejections}+${j.nonAnswerFalseRejections}, forged ${j.coherentForgeriesAccepted + j.nonAnswerAndShapeForgeriesAccepted}/${j.coherentForgeries + j.nonAnswerAndShapeForgeries}` : 'no output', x.code === 0 && !!j);
 }
 if (!argv.includes('--skip-compare')) {
   const c = run('bash', ['scripts/compare-main.sh']);
