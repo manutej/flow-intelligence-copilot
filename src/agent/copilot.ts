@@ -1,4 +1,4 @@
-import { nonAnswerKind, sealNonAnswer } from './envelope.ts';
+import { nonAnswerKind, sealNonAnswer, setNonAnswerRenderer, type NonAnswerInput } from './envelope.ts';
 import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
 import type { ParsedQueryIntent } from './intent.ts';
 import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
@@ -25,7 +25,7 @@ import {
 } from './model-harness.ts';
 import { classifyFrame, frameModelConfig } from './frame-model.ts';
 import { executeCompositionalPlan } from './planner.ts';
-import { modelParse, parseConfigFromEnv, type ModelParse, type ParseConfig } from './model-parse.ts';
+import { coverage, modelParse, parseConfigFromEnv, toIntent, type ModelParse, type ParseConfig } from './model-parse.ts';
 import type { RunStore } from './run-store.ts';
 import { canonicalQuestion } from './clarify.ts';
 import { hashOf } from './envelope.ts';
@@ -81,14 +81,53 @@ export async function askFlowIqCopilot(
   input: string | QuestionRecord,
   options: CopilotRunOptions = {},
 ): Promise<CopilotTurnResult> {
+  const question = typeof input === 'string' ? input : input.question;
+  // A session refusal depends on earlier turns; note it before this turn sets state.
+  const sessionRefused = !!sessionRefusal(options.session, question);
   const t = await askUnsealed(input, options);
   const kind = nonAnswerKind(t.envelope.result as Record<string, unknown>);
   if (!kind) return t;
-  // Seal every "I don't know" and refusal to the question it answers.
+  // Seal every refusal, "I don't know" and clarify to what it was rendered from.
   const store = options.store && !options.policy ? options.store : loadPortfolioStore(undefined, options.policy);
-  const question = typeof input === 'string' ? input : input.question;
-  const envelope = { ...t.envelope, ...sealNonAnswer(question, t.envelope) };
+  const origin: NonAnswerInput['origin'] = sessionRefused && kind === 'refused' ? 'session'
+    : t.parse && t.parsePath && t.parsePath !== 'deterministic' ? 'model'
+    : t.modeUsed === 'llm' && !t.parse ? (t.providerUsed === 'openrouter' && kind === 'refused' ? 'frame' : 'harness')
+    : 'deterministic';
+  const sealInput: NonAnswerInput = { question, origin, ...(origin === 'model' ? { model_intent: t.parse!.intent } : {}) };
+  const envelope = { ...t.envelope, ...sealNonAnswer(sealInput, t.envelope) };
   return { ...t, envelope, verification: verifyAnswerEnvelope(envelope, store) };
+}
+
+/** The deterministic turn for a question: the model-off pipeline, with no session or frame model. */
+export function deterministicTurn(qRecord: QuestionRecord, store: PortfolioStore): AnswerEnvelope {
+  const fh = checkFairHousingGuard(qRecord.question, store);
+  if (fh.refused) return { id: qRecord.id, answer: fh.reason ?? 'Refused under the Fair Housing Act.', result: { refused: true }, citations: fh.citations };
+  const unknownCheck = checkUnknownDataGuard(qRecord.question, store);
+  if (unknownCheck.unknown) return { id: qRecord.id, answer: unknownCheck.reason ?? "I don't know — that field is not in the portfolio CSV exports.", result: { unknown: true }, citations: unknownCheck.citations };
+  return runDeterministicToolRouter(qRecord, store).envelope;
+}
+
+setNonAnswerRenderer((input, store) => {
+  const qRecord: QuestionRecord = { id: 'RENDER', type: 'adhoc', question: input.question };
+  if (input.origin === 'model') {
+    const fh = checkFairHousingGuard(input.question, store);
+    if (fh.refused || checkUnknownDataGuard(input.question, store).unknown) return deterministicTurn(qRecord, store);
+    const intent = toIntent({ kind: 'query', question: input.question, intent: modelIntentKeys(input.model_intent) });
+    if (typeof intent === 'string') throw new Error(`model reading is not a TypedQuery: ${intent}`);
+    return modelReadingTurn(qRecord, store, intent).envelope;
+  }
+  return deterministicTurn(qRecord, store);
+});
+
+// A sealed model reading carries resolved date windows; toIntent takes keys.
+function modelIntentKeys(i: unknown): unknown {
+  if (!i || typeof i !== 'object') return i;
+  const o = { ...(i as Record<string, unknown>) };
+  for (const k of ['dateWindow', 'leaseStartWindow', 'leaseEndWindow']) {
+    const w = o[k] as { key?: string } | undefined;
+    if (w && typeof w === 'object' && typeof w.key === 'string') o[k] = w.key;
+  }
+  return o;
 }
 
 async function askUnsealed(
@@ -250,6 +289,28 @@ export async function runModelParseRouter(
     return r;
   };
   if (mp.path === 'deterministic') return tag(det);
+  const t = modelReadingTurn(qRecord, store, mp.intent, det, cfg.model, frameFallback);
+  return tag(t, t.parsePath);
+}
+
+/**
+ * The turn for a valid model reading, as a pure function of the question
+ * and that reading (coverage and the lexicon parse are recomputed), so the
+ * verifier can re-render a model clarify or "I don't know" byte for byte.
+ */
+export function modelReadingTurn(
+  qRecord: QuestionRecord,
+  store: PortfolioStore,
+  intent: ParsedQueryIntent,
+  det: CopilotTurnResult = runDeterministicToolRouter(qRecord, store),
+  model = 'model',
+  frameFallback: string | null = null,
+): CopilotTurnResult {
+  const deterministic = parseQueryIntent(qRecord.question, store);
+  const cov = coverage(qRecord.question, intent, deterministic, store);
+  const mp = { intent, deterministic, coverage: cov, path: cov.ok ? 'model' as const : 'model-clarify' as const };
+  const cfg = { model };
+  const tag = (t: CopilotTurnResult, path: ModelParse['path'] = mp.path): CopilotTurnResult => ({ ...t, parsePath: path });
   const isAnswer = (r: Record<string, unknown>) => r.unknown !== true && r.refused !== true && r.clarification_needed !== true;
   if (mp.path === 'model') {
     const out = closedVocabulary(executeCompositionalPlan(qRecord, store, { intent: mp.intent }), qRecord, store);

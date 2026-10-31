@@ -1,6 +1,4 @@
 import { envelopeErrors, nonAnswerErrors } from '../agent/envelope.ts';
-import { unboundNegators } from '../agent/closed-world.ts';
-import { unknownWords } from './vocabulary.ts';
 import type {
   AnswerEnvelope,
   CitationId,
@@ -298,10 +296,7 @@ export function verifyAnswerEnvelope(
     if (!Array.isArray(envelope.citations)) errors.push('Citations must be an array of row ids');
     errors.push(...figureErrors(envelope, store));
   }
-  errors.push(...nonAnswerErrors(envelope, store, {
-    refusedBy: (q) => checkFairHousingGuard(q, store).refused === true,
-    closedWorldGap: (q) => checkUnknownDataGuard(q, store).unknown === true || unknownWords(q, store).length > 0 || unboundNegators(q).length > 0,
-  }));
+  errors.push(...nonAnswerErrors(envelope, store));
 
   if (resultSchema) {
     for (const [key, expectedType] of Object.entries(resultSchema)) {

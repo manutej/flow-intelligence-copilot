@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import type { AnswerEnvelope, AnswerProof, PortfolioStore, TypedQuery } from '../data/schema.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 import { executeCompositionalPlan } from './planner.ts';
@@ -78,50 +78,67 @@ export function envelopeErrors(envelope: AnswerEnvelope, store: PortfolioStore):
  * a refusal must be one the fair-housing guard makes) and that the text adds
  * no figure the question did not state.
  */
-export type NonAnswerKind = 'unknown' | 'refused';
+export type NonAnswerKind = 'unknown' | 'refused' | 'clarify';
 export const nonAnswerKind = (r: Readonly<Record<string, unknown>> | undefined): NonAnswerKind | null =>
-  r?.refused === true ? 'refused' : r?.unknown === true ? 'unknown' : null;
+  r?.refused === true ? 'refused' : r?.clarification_needed === true ? 'clarify' : r?.unknown === true ? 'unknown' : null;
 
-export function sealNonAnswer(question: string, envelope: Pick<AnswerEnvelope, 'answer' | 'result'>): { query: TypedQuery; proof: AnswerProof } {
+/**
+ * What a non-answer (refusal, "I don't know", clarify) was rendered from.
+ * deterministic and model turns are re-rendered from this input by the
+ * verifier; session, frame and harness turns depend on state the verifier
+ * does not hold, so for them the keyed seal is the whole check.
+ */
+export interface NonAnswerInput {
+  readonly question: string;
+  readonly origin: 'deterministic' | 'model' | 'session' | 'frame' | 'harness';
+  readonly model_intent?: unknown;
+}
+type Rendered = Pick<AnswerEnvelope, 'answer' | 'result' | 'citations'>;
+type Renderer = (input: NonAnswerInput, store: PortfolioStore) => Rendered;
+
+// Per-process key: a seal proves this process rendered the turn. A
+// FLOWIQ_SEAL_KEY lets separate processes (replays, audits) share it.
+const SEAL_KEY = process.env.FLOWIQ_SEAL_KEY ? Buffer.from(process.env.FLOWIQ_SEAL_KEY) : randomBytes(32);
+const seal = (input: NonAnswerInput, env: Rendered) =>
+  createHmac('sha256', SEAL_KEY).update(hashOf({ input, answer: env.answer, result: env.result, citations: env.citations ?? null })).digest('hex');
+const rendered = (env: Rendered) => hashOf({ answer: env.answer, result: env.result, citations: env.citations ?? null });
+
+let renderer: Renderer | null = null;
+/** The copilot registers how it renders a non-answer turn (avoids an import cycle). */
+export function setNonAnswerRenderer(fn: Renderer): void {
+  renderer = fn;
+}
+
+export function sealNonAnswer(input: NonAnswerInput, envelope: Rendered): { query: TypedQuery; proof: AnswerProof } {
   const kind = nonAnswerKind(envelope.result);
   return {
-    query: { question, intent: { non_answer: kind } },
-    proof: { template_id: `non_answer.${kind}`, query_hash: hashOf({ question, kind, reason: envelope.result.reason ?? null, answer: envelope.answer }), result_hash: hashOf(envelope.result), row_ids: [] },
+    query: { question: input.question, intent: { non_answer: kind, origin: input.origin, ...(input.model_intent !== undefined ? { model_intent: input.model_intent } : {}) } },
+    proof: { template_id: `non_answer.${kind}`, query_hash: seal(input, envelope), result_hash: hashOf(envelope.result), row_ids: [] },
   };
 }
 
-// A figure is money, a percent, or a number of 2+ digits outside an id.
-const FIGURE_RE = /\$\s?\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s?%|(?<![A-Za-z#§:])\d{2,}(?:,\d{3})*(?:\.\d+)?(?![A-Za-z])/g;
-// Legal citations ("42 U.S.C. § 3604(f)", "§ 5-8-030", "775 ILCS 5/3-102") and years are not figures.
-const STATUTE_RE = /\b\d{4}-\d{2}(?:-\d{2})?\b|\d+\s+U\.S\.C\.?|§+\s*[\w.\-()/]+|\d+\s+ILCS\s+[\w./\-()]+|\b(?:19|20)\d\d\b/g;
-const figures = (s: string) => (s.replace(STATUTE_RE, ' ').match(FIGURE_RE) ?? []).map((f) => f.replace(/[\s$,%]/g, ''));
-
-export function nonAnswerErrors(
-  envelope: AnswerEnvelope,
-  store: PortfolioStore,
-  confirm: { refusedBy: (question: string) => boolean; closedWorldGap: (question: string) => boolean },
-): string[] {
+/**
+ * A non-answer is valid only when this process sealed it and, re-rendered
+ * from its question (and the model reading, for a model turn), it is byte
+ * for byte the same answer, result and citations. No figure or wording
+ * heuristics: any edit, move or invention fails the comparison.
+ */
+export function nonAnswerErrors(envelope: AnswerEnvelope, store: PortfolioStore): string[] {
   const kind = nonAnswerKind(envelope.result);
   if (!kind) return [];
-  const q = envelope.query;
-  if (!q || typeof q.question !== 'string' || !envelope.proof) return [`The ${kind === 'refused' ? 'refusal' : '"I don\'t know"'} is not sealed to a question`];
-  const errors: string[] = [];
-  const sealed = sealNonAnswer(q.question, envelope);
-  if (envelope.proof.query_hash !== sealed.proof.query_hash || envelope.proof.result_hash !== sealed.proof.result_hash || envelope.proof.template_id !== sealed.proof.template_id) {
-    errors.push('The non-answer is not the sealed one for its question');
+  const label = kind === 'refused' ? 'refusal' : kind === 'clarify' ? 'clarify' : '"I don\'t know"';
+  const q = envelope.query as (TypedQuery & { intent?: Record<string, unknown> }) | undefined;
+  const intent = (q?.intent ?? {}) as Record<string, unknown>;
+  if (!q || typeof q.question !== 'string' || !envelope.proof || typeof intent.origin !== 'string') return [`The ${label} is not sealed to a question`];
+  const input: NonAnswerInput = { question: q.question, origin: intent.origin as NonAnswerInput['origin'], ...('model_intent' in intent ? { model_intent: intent.model_intent } : {}) };
+  if (intent.non_answer !== kind || envelope.proof.template_id !== `non_answer.${kind}` || envelope.proof.query_hash !== seal(input, envelope)) return [`The ${label} is not the one this process sealed for its question`];
+  if (input.origin !== 'deterministic' && input.origin !== 'model') return [];
+  if (!renderer) return ['No renderer is registered to re-render the non-answer'];
+  let again: Rendered;
+  try {
+    again = renderer(input, store);
+  } catch (e) {
+    return [`The ${label} could not be re-rendered: ${(e as Error).message}`];
   }
-  const asked = new Set(figures(q.question));
-  const added = figures(envelope.answer).filter((f) => !asked.has(f));
-  if (added.length > 0) errors.push(`A non-answer must not state figures (${[...new Set(added)].join(', ')})`);
-  if (kind === 'refused' && !confirm.refusedBy(q.question)) errors.push('The refusal is not one the fair-housing guard makes for its question');
-  if (kind === 'unknown' && !confirm.closedWorldGap(q.question) && !confirm.refusedBy(q.question)) {
-    // Re-parse and re-execute: an answerable plain reading is not unknown.
-    const intent = parseQueryIntent(q.question, store);
-    if (intent.measure !== 'unsupported') {
-      const plan = executeCompositionalPlan({ id: envelope.id, type: 'adhoc', question: q.question }, store, { intent, verify: false });
-      const r = plan.envelope.result as Record<string, unknown>;
-      if (!nonAnswerKind(r) && r.clarification_needed !== true && envelopeErrors(plan.envelope, store).length === 0) errors.push('The question has an answer, so "I don\'t know" is not its outcome');
-    }
-  }
-  return errors;
+  return rendered(again) === rendered(envelope) ? [] : [`The ${label} is not the turn FlowIQ renders for its question`];
 }
