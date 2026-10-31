@@ -69,6 +69,10 @@ for (const q of ["what's the renewal rate at the point for the period?", "What's
     for (const o of t.clarifyOptions!) {
       assert.match(o.question, /renewal rate/i);
       assert.match(o.question, /20\d\d/);
+      // The option is answered over the window it names, never over all end dates.
+      const picked = (await turn(o.question)).envelope;
+      assert.ok(answered(picked));
+      assert.doesNotMatch(picked.answer, /all end dates/);
     }
   });
 }
