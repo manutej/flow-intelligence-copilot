@@ -430,12 +430,31 @@ export function parseDateWindowFromText(
 }
 
 /** Returns the window the question names, or null when it names none. */
+/** "07/2026" is the ISO month "2026-07". */
+export function spellIsoMonths(text: string): string {
+  return text.replace(/(?<![\d/])(0?[1-9]|1[0-2])\/(20\d{2})(?![\d/])/g, (_m, mo: string, y: string) => `${y}-${mo.padStart(2, '0')}`);
+}
+const ISO_RANGE_RE = /\b(20\d{2})-(0[1-9]|1[0-2])(?:-(\d{2}))?(?!\d)(\s*(?:[-\u2013\u2014]|\bto\b|\bthrough\b|\bthru\b|\buntil\b|\btill\b|\b(and)\b)\s*)(20\d{2})-(0[1-9]|1[0-2])(?:-(\d{2}))?(?!\d)/i;
+
 export function parseExplicitDateWindow(
   question: string,
   asOfDate = '2026-10-01',
 ): DateWindowSpec | null {
-  question = spellCalendarYear(question);
+  question = spellIsoMonths(spellCalendarYear(question));
   const defaultYear = Number.parseInt(asOfDate.slice(0, 4), 10) || 2026;
+
+  // ISO range: "2026-04 to 2026-06", "between 2026-07-01 and 2026-08-31".
+  // Days must sit on month edges; any other day is not a month window.
+  const isoRange = ISO_RANGE_RE.exec(question);
+  if (isoRange && (isoRange[5]?.toLowerCase() !== 'and' || /\bbetween\s+$/i.test(question.slice(0, isoRange.index)))) {
+    const [, y1, m1, d1, , , y2, m2, d2] = isoRange;
+    const ys = Number(y1), ms = Number(m1), ye = Number(y2), me = Number(m2);
+    if ((!d1 || d1 === '01') && (!d2 || Number(d2) === lastDayOfMonth(ye, me)) && (ys < ye || (ys === ye && ms <= me))) {
+      const preset = Object.values(DATE_WINDOWS).find((w) => w.months[0] === `${y1}-${m1}` && w.months[w.months.length - 1] === `${y2}-${m2}`);
+      return preset ?? buildDynamicDateWindow(`RANGE_${ys}_${ms}_${ye}_${me}`, `${MONTH_FULL_NAMES[ms]} ${ys} to ${MONTH_FULL_NAMES[me]} ${ye}`, ys, ms, ye, me);
+    }
+    return null;
+  }
 
   if (/\bthis\s+month\b/i.test(question)) {
     const ym = asOfDate.slice(0, 7);
@@ -588,6 +607,11 @@ export function parseExplicitDateWindow(
   ) {
     return DATE_WINDOWS.H1_2026;
   }
+  const h2 = question.match(/\b(?:h2|second\s+half)(?:\s+of)?(?:\s*(20\d{2}))?\b/i);
+  if (h2) {
+    const y = h2[1] ? Number(h2[1]) : defaultYear;
+    return buildDynamicDateWindow(`H2_${y}`, `H2 ${y} (July to December ${y})`, y, 7, y, 12);
+  }
 
   // Single Month + optional Year: e.g., "December 2026", "Dec 2026", "August"
   const singleMonthMatch = question.match(
@@ -615,10 +639,6 @@ export function parseExplicitDateWindow(
     );
   }
 
-  if (/\b(end(s|ing)?\s+in\s+2026|started\s+in\s+2026|created\s+in\s+2026|in\s+2026)\b/i.test(question)) {
-    return DATE_WINDOWS.YEAR_2026;
-  }
-
   const isoSingleMonth = question.match(/\b(20\d{2})-(\d{2})(?:-\d{2})?\b/);
   if (isoSingleMonth && !/\bto\b/i.test(question)) {
     const yNum = Number.parseInt(isoSingleMonth[1], 10);
@@ -636,6 +656,10 @@ export function parseExplicitDateWindow(
       yNum,
       mNum,
     );
+  }
+
+  if (/\b(end(s|ing)?\s+in\s+2026|started\s+in\s+2026|created\s+in\s+2026|in\s+2026)\b/i.test(question)) {
+    return DATE_WINDOWS.YEAR_2026;
   }
 
   // A bare year other than the reporting year ("in 2025") is a whole calendar
@@ -1273,9 +1297,30 @@ const FIELD_COVERAGE: ReadonlyArray<readonly [Field, (i: ParsedQueryIntent) => b
 export type Dimension = 'building' | 'source' | 'class' | 'time' | 'other';
 
 /** The dimension each answer template lists or ranks over (planner.ts). */
-function answerLayout(i: ParsedQueryIntent): ReadonlySet<Dimension> {
+/** Marketing measures defined per listing source, answered through sourceModeOf. */
+export const SOURCE_MEASURES: ReadonlySet<IntentMeasure> = new Set<IntentMeasure>(['cost_per_lead', 'cost_per_tour', 'cost_per_signed_lease', 'tour_to_lease_rate']);
+export type SourceMode = 'overall' | 'one' | 'pooled' | 'ranked' | 'list' | 'which';
+/**
+ * How a source measure picks its source rows, the same way for every source
+ * measure: one named source, several named sources pooled, a ranking
+ * (lowest/highest), a breakdown ("by <any> source", "for each channel"), an
+ * unranked "which source" (no row can be picked), or the overall figure.
+ */
+export function sourceModeOf(question: string, intent: ParsedQueryIntent): SourceMode {
+  if (intent.mentionedSources.length === 1) return 'one';
+  if (intent.mentionedSources.length > 1) return 'pooled';
+  if (intent.aggregation === 'argmin' || intent.aggregation === 'argmax') return 'ranked';
+  const asked = requestedBreakdowns(question).filter((b) => b.dim === 'source');
+  if (asked.some((b) => !b.ranked) || groupedBy(question) === 'source') return 'list';
+  if (asked.length > 0 || askedDimension(question) === 'source') return 'which';
+  return 'overall';
+}
+
+function answerLayout(i: ParsedQueryIntent, question?: string): ReadonlySet<Dimension> {
   const ranked = i.aggregation === 'argmax' || i.aggregation === 'argmin';
   const out = new Set<Dimension>();
+  // A source measure lays out by source whenever the question picks rows by source.
+  if (question !== undefined && SOURCE_MEASURES.has(i.measure) && sourceModeOf(question, i) !== 'overall') out.add('source');
   if (i.isClassComparison || i.measure === 'renewal_rate_class_comparison') out.add('class');
   switch (i.measure) {
     case 'apply_rate': case 'cost_per_tour': out.add('source'); break;
@@ -1460,7 +1505,7 @@ const TOTAL_NOUN: Partial<Record<IntentMeasure, string>> = {
 
 /** The first breakdown the parse does not carry, or null. */
 export function droppedBreakdown(question: string, intent: ParsedQueryIntent): { dim: Dimension; words: string } | null {
-  const layout = answerLayout(intent);
+  const layout = answerLayout(intent, question);
   for (const b of requestedBreakdowns(question)) {
     if (!layout.has(b.dim)) return b;
   }
@@ -1487,7 +1532,11 @@ const SCALAR_LEFTOVERS: ReadonlyArray<readonly [string, RegExp]> = [
 
 /** What a scalar parse leaves unaccounted for, or null. */
 function scalarLeftover(question: string, intent: ParsedQueryIntent, store: PortfolioStore): string | null {
-  if (intent.measure === 'unsupported' || answerLayout(intent).size > 0) return null;
+  const layout = answerLayout(intent, question);
+  // A source measure's source layout consumes only its ranking words; every
+  // other leftover (a noun, a period, a source) is still checked.
+  const bySource = SOURCE_MEASURES.has(intent.measure) && layout.has('source');
+  if (intent.measure === 'unsupported' || (layout.size > 0 && !bySource)) return null;
   // A ranked parse whose measure has no ranked layout is answered as one
   // pooled figure, so its ordering words are left over like a value parse's.
   if (!['value', 'argmax', 'argmin'].includes(intent.aggregation)) return null;
@@ -1498,11 +1547,16 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
   for (const [what, re] of SCALAR_LEFTOVERS) {
     // A measure that is itself a comparison (H1 versus Q3) consumes the comparison words.
     if (what === 'a comparison' && /_vs_|comparison|delta|change/.test(intent.measure)) continue;
+    if (what === 'an ordering' && bySource && (intent.aggregation === 'argmin' || intent.aggregation === 'argmax')) continue;
     const m = re.exec(q);
     if (m) return `${what} ("${m[0].trim()}")`;
   }
+  const unitFilter = unappliedUnitFilter(question, intent);
+  if (unitFilter) return unitFilter;
   const noun = unconsumedMeasureNoun(question, intent, store);
   if (noun) return `a second measure ("${noun}")`;
+  const source = unrecognisedSource(question, intent, store);
+  if (source) return `a source FlowIQ does not track ("${source}")`;
   // A measure that compares two periods (H1 versus Q3) consumes both.
   const period = /_vs_|comparison|delta|change/.test(intent.measure) ? null : unconsumedPeriod(question, intent);
   if (period) return `a second period ("${period}")`;
@@ -1532,7 +1586,6 @@ const MEASURE_NOUNS: ReadonlyArray<readonly [string, RegExp]> = [
   ['resident', /\b(?:residents?|tenants?|renters?)\b/gi],
   ['rent', /\b(?:rents?|rental\s+income|revenue)\b/gi],
   ['concession', /\b(?:concessions?)\b/gi],
-  ['unit', /\b(?:units?|doors?)\b/gi],
   ['area', /\b(?:sq\.?\s*ft|sqft|square\s+(?:foot|feet))\b/gi],
 ];
 /** The nouns each marketing scalar names; a measure not listed is not checked. */
@@ -1566,6 +1619,51 @@ function unconsumedMeasureNoun(question: string, intent: ParsedQueryIntent, stor
     const m = q.match(re);
     if (m) return m[0];
   }
+  // A unit phrase is a filter ("1-bedroom units", "excluding down units");
+  // a bare "units" or "doors" is a unit count, a second measure.
+  return q.replace(BEDROOM_PHRASE_RE, ' ').replace(UNIT_STATUS_EXCLUSION_RE, ' ').match(/\b(?:units?|doors?)\b/i)?.[0] ?? null;
+}
+
+/** A bedroom or unit-type phrase with the noun it governs ("2-bedroom units", "studio leads", "2+ bedrooms"). */
+const BEDROOM_PHRASE_RE = /\b(?:(?:\d+|one|two|three|four|five)\s*\+?\s*-?\s*(?:bed(?:room)?s?|br|bd)\b|studios?\b)(?:\s+(?:or\s+(?:more|larger|bigger)\s+)?(?:units?|apartments?|apts?|homes|flats?|leads?|prospects?))?/gi;
+/** A unit status set aside ("exclude down units"); unit status does not apply to leads. */
+export const UNIT_STATUS_EXCLUSION_RE = /\b(?:exclud\w*|without|except|not\s+counting|minus|ignor\w*)\s+(?:the\s+|any\s+)?(?:down|offline|vacant|occupied|model|notice|on[-\s]notice|non[-\s]revenue)\s+units?\b/gi;
+
+/**
+ * A bedroom filter applies only to a lead count: each deduplicated lead
+ * carries the bedrooms it wanted, but spend, tours and leases carry none,
+ * so a bedroom phrase on any other measure (or one the parse bound to no
+ * exact count, such as "2+ bedrooms") is left over.
+ */
+function unappliedUnitFilter(question: string, intent: ParsedQueryIntent): string | null {
+  if (intent.domain !== 'marketing' || !MEASURE_CONSUMES[intent.measure]) return null;
+  const m = question.match(BEDROOM_PHRASE_RE);
+  if (!m) return null;
+  if (intent.measure === 'lead_count' && intent.bedrooms !== undefined && intent.bedroomsMin === undefined && intent.bedroomsMax === undefined) return null;
+  return intent.measure === 'lead_count'
+    ? `a bedroom filter FlowIQ could not apply ("${m[0].trim()}")`
+    : `a bedroom filter ("${m[0].trim()}"), but marketing spend, tours and leases are not split by bedroom`;
+}
+
+/** Words a "from <phrase>" source phrase may hold besides source, property and date names. */
+const SOURCE_PHRASE_WORDS = /\b(?:and|or|&|the|all|our|any|both|plus|paid|sources?|channels?|ils(?:es)?|internet|listing|sites?|services?|leads?|spend|ads?|marketing|to|through|thru|until|till|between|of|its|their|building|buildings|property|properties|portfolio|20\d{2}|'\d{2})\b/gi;
+
+/**
+ * Every word of a "from <phrase>" must be a tracked source, a property, a
+ * date or a source-set word. "from Facebook" names no tracked source
+ * ("Facebook Ads" is one), so the phrase is left over, never dropped.
+ */
+function unrecognisedSource(question: string, intent: ParsedQueryIntent, store: PortfolioStore): string | null {
+  if (intent.domain !== 'marketing' || !MEASURE_CONSUMES[intent.measure]) return null;
+  const names = [...intent.mentionedSources, ...store.properties.flatMap((p) => [p.name, ...p.aka])].filter((n) => n.trim().length >= 2).sort((x, y) => y.length - x.length);
+  for (const m of spellIsoMonths(question).matchAll(/\b(?:from|via)\s+([^?!;]*?)(?=\s*(?:\b(?:at|in|for|during|over|across|on|by|per|this|last|since|with|vs\.?|versus|except|excluding)\b|[?!;,]|$))/gi)) {
+    let rest = m[1].replace(DATE_TOKEN_RE, ' ');
+    for (const n of names) rest = rest.replace(new RegExp(`(?<![\\p{L}\\p{N}])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'giu'), ' ');
+    // A funnel stage is not a source ("convert from tour to lease").
+    for (const [, re] of MEASURE_NOUNS) rest = rest.replace(re, ' ');
+    rest = rest.replace(SOURCE_PHRASE_WORDS, ' ').replace(/[-\u2013\u2014.,'’]/g, ' ').trim();
+    if (/[\p{L}]{2,}/u.test(rest)) return rest.replace(/\s+/g, ' ');
+  }
   return null;
 }
 
@@ -1577,7 +1675,7 @@ const MONTH_WORD = String.raw`(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)
  * each with an optional year of its own.
  */
 const DATE_TOKEN_RE = new RegExp(
-  String.raw`\b(?:(?<iso>20\d{2}-(?:0[1-9]|1[0-2]))(?:-\d{2})?(?!\d)|(?<yq>20\d{2})\s+q(?<yqn>[1-4])\b|(?<tok>q[1-4]|h[12]|(?:first|second)\s+half|${ORD_Q}(?=(?:\s*(?:,|and|&|or|to|through|thru|-)\s*(?:the\s+)?${ORD_Q})*\s+quarters?\b)|${MONTH_WORD})(?:\s*,?\s*(?<year>20\d{2}|'\d{2}))?)\b`,
+  String.raw`\b(?:(?<iso>20\d{2}-(?:0[1-9]|1[0-2]))(?:-(?<day>\d{2}))?(?!\d)|(?<yq>20\d{2})\s+q(?<yqn>[1-4])\b|(?<tok>q[1-4]|h[12]|(?:first|second)\s+half|${ORD_Q}(?=(?:\s*(?:,|and|&|or|to|through|thru|-)\s*(?:the\s+)?${ORD_Q})*\s+quarters?\b)|${MONTH_WORD})(?:\s*,?\s*(?<year>20\d{2}|'\d{2}))?)\b`,
   'gi',
 );
 const RANGE_GAP_RE = /^\s*(?:[-\u2013\u2014]|to|through|thru|until|till)\s*(?:the\s+)?$/i;
@@ -1603,22 +1701,26 @@ function monthSpan(from: string, to: string): string[] {
  * is a period the parse did not consume.
  */
 function unconsumedPeriod(question: string, intent: ParsedQueryIntent): string | null {
+  question = spellIsoMonths(question);
   const toks = [...question.matchAll(DATE_TOKEN_RE)];
-  if (toks.length < 2) return null;
-  const yearAfter = (i: number) => question.slice(i).match(/\b20\d{2}\b/)?.[0] ?? question.match(/\b20\d{2}\b/)?.[0] ?? '2026';
-  const spans: Array<{ text: string; start: number; end: number; months: string[] }> = [];
+  if (toks.length === 0) return null;
+  const anyYear = /\b20\d{2}\b/.test(question);
+  const yearAfter = (i: number) => question.slice(i).match(/\b20\d{2}\b/)?.[0] ?? question.match(/\b20\d{2}\b/)?.[0];
+  const spans: Array<{ text: string; start: number; end: number; months: string[]; day?: string }> = [];
   for (const t of toks) {
     const g = t.groups ?? {};
     let months: readonly string[] | undefined;
     if (g.iso) months = [g.iso];
     else {
-      const year = g.year ? (g.year.startsWith("'") ? `20${g.year.slice(1)}` : g.year) : g.yq ?? yearAfter(t.index! + t[0].length);
+      const year = g.year ? (g.year.startsWith("'") ? `20${g.year.slice(1)}` : g.year) : g.yq ?? (anyYear ? yearAfter(t.index! + t[0].length) : undefined);
       const tok = g.yq ? `q${g.yqn}` : /quarters?$/i.test(g.tok) ? g.tok : new RegExp(`^${ORD_Q}$`, 'i').test(g.tok) ? `${g.tok} quarter` : g.tok;
-      months = parseExplicitDateWindow(`in ${tok} ${year}`)?.months;
+      // No year anywhere: the parser's own default year applies ("Q1" is the next Q1).
+      months = parseExplicitDateWindow(year ? `in ${tok} ${year}` : `in ${tok}`)?.months;
     }
     if (!months?.length) return t[0];
-    spans.push({ text: t[0], start: t.index!, end: t.index! + t[0].length, months: [...months].sort() });
+    spans.push({ text: t[0], start: t.index!, end: t.index! + t[0].length, months: [...months].sort(), day: g.day });
   }
+  const lastDay = (ym: string) => { const [y, m] = ym.split('-').map(Number); return String(new Date(Date.UTC(y, m, 0)).getUTCDate()); };
   const want = new Set<string>();
   for (let i = 0; i < spans.length; i++) {
     const cur = spans[i];
@@ -1626,15 +1728,20 @@ function unconsumedPeriod(question: string, intent: ParsedQueryIntent): string |
     const gap = next ? question.slice(cur.end, next.start) : '';
     const between = next && /^\s*and\s*$/i.test(gap) && /\bbetween\s+(?:the\s+)?$/i.test(question.slice(0, cur.start));
     if (next && (RANGE_GAP_RE.test(gap) || between)) {
+      // A range of days is a month window only from a first to a last day.
+      if (cur.day && cur.day !== '01') return cur.text;
+      if (next.day && Number(next.day) !== Number(lastDay(next.months[0]))) return next.text;
       for (const m of monthSpan(cur.months[0], next.months[next.months.length - 1])) want.add(m);
       i += 1;
       continue;
     }
+    // One day is not a month.
+    if (cur.day) return cur.text;
     for (const m of cur.months) want.add(m);
   }
   const used = [intent.dateWindow, intent.leaseStartWindow, intent.leaseEndWindow].filter((w): w is DateWindowSpec => w !== undefined);
   const same = (w: DateWindowSpec) => w.months.length === want.size && w.months.every((m) => want.has(m));
-  return used.some(same) ? null : spans.slice(1).map((s) => s.text).join(', ');
+  return used.some(same) ? null : spans.map((s) => s.text).join(', ');
 }
 
 /** Building-type words that name no one property on their own. */
