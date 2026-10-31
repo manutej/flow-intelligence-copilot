@@ -1548,29 +1548,72 @@ function unconsumedMeasureNoun(question: string, intent: ParsedQueryIntent): str
   return null;
 }
 
-const PERIOD_WORD_RE = /\b(?:q[1-4]|h[12]|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may(?=\s+(?:20\d{2}|\d{1,2}\b))|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/gi;
-const PERIOD_RANGE_RE = /\b(?:between\s+\S+(?:\s+20\d{2})?\s+and|from\s+\S+(?:\s+20\d{2})?\s+(?:to|through|thru|until)|[a-z]\w*(?:\s+20\d{2})?\s*(?:[-\u2013\u2014]|\s(?:to|through|thru|until)\s))\s*(?=[a-z]\w*\b)/gi;
+const ORD_Q = String.raw`(?:first|1st|second|2nd|third|3rd|fourth|4th)`;
+const MONTH_WORD = String.raw`(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may(?=\s*(?:20\d{2}|'\d{2}|\d{1,2}\b|,|and\b|to\b|through\b|-))|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)`;
+/**
+ * Every date token the window parser reads: ISO months, "2026 Q3", quarters,
+ * ordinal quarters ("second and third quarters"), halves and month names,
+ * each with an optional year of its own.
+ */
+const DATE_TOKEN_RE = new RegExp(
+  String.raw`\b(?:(?<iso>20\d{2}-(?:0[1-9]|1[0-2]))(?:-\d{2})?(?!\d)|(?<yq>20\d{2})\s+q(?<yqn>[1-4])\b|(?<tok>q[1-4]|h[12]|(?:first|second)\s+half|${ORD_Q}(?=(?:\s*(?:,|and|&|or|to|through|thru|-)\s*(?:the\s+)?${ORD_Q})*\s+quarters?\b)|${MONTH_WORD})(?:\s*,?\s*(?<year>20\d{2}|'\d{2}))?)\b`,
+  'gi',
+);
+const RANGE_GAP_RE = /^\s*(?:[-\u2013\u2014]|to|through|thru|until|till)\s*(?:the\s+)?$/i;
+
+function monthSpan(from: string, to: string): string[] {
+  const out: string[] = [];
+  let [y, m] = from.split('-').map(Number);
+  const [y2, m2] = to.split('-').map(Number);
+  while (y < y2 || (y === y2 && m <= m2)) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    if (++m > 12) { m = 1; y += 1; }
+    if (out.length > 60) break;
+  }
+  return out;
+}
 
 /**
- * Two or more named periods must together be the window the parse used:
- * "July and August" is July-August, but "Q2 and Q3" read as Q2 alone or
- * "April and July" read as April-July drops or adds months.
+ * Every date token the question names must be the window the parse used.
+ * A range ("Q2-Q3", "from July to September") counts as one period that
+ * spans start..end; it is never exempt from the window check. "July and
+ * August" is July-August, but "Q2 and Q3" read as Q2 alone, "April and
+ * July" read as April-July, or "2026-07 and 2026-08" read as all of 2026
+ * is a period the parse did not consume.
  */
 function unconsumedPeriod(question: string, intent: ParsedQueryIntent): string | null {
-  // "between April and June" and "from April to June" are one range.
-  const q = question.replace(PERIOD_RANGE_RE, ' ');
-  const words = [...q.matchAll(PERIOD_WORD_RE)].map((m) => m[0]);
-  if (words.length < 2) return null;
-  const year = question.match(/\b20\d{2}\b/)?.[0] ?? '2026';
-  const months = new Set<string>();
-  for (const w of words) {
-    const win = parseExplicitDateWindow(`in ${w} ${year}`);
-    if (!win) return w;
-    for (const m of win.months) months.add(m);
+  const toks = [...question.matchAll(DATE_TOKEN_RE)];
+  if (toks.length < 2) return null;
+  const yearAfter = (i: number) => question.slice(i).match(/\b20\d{2}\b/)?.[0] ?? question.match(/\b20\d{2}\b/)?.[0] ?? '2026';
+  const spans: Array<{ text: string; start: number; end: number; months: string[] }> = [];
+  for (const t of toks) {
+    const g = t.groups ?? {};
+    let months: readonly string[] | undefined;
+    if (g.iso) months = [g.iso];
+    else {
+      const year = g.year ? (g.year.startsWith("'") ? `20${g.year.slice(1)}` : g.year) : g.yq ?? yearAfter(t.index! + t[0].length);
+      const tok = g.yq ? `q${g.yqn}` : /quarters?$/i.test(g.tok) ? g.tok : new RegExp(`^${ORD_Q}$`, 'i').test(g.tok) ? `${g.tok} quarter` : g.tok;
+      months = parseExplicitDateWindow(`in ${tok} ${year}`)?.months;
+    }
+    if (!months?.length) return t[0];
+    spans.push({ text: t[0], start: t.index!, end: t.index! + t[0].length, months: [...months].sort() });
+  }
+  const want = new Set<string>();
+  for (let i = 0; i < spans.length; i++) {
+    const cur = spans[i];
+    const next = spans[i + 1];
+    const gap = next ? question.slice(cur.end, next.start) : '';
+    const between = next && /^\s*and\s*$/i.test(gap) && /\bbetween\s+(?:the\s+)?$/i.test(question.slice(0, cur.start));
+    if (next && (RANGE_GAP_RE.test(gap) || between)) {
+      for (const m of monthSpan(cur.months[0], next.months[next.months.length - 1])) want.add(m);
+      i += 1;
+      continue;
+    }
+    for (const m of cur.months) want.add(m);
   }
   const used = [intent.dateWindow, intent.leaseStartWindow, intent.leaseEndWindow].filter((w): w is DateWindowSpec => w !== undefined);
-  const same = (w: DateWindowSpec) => w.months.length === months.size && w.months.every((m) => months.has(m));
-  return used.some(same) ? null : words.slice(1).join(', ');
+  const same = (w: DateWindowSpec) => w.months.length === want.size && w.months.every((m) => want.has(m));
+  return used.some(same) ? null : spans.slice(1).map((s) => s.text).join(', ');
 }
 
 /** Building-type words that name no one property on their own. */
