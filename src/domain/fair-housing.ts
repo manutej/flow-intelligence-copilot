@@ -36,7 +36,7 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     terms: ['children', 'pregnant', 'pregnancy', 'expecting', 'families', 'mothers', 'toddlers', 'teenagers'],
     legalBasis: FHA,
     pattern:
-      /\b(famil(?:y|ies)|children|child|kids?|minors|toddlers?|little\s+ones|babies|baby|prams?|buggies|moms?|mothers?|kid[-\s]?free|teen(?:ager)?s?|pregnan\w*|expecting\s+mothers?|expecting(?=\s*(?:[?.!;,]|$|a\s+(?:baby|child)|twins))|(?:a\s+)?(?:baby|babies|kids?|child|little\s+ones?)\s+on\s+the\s+way|strollers?|school[-\s]?age|parents?|adults?[-\s]only|no[-\s]kids|child[-\s]?free|empty[-\s]?nesters?|dinks?)\b/i,
+      /\b(famil(?:y|ies)|children|child|kids?|minors|toddlers?|little\s+ones|babies|baby|prams?|buggies|moms?|mothers?|kid[-\s]?free|teen(?:ager)?s?|pregnan\w*|expecting\s+mothers?|expecting(?=\s*(?:[?.!;,]|$|a\s+(?:baby|child)|twins))|strollers?|school[-\s]?age|parents?|adults?[-\s]only|no[-\s]kids|child[-\s]?free|empty[-\s]?nesters?|dinks?)\b/i,
   },
   {
     protectedClass: 'race or color',
@@ -50,14 +50,14 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     terms: ['immigrant', 'immigrants', 'refugee', 'refugees', 'asylum', 'immigration', 'foreigner', 'foreigners', 'citizen', 'citizens', 'citizenship', 'undocumented', 'mexican', 'ancestry'],
     legalBasis: `${FHA} and ${IHRA}`,
     pattern:
-      /\b(national\s+origin|ancestry|immigrants?|immigration(?:\s+status)?|visa\s+status|(?:legal\s+)?status\s+in\s+the\s+(?:us|u\.s\.|country)|foreign(?:ers)?|citizens?(?:hip)?|non[-\s]?citizens?|undocumented|green\s+card|accents?|english[-\s]speak\w*|(?:first|native)\s+language|mother\s+tongue|perfect\s+english|from\s+(?:mexico|china|india|poland|another\s+country|abroad)|(?:lack\w*|no|without|ha(?:ve|s)\s+no)\s+(?:legal\s+)?(?:status|papers|documents)|legal\s+status|immigration\s+papers|from\s+overseas|refugees?|asylum\s+seekers?|asylees?|asylum|born\s+(?:abroad|overseas|outside\s+(?:the\s+)?(?:us|u\.s\.|country|united\s+states))|(?:foreign|overseas)[-\s]born|native\s+english|speaks?\s+(?:good\s+|fluent\s+)?english|spanish[-\s]speak\w*|non[-\s]english|esl|mexican\w*|indian|chinese|polish|arab\w*|middle\s+eastern|puerto\s+ricans?|somalis?|nigerians?|koreans?|vietnamese|filipin[oa]s?|russians?|ukrainians?|haitians?|syrians?|afghans?|(?:people|tenants|renters|applicants|callers|families)\s+from\s+(?!the\s+(?:website|portal|ils|ad)\b)[a-z]+)\b/i,
+      /\b(national\s+origin|ancestry|immigrants?|immigration(?:\s+status)?|visa\s+status|(?:legal\s+)?status\s+in\s+the\s+(?:us|u\.s\.|country)|foreign(?:ers)?|citizens?(?:hip)?|non[-\s]?citizens?|undocumented|green\s+card|accents?|english[-\s]speak\w*|(?:first|native)\s+language|mother\s+tongue|perfect\s+english|from\s+(?:mexico|china|india|poland|another\s+country|abroad|overseas)|(?:legal|immigration)\s+(?:status|papers|documents)|refugees?|asylum\s+seekers?|asylees?|asylum|born\s+(?:abroad|overseas|outside\s+(?:the\s+)?(?:us|u\.s\.|country|united\s+states))|(?:foreign|overseas)[-\s]born|native\s+english|speaks?\s+(?:good\s+|fluent\s+)?english|spanish[-\s]speak\w*|non[-\s]english|esl|mexican\w*|indian|chinese|polish|arab\w*|middle\s+eastern|puerto\s+ricans?|somalis?|nigerians?|koreans?|vietnamese|filipin[oa]s?|russians?|ukrainians?|haitians?|syrians?|afghans?|(?:people|tenants|renters|applicants|callers|families)\s+from\s+(?!the\s+(?:website|portal|ils|ad)\b)[a-z]+)\b/i,
   },
   {
     protectedClass: 'religion',
     terms: ['religion', 'religious', 'islam', 'judaism', 'christianity', 'hinduism', 'buddhism', 'ramadan', 'synagogue', 'muslim', 'muslims', 'christian', 'christians', 'catholic', 'catholics', 'jewish', 'church', 'synagogue', 'mosque'],
     legalBasis: FHA,
     pattern:
-      /\b((?:practi[cs]\w*|observ\w*|worship\w*|attend\w*|go(?:es)?\s+to|pray\w*\s+at)\s+(?:at\s+)?(?:an?\s+|the\s+)?(?:islam|judaism|christianity|hinduism|buddhism|sikhism|ramadan|passover|lent|sabbath|shabbat|mass|mosque|church|synagogue|temple|gurdwara)|islam|judaism|christianity|hinduism|buddhism|sikhism|ramadan|shabbat|religio(?:n|us)|church[-\s]?go\w*|churchgo\w*|church|christians?|catholics?|protestants?|muslims?|islamic|jewish|jews?|hindus?|sikhs?|mormons?|evangelicals?|orthodox|hasidi?c?m?|amish|quakers?|jehovah\w*|buddhists?|atheists?|synagogue|mosque|temple[-\s]go\w*|faith[-\s]based|devout|pray\w*|hijabs?|turbans?|yarmulkes?|kippahs?)\b/i,
+      /\b(islam|judaism|christianity|hinduism|buddhism|sikhism|ramadan|shabbat|religio(?:n|us)|church[-\s]?go\w*|churchgo\w*|church|christians?|catholics?|protestants?|muslims?|islamic|jewish|jews?|hindus?|sikhs?|mormons?|evangelicals?|orthodox|hasidi?c?m?|amish|quakers?|jehovah\w*|buddhists?|atheists?|synagogue|mosque|temple[-\s]go\w*|faith[-\s]based|devout|pray\w*|hijabs?|turbans?|yarmulkes?|kippahs?)\b/i,
   },
   {
     protectedClass: 'sex, gender identity, or sexual orientation',
@@ -71,7 +71,7 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     terms: ['disabled', 'disability', 'disabilities', 'wheelchair', 'wheelchairs', 'diabetes', 'dialysis', 'chemotherapy', 'dementia', 'epilepsy', 'autism', 'handicapped', 'medical', 'conditions', 'illness', 'impaired'],
     legalBasis: `${FHA}(f)`,
     pattern:
-      /\b(disab(?:ility|ilities|led)|handicap\w*|wheelchairs?|walkers?|canes?|crutches|mobility\s+aids?|service\s+(?:animals?|dogs?)|emotional\s+support\s+animals?|esas?|blind|deaf|mental(?:ly)?\s+ill\w*|mental\s+health|hiv|aids\s+patients?|recovering\s+addicts?|medical\s+(?:needs?|conditions?|issues?|histor(?:y|ies)|records?)|health\s+(?:conditions?|issues?|problems?)|illness\w*|chronic(?:ally)?\s+ill\w*|impair\w*|hard\s+of\s+hearing|visually\s+impaired|cancer|diabet\w*|dialysis|chemo\w*|autis\w*|epilep\w*|dementia|alzheimer\w*|parkinson\w*|multiple\s+sclerosis|asthma\w*|(?:in\s+)?recovery(?:\s+from\s+addiction)?|addict\w*)\b/i,
+      /\b(disab(?:ility|ilities|led)|handicap\w*|wheelchairs?|walkers?|canes?|crutches|mobility\s+aids?|service\s+(?:animals?|dogs?)|emotional\s+support\s+animals?|esas?|blind|deaf|mental(?:ly)?\s+ill\w*|mental\s+health|hiv|aids\s+patients?|recovering\s+addicts?|medical\s+(?:needs?|conditions?|issues?|histor(?:y|ies)|records?)|health\s+(?:conditions?|issues?|problems?)|illness\w*|chronic(?:ally)?\s+ill\w*|impair\w*|hard\s+of\s+hearing|cancer|diabet\w*|dialysis|chemo\w*|autis\w*|epilep\w*|dementia|alzheimer\w*|parkinson\w*|multiple\s+sclerosis|asthma\w*|(?:in\s+)?recovery(?:\s+from\s+addiction)?|addict\w*)\b/i,
   },
   {
     protectedClass: 'age',

@@ -9,7 +9,7 @@ import { parseQueryIntent, type ParsedQueryIntent } from '../agent/intent.ts';
 import { executeCompositionalPlan } from '../agent/planner.ts';
 import type { FairHousingSession } from '../domain/fair-housing.ts';
 import { hashOf } from '../agent/envelope.ts';
-import { verifyAnswerEnvelope } from '../domain/guards.ts';
+import { checkFairHousingGuard, verifyAnswerEnvelope } from '../domain/guards.ts';
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import type { ParseConfig } from '../agent/model-parse.ts';
 import { readSettings } from './inputs.ts';
@@ -375,7 +375,9 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   const turns = input.split(/\s*→\s*/).filter(Boolean);
   const session: FairHousingSession = { refusedEarlier: false };
   let turn!: CopilotTurnResult;
-  for (const t of turns) turn = await askFlowIqCopilot(coreQuestion(t), { mode: 'deterministic', store, parse, session });
+  // the fair-housing guard reads the question as asked: cutting a chart verb ("Show the X tenants")
+  // must not turn a refused lookup into a different question
+  for (const t of turns) turn = await askFlowIqCopilot(checkFairHousingGuard(t, store).refused ? t : coreQuestion(t), { mode: 'deterministic', store, parse, session });
   const question = turns[turns.length - 1];
   const gate = intentGate(turn, coreQuestion(question), store);
   if (gate) return { question: input, spec: gate, evidence: { items: [] }, errors: [], parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };

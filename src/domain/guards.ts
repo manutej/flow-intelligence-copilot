@@ -5,6 +5,7 @@ import type {
   PortfolioStore,
 } from '../data/schema.ts';
 import { classifyFairHousingRequest } from './fair-housing.ts';
+import { personAttributeLookup } from './person-attributes.ts';
 import { resolvePropertiesFromText } from './resolver.ts';
 
 export interface FairHousingCheckResult {
@@ -40,7 +41,12 @@ export function checkFairHousingGuard(
     };
   }
 
-  const classification = classifyFairHousingRequest(question);
+  const classification0 = classifyFairHousingRequest(question);
+  // a lookup of people by a trait no column records is refused whatever its wording
+  const lookup = classification0.refused ? null : personAttributeLookup(question, store);
+  const classification = lookup?.classes.length
+    ? { ...classification0, refused: true, classes: lookup.classes, actions: [...new Set([...classification0.actions, 'identification' as const])] }
+    : classification0;
   const matchedRules = classification.classes;
   if (!classification.refused) {
     return {
@@ -140,6 +146,16 @@ export function checkUnknownDataGuard(
     };
   }
 
+  const lookup = personAttributeLookup(question, store);
+  if (lookup && !lookup.classes.length) {
+    const words = lookup.unknown.map((w) => `"${w}"`).join(', ');
+    return {
+      unknown: true,
+      missingCategory: 'Personal attributes of residents',
+      reason: `I don't know — FlowIQ holds no record of ${words} for any resident. People appear in the exports only through lease, unit and lead columns (lease type, dates, rent, concession, renewal status, unit and building), so a lookup filtered on anything else cannot be answered.`,
+      citations: ['properties:P01'],
+    };
+  }
   for (const rule of UNMODELED_DATA_RULES) {
     if (rule.pattern.test(question)) {
       const mentionedProps = resolvePropertiesFromText(store, question, {
