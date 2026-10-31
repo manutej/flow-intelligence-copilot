@@ -28,7 +28,7 @@ for (const q of [
   'Spend at F Y in Q3 2026?',
   // Own rewordings (02:52 file).
   'Lead count from Q2 through Q3 2026?', 'Marketing spend Q2 thru Q3 2026?', 'Marketing spend in Q2–Q3 2026?',
-  'Marketing spend for 2026-07 and 2026-09?', 'Marketing spend in 2026-07 through 2026-08?',
+  'Marketing spend for 2026-07 and 2026-09?',
   'Spend plus renewals at Marlowe Residences in Q2 2026?', 'Cost per lead with move-ins at Marlowe Residences in Q2 2026?',
   'Spend per renewal at Marlowe Residences in Q2 2026?', 'Lead count and occupancy at Marlowe Residences in Q2 2026?',
   'Spend per conversion at Marlowe Residences in Q2 2026?', 'What channel at Marlowe Residences in Q2 2026, cost per lead?',
@@ -53,6 +53,8 @@ for (const [q, want, not] of [
   // Controls that must still answer.
   ['Marketing spend from July to September 2026?', /\$111,893\.30/, null],
   ['Marketing spend in July and August 2026?', /\$73,301\.60/, null],
+  // VERDICT-S2-d1091cb LOW: an ISO month range is a window, not a refusal.
+  ['Marketing spend in 2026-07 through 2026-08?', /\$73,301\.60/, null],
   ['Marketing spend in Q3 and September 2026?', /\$111,893\.30/, null],
   [`Cost per lead from Zillow ${K}`, /\$318\.18/, null],
   [`Tour to lease rate ${K}`, /33\.3%/, null],

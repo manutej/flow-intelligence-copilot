@@ -18,7 +18,6 @@ const dropped: ReadonlyArray<readonly [string, string]> = [
   ['What property tops the list on renewal rate?', ''],
   ['Renewals [per building] in 2026?', 'per building'],
   ['Marketing spend: per month, Q2 2026', 'per month'],
-  ['Cost per lead, by channel, at Kedzie Works in Q3?', 'channel'],
 ];
 for (const [q, words] of dropped) {
   test(`a dropped breakdown is not answered: ${q}`, async () => {
@@ -36,6 +35,8 @@ for (const q of [
   'Rent per month at risk at Logan Lofts from residents on notice?',
   'Apply rate by source in Q3 2026?',
   'Cost per tour by channel in Q2 2026?',
+  // VERDICT-S2-d1091cb finding 5: a source breakdown is listed per source.
+  'Cost per lead, by channel, at Kedzie Works in Q3?',
 ]) {
   test(`scope, filters and rate units still answer: ${q}`, async () => {
     const e = await ask(q);

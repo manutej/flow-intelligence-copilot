@@ -18,7 +18,6 @@ for (const [q, want] of [
   ['Marketing spend July and August 2026?', /\$73,301\.60/],
   ['How many leads in Q2 2026 at Marlowe Residences?', /\b139\b/],
   ['Spend at FY in Q2 2026?', /Fulton Yards \(P03\)/],
-  ['Cost per signed lease, which channel, Kedzie Works Q3 2026?', /cost per signed lease/],
 ] as const) {
   test(`s10: answers: ${q}`, async () => {
     const e = await ask(q);
@@ -27,6 +26,8 @@ for (const [q, want] of [
   });
 }
 for (const q of [
+  // VERDICT-S2-d1091cb finding 5: an unranked which names no source.
+  'Cost per signed lease, which channel, Kedzie Works Q3 2026?',
   // s10 rows.
   'Tour to lease rate and leads at Kedzie Works in Q3 2026?', 'Cost per lead over tours at Kedzie Works in Q3 2026?',
   'Spend, leads at Kedzie Works in Q3 2026?', 'Spend : leads at Kedzie Works in Q3 2026?', 'Spend over signings at Kedzie Works in Q3 2026?',
