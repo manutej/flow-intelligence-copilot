@@ -1,6 +1,7 @@
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import { resolvePropertiesFromText } from '../domain/resolver.ts';
 import { findUnknownBuildingReference, findUnresolvedPlace } from './recognition.ts';
+import { isMeasureNoun } from './intent.ts';
 import { unboundNegators } from './closed-world.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 
@@ -75,12 +76,16 @@ const ASK_WORD = /^(?:highest|lowest|most|least|top|bottom|best|worst|slowest|fa
 function dropsPlaceOrAsk(question: string, unbound: readonly string[], store: PortfolioStore): boolean {
   if (findUnresolvedPlace(question, store)) return true;
   if (unbound.some((w) => ASK_WORD.test(w))) return true;
+  // A reading without a measure noun the question states ("units, vacancy, leads") answers less than was asked.
+  if (unbound.some((w) => isMeasureNoun(w))) return true;
+  // A dropped locative ("vacancy around X") turns a place-relative ask into one about X itself.
+  if (unbound.some((w) => /^(?:at|near|in|around|within|by)$/i.test(w))) return true;
   const labels = store.properties.flatMap((p) => [p.name, ...p.aka]).map((l) => l.toLowerCase());
   const labelWords = new Set(labels.flatMap((l) => l.split(/\s+/)));
   for (const w of unbound) {
-    const at = new RegExp(`\\b(?:at|near|in|around)\\s+(?:the\\s+)?(?:[\\p{L}'’&-]+\\s+){0,2}${escape(w)}(?![\\p{L}\\p{N}])`, 'iu');
+    const at = new RegExp(String.raw`\b(?:at|near|in|around)\s+(?:the\s+)?(?:[\p{L}'’&-]+\s+){0,2}${escape(w)}(?![\p{L}\p{N}])`, 'iu');
     if (at.test(question)) return true;
-    const cap = new RegExp(`(?<=[\p{L}\p{N},;]\s+)(${escape(w)})(?![\p{L}\p{N}])`, 'giu');
+    const cap = new RegExp(String.raw`(?<=[\p{L}\p{N},;]\s+)(${escape(w)})(?![\p{L}\p{N}])`, 'giu');
     // Acronyms ("LPs", "NOI") are not names.
     for (const m of question.matchAll(cap)) if (/^\p{Lu}/u.test(m[1]) && !/^\p{Lu}{2,}s?$/u.test(m[1])) return true;
   }
@@ -94,6 +99,71 @@ function dropsPlaceOrAsk(question: string, unbound: readonly string[], store: Po
   return false;
 }
 
+/** Optimal-string-alignment distance capped at 2: one insertion, deletion, substitution or adjacent swap is 1. */
+function editDistance(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 1) return 2;
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return Math.min(d[a.length][b.length], 2);
+}
+
+interface NearMiss { readonly start: number; readonly end: number; readonly written: string; readonly name: string }
+/**
+ * A building label written one edit away: a run of question words that
+ * matches a property's name or alias word for word, with exactly one edit
+ * in total (in a word of four or more letters). It counts only when exactly
+ * one property has such a run and the run is not already an exact label.
+ */
+export function nearMissBuilding(question: string, store: PortfolioStore): NearMiss | null {
+  const words = [...question.matchAll(/[\p{L}\p{N}'’&]+/gu)];
+  const found = new Map<string, NearMiss>();
+  for (const p of store.properties) {
+    for (const label of [p.name, ...p.aka].filter(isDisplayLabel)) {
+      const lw = label.toLowerCase().replace(/^the\s+/, '').split(/\s+/);
+      for (let i = 0; i + lw.length <= words.length; i++) {
+        let edits = 0;
+        for (let k = 0; k < lw.length && edits < 2; k++) {
+          const w = words[i + k][0].toLowerCase();
+          const e = w === lw[k] ? 0 : Math.min(w.length, lw[k].length) >= 4 ? editDistance(w, lw[k]) : 2;
+          edits += e;
+        }
+        if (edits !== 1) continue;
+        const start = words[i].index!, last = words[i + lw.length - 1];
+        const end = last.index! + last[0].length;
+        const prev = found.get(p.propertyId);
+        // The longest run wins: "armitage common" is one mention of "Armitage Commons", not "Commons".
+        if (!prev || end - start > prev.end - prev.start) found.set(p.propertyId, { start, end, written: question.slice(start, end), name: p.name });
+      }
+    }
+  }
+  return found.size === 1 ? [...found.values()][0] : null;
+}
+const isDisplayLabel = (l: string) => /^[\p{L}\p{N}'’& .-]+$/u.test(l.trim()) && l.trim().length >= 3;
+
+/**
+ * Did-you-mean for a building one edit away: the only option is the user's
+ * own question with that one name corrected, so the measure and every
+ * filter stay as written. Any other unbound word goes through the ordinary
+ * readings of the corrected question, each still naming the building.
+ */
+function didYouMean(question: string, typo: NearMiss, unbound: readonly string[], store: PortfolioStore): ClarifyOption[] {
+  const corrected = `${question.slice(0, typo.start)}${typo.name}${question.slice(typo.end)}`;
+  const typoWords = new Set(typo.written.toLowerCase().split(/[^\p{L}\p{N}'’&]+/u));
+  const rest = unbound.filter((w) => !typoWords.has(w.toLowerCase()));
+  if (rest.length > 0) {
+    return clarifyOptions(corrected, rest, store).map((o) => ({ ...o, label: `"${typo.written}" as ${typo.name}, ${o.label}` }));
+  }
+  const query = parseQueryIntent(corrected, store);
+  if (query.measure === 'unsupported') return [];
+  return [{ label: `"${typo.written}" as ${typo.name}: ${restate(query, corrected, store).replace(/^I computed: /, '').replace(/\.$/, '')}`, question: corrected, query }];
+}
+
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** 2-4 typed readings of a question whose words `unbound` no field carries. */
@@ -103,6 +173,8 @@ export function clarifyOptions(question: string, unbound: readonly string[], sto
   // no reading is offered; the turn is an honest "I don't know".
   // An unknown building has no reading: guessing one by a shared word, or
   // widening to the portfolio, answers a different question.
+  const typo = nearMissBuilding(question, store);
+  if (typo) return didYouMean(question, typo, unbound, store);
   if (findUnknownBuildingReference(question, store)) return [];
   if (dropsPlaceOrAsk(question, unbound, store)) return [];
   if (unboundNegators(question).length > 0) return negatedStatusOptions(question, store);

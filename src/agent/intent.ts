@@ -1637,6 +1637,11 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
   return null;
 }
 
+/** A word that names a quantity in any domain. */
+export function isMeasureNoun(word: string): boolean {
+  return [...MEASURE_NOUNS.map(([, re]) => re), /\b(?:units?|doors?)\b/gi].some((re) => new RegExp(`^(?:${re.source})$`, 'i').test(word));
+}
+
 /** The nouns each marketing scalar names; a measure not listed is not checked. */
 const MEASURE_CONSUMES: Readonly<Partial<Record<IntentMeasure, readonly string[]>>> = {
   spend_total: ['spend'],
