@@ -565,14 +565,14 @@ export async function runUniversalModelHarness(
       answer:
         unknownCheck.reason ??
         "I don't know — that field is not in the portfolio CSV exports.",
-      result: { unknown: true },
+      result: unknownCheck.clarifyingQuestion ? { unknown: true, clarification_needed: true } : { unknown: true },
       citations: unknownCheck.citations,
     };
     return {
       envelope,
       toolCalls: [],
-      clarificationNeeded: false,
-      clarifyingQuestion: null,
+      clarificationNeeded: unknownCheck.clarifyingQuestion !== undefined,
+      clarifyingQuestion: unknownCheck.clarifyingQuestion ?? null,
       providerUsed: config.provider,
       modelUsed: config.model,
       wireModeUsed: config.wireMode,

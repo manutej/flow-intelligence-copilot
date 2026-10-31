@@ -1,6 +1,7 @@
 import { COMPARATOR_PHRASES } from './comparators.ts';
 import type { PortfolioStore } from '../data/schema.ts';
 import { resolvePropertiesFromText } from './resolver.ts';
+import { spellCalendarYear } from './fiscal.ts';
 
 /**
  * L1 is a closed grammar: a question may use only words FlowIQ has a meaning
@@ -24,7 +25,7 @@ export const FIXED = new Set(
   'decimal decision decisions declined delta deltas did distinct divided do',
   'does dog dollars doorman down duplicate duplicates each earlier earliest',
   'end ending entries entry equivalent ev evaluating every exclude facebook',
-  'false fiscal fiscally find first floor for from fulton gave get give given google h had',
+  'calendar false fiscal fiscally find first floor for from fulton gave get give given google h had',
   'halcyon halsted harbor has have higher highest how i id ids ils in include',
   'is it its january jul july june kedzie keeping kensington lake lakefront',
   'later lead leads learning lease leased leases list listing lofts loop',
@@ -107,7 +108,7 @@ export function unknownWords(question: string, store: PortfolioStore): string[] 
   const scope = named.length > 0 ? named : store.properties;
   for (const p of scope) for (const w of amenityWords(p.amenities)) known.add(w);
   const out = new Set<string>();
-  let text = question.toLowerCase();
+  let text = spellCalendarYear(question).toLowerCase();
   // A word a comparator rule reads ("larger than 600 square feet") is understood.
   for (const re of COMPARATOR_PHRASES) text = text.replace(re, ' ');
   // Every letter, digit-free word or pictograph in any script is a token; one

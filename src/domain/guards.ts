@@ -6,7 +6,7 @@ import type {
 } from '../data/schema.ts';
 import { classifyFairHousingRequest } from './fair-housing.ts';
 import { resolvePropertiesFromText } from './resolver.ts';
-import { BARE_FISCAL_RE, CALENDAR_PERIOD_RE, FISCAL_TOKEN_RE, maskFiscalTokens } from './fiscal.ts';
+import { BARE_FISCAL_RE, BARE_FY_RE, CALENDAR_PERIOD_RE, FISCAL_TOKEN_RE, LOCATIVE_FY_RE, maskFiscalTokens, spellCalendarYear } from './fiscal.ts';
 
 export interface FairHousingCheckResult {
   readonly refused: boolean;
@@ -21,6 +21,8 @@ export interface UnknownDataCheckResult {
   readonly missingCategory: string | null;
   readonly reason: string | null;
   readonly citations: readonly CitationId[];
+  /** Set when the non-answer is a clarification: the question to ask back. */
+  readonly clarifyingQuestion?: string;
 }
 
 /**
@@ -148,11 +150,26 @@ export function checkUnknownDataGuard(
     };
   }
 
+  // Bare "FY" outside "at/for/in FY" is Fulton Yards or a fiscal year: ask.
+  const masked = maskFiscalTokens(question);
+  if (BARE_FY_RE.test(masked) && !LOCATIVE_FY_RE.test(masked)) {
+    const fy = store.properties.find((p) => p.aka.some((a) => /^f\.?y\.?$/i.test(a.trim())));
+    const place = fy ? `${fy.name} (${fy.propertyId})` : 'a property';
+    return {
+      unknown: true,
+      missingCategory: 'Ambiguous FY',
+      reason: `I don't know which FY you mean. "FY" here could be ${place} or a fiscal year, so FlowIQ will not pick one. Did you mean: (1) the figure at ${fy ? fy.name : 'that property'} (say "at ${fy ? fy.name : 'the property'}"); (2) a fiscal year, which the exports cannot map (they carry calendar months only; ask for a calendar year such as "in 2026")?`,
+      citations: fy ? [fy.citationId] : ['properties:P01'],
+      clarifyingQuestion: fy ? `Do you mean ${fy.name} or a fiscal year?` : 'Do you mean a property or a fiscal year?',
+    };
+  }
   for (const rule of UNMODELED_DATA_RULES) {
     const fiscal = rule.pattern === FISCAL_TOKEN_RE;
-    if (rule.pattern.test(question) || (fiscal && BARE_FISCAL_RE.test(question))) {
-      // A fiscal word beside an explicit calendar period: answer the calendar period.
-      if (fiscal && CALENDAR_PERIOD_RE.test(maskFiscalTokens(question))) continue;
+    // A fiscal period is never answered; only the bare adjective gives way
+    // to a calendar period the question states.
+    const bareFiscalOnly = fiscal && !rule.pattern.test(question) && BARE_FISCAL_RE.test(question);
+    if (bareFiscalOnly && CALENDAR_PERIOD_RE.test(spellCalendarYear(question))) continue;
+    if (rule.pattern.test(question) || bareFiscalOnly) {
       const mentionedProps = resolvePropertiesFromText(store, question, {
         includeOnboarding: true,
       });

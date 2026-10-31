@@ -1,4 +1,4 @@
-import { isFiscalToken, maskFiscalTokens } from './fiscal.ts';
+import { isFiscalToken, maskFiscalTokens, maskNonLocativeFy } from './fiscal.ts';
 import type {
   CitationId,
   PortfolioStore,
@@ -325,8 +325,9 @@ export function resolvePropertiesFromText(
     candidatePool?: readonly PropertyRecord[];
   },
 ): PropertyResolutionResult {
-  // A fiscal token outranks an alias spelled the same way (FY is not P03).
-  text = maskFiscalTokens(text);
+  // A fiscal token outranks an alias spelled the same way, and bare FY names
+  // the property only after at/for/in ("at FY"); elsewhere it binds nothing.
+  text = maskNonLocativeFy(maskFiscalTokens(text));
   const pool =
     options?.candidatePool ??
     (options?.includeOnboarding ? store.properties : store.operatingProperties);

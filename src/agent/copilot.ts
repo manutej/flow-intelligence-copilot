@@ -1,5 +1,6 @@
 import { nonAnswerKind, sealNonAnswer, setNonAnswerRenderer, type NonAnswerInput } from './envelope.ts';
 import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
+import { LOCATIVE_FY_RE, maskFiscalTokens } from '../domain/fiscal.ts';
 import type { ParsedQueryIntent } from './intent.ts';
 import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
 import { parseQueryIntent } from './intent.ts';
@@ -108,7 +109,7 @@ export function deterministicTurn(qRecord: QuestionRecord, store: PortfolioStore
   const fh = checkFairHousingGuard(qRecord.question, store);
   if (fh.refused) return { id: qRecord.id, answer: fh.reason ?? 'Refused under the Fair Housing Act.', result: { refused: true }, citations: fh.citations };
   const unknownCheck = checkUnknownDataGuard(qRecord.question, store);
-  if (unknownCheck.unknown) return { id: qRecord.id, answer: unknownCheck.reason ?? "I don't know — that field is not in the portfolio CSV exports.", result: { unknown: true }, citations: unknownCheck.citations };
+  if (unknownCheck.unknown) return { id: qRecord.id, answer: unknownCheck.reason ?? "I don't know — that field is not in the portfolio CSV exports.", result: unknownCheck.clarifyingQuestion ? { unknown: true, clarification_needed: true } : { unknown: true }, citations: unknownCheck.citations };
   return runDeterministicToolRouter(qRecord, store).envelope;
 }
 
@@ -217,14 +218,14 @@ async function askUnsealed(
       answer:
         unknownCheck.reason ??
         "I don't know — that field is not in the portfolio CSV exports.",
-      result: { unknown: true },
+      result: unknownCheck.clarifyingQuestion ? { unknown: true, clarification_needed: true } : { unknown: true },
       citations: unknownCheck.citations,
     };
     return {
       envelope,
       toolCalls,
-      clarificationNeeded: false,
-      clarifyingQuestion: null,
+      clarificationNeeded: unknownCheck.clarifyingQuestion !== undefined,
+      clarifyingQuestion: unknownCheck.clarifyingQuestion ?? null,
       modeUsed: 'deterministic',
       providerUsed: 'deterministic',
       modelUsed: 'flowiq-deterministic-v2.0',
@@ -488,6 +489,19 @@ function unitClarify(question: string, store: PortfolioStore): { clarifyOptions?
 }
 
 /**
+ * "at FY" binds the alias FY to its property; the answer says so, so a
+ * reader who meant a fiscal year sees the property figure for what it is.
+ */
+function namedAlias(out: ReturnType<typeof executeCompositionalPlan>, question: string, store: PortfolioStore): ReturnType<typeof executeCompositionalPlan> {
+  const masked = maskFiscalTokens(question);
+  if (!LOCATIVE_FY_RE.test(masked)) return out;
+  const fy = store.properties.find((p) => p.aka.some((a) => /^f\.?y\.?$/i.test(a.trim())));
+  if (!fy || out.envelope.answer.includes(fy.name)) return out;
+  const envelope: AnswerEnvelope = { ...out.envelope, answer: `Reading "FY" as the property ${fy.name} (${fy.propertyId}), not a fiscal year: ${out.envelope.answer}` };
+  return { ...out, envelope };
+}
+
+/**
  * L1 closed grammar: an answer stands only if every word of the question has a
  * meaning. Refusals, unknowns and clarifications pass through untouched.
  */
@@ -506,7 +520,7 @@ function closedVocabulary(
       : /\bhow\s+many\b/i.test(qRecord.question) && !hasCount(r)
         ? 'the question asks "how many" but the plan computed no count'
         : null;
-  if (why === null) return out;
+  if (why === null) return namedAlias(out, qRecord.question, store);
   if (unparsed.length > 0) {
     // Clarify, not a dead end: offer typed readings (result keys unchanged).
     const { envelope: c, options } = clarifyEnvelope(qRecord.id, qRecord.question, unparsed, store);
