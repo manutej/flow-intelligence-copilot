@@ -260,11 +260,31 @@ export async function runModelParseRouter(
   }
   // model-clarify: model and lexicon disagree, or a word is unbound.
   if (!isAnswer(det.envelope.result as Record<string, unknown>)) return tag(det);
+  // A model that only drops filters the lexicon bound from the question's
+  // words, adds filters no word states, or differs in fields the computation does not read (the reading
+  // restates the same), has not offered another reading; it failed to read
+  // the whole question. That is a model failure: the turn is the model-off turn.
+  if (mp.coverage.unbound.every((u) => u.includes(':'))) {
+    const filled = { ...mp.intent } as Record<string, unknown>;
+    const d0 = mp.deterministic as unknown as Record<string, unknown>;
+    // Every word is bound here, so a field the model sets that the lexicon
+    // left unset has no word behind it (unstated): an invented constraint.
+    for (const u of mp.coverage.unbound) {
+      const [k, how] = u.split(':');
+      if (how === 'dropped') filled[k] = d0[k];
+      if (how === 'unstated') delete filled[k];
+    }
+    if (restate(filled as unknown as ParsedQueryIntent, qRecord.question, store) === restate(mp.deterministic, qRecord.question, store)) return tag(det, 'deterministic');
+  }
   const options: ClarifyOption[] = [
     { label: restate(mp.deterministic, qRecord.question, store).replace(/^I computed: /, ''), question: qRecord.question, query: mp.deterministic },
   ];
   const mq = canonicalQuestion(mp.intent);
   if (mq !== null && mq !== qRecord.question) options.push({ label: restate(mp.intent, mq, store).replace(/^I computed: /, ''), question: mq, query: mp.intent });
+  // A model reading that cannot be put as a distinct question offers the user
+  // nothing to choose: that is a model failure, so the turn is the model-off
+  // turn rather than a dead end over a valid lexicon answer.
+  if (options.length < 2) return tag(det, 'deterministic');
   const restatement = `I could not bind ${mp.coverage.unbound.join(', ')}. I read: ${restate(mp.deterministic, qRecord.question, store).replace(/^I computed: /, '')}`;
   const envelope: AnswerEnvelope = options.length >= 2
     ? { id: qRecord.id, answer: `I am not sure which question you mean. Did you mean: ${options.map((o, k) => `(${k + 1}) ${o.label}`).join('; ')}?`, result: { unknown: true, clarification_needed: true }, citations: [] }
