@@ -87,10 +87,42 @@ function sub(store: PortfolioStore, question: string, intent: ParsedQueryIntent,
   return itemFrom(key, label, env, question, intent);
 }
 
+/** The operating buildings a question names, when it names two or more: a comparison charts only those. */
+export function namedBuildings(store: PortfolioStore, q: string) {
+  const ids = new Set(resolvePropertiesFromText(store, q).matched.map((p) => p.propertyId));
+  const named = store.operatingProperties.filter((p) => ids.has(p.propertyId));
+  return named.length >= 2 ? named : null;
+}
+const escRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * One building's slice of the question: every building the question names is cut and the
+ * slice is scoped to that building alone, so each bar is computed for one building with the
+ * main answer's window and definition. A slice whose text does not resolve to exactly that
+ * building is dropped (the panel shows it as partial), never charted as another scope.
+ */
+export function scopedQuestion(store: PortfolioStore, q: string, p: { propertyId: string; name: string }): string | null {
+  let t = q;
+  for (const n of resolvePropertiesFromText(store, q, { includeOnboarding: true }).matched)
+    for (const w of [n.name, n.name.replace(/&/g, 'and'), n.propertyId]) t = t.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escRe(w)}(?![\\p{L}\\p{N}])`, 'giu'), ' ');
+  const scoped = `${t.replace(/\s+([?.,])/g, '$1').replace(/\s{2,}/g, ' ').trim()} (scope: ${p.name})`;
+  const r = resolvePropertiesFromText(store, scoped).matched;
+  return r.length === 1 && r[0].propertyId === p.propertyId ? scoped : null;
+}
 function byBuilding(store: PortfolioStore, q: string, intent: ParsedQueryIntent, k: string): EvidenceItem[] {
   const it = { ...intent, aggregation: 'value', isWholePortfolioExplicit: false, isClassComparison: false } as ParsedQueryIntent;
-  return store.operatingProperties.map((p) => sub(store, `${q} (scope: ${p.name})`, it, p.propertyId, p.name))
+  return (namedBuildings(store, q) ?? store.operatingProperties).map((p) => { const sq = scopedQuestion(store, q, p); return sq ? sub(store, sq, it, p.propertyId, p.name) : null; })
     .filter((x): x is EvidenceItem => !!x && (k === '' || typeof x.result[k] === 'number'));
+}
+
+/**
+ * The highlight is derived from the plotted series alone: the single largest (or, for
+ * argmin, smallest) plotted value. When the extreme value is shared, nothing is highlighted.
+ */
+export function seriesWinner(series: ReadonlyArray<{ label: string; v: number }>, want: 'max' | 'min'): string | null {
+  if (!series.length) return null;
+  const best = want === 'max' ? Math.max(...series.map((x) => x.v)) : Math.min(...series.map((x) => x.v));
+  const at = series.filter((x) => x.v === best);
+  return at.length === 1 ? at[0].label : null;
 }
 function bySource(store: PortfolioStore, q: string, intent: ParsedQueryIntent, k: string): EvidenceItem[] {
   const srcs = intent.paidOnly || /\bpaid\b/i.test(q) ? store.paidSources : [...store.paidSources, ...store.organicSources];
@@ -248,13 +280,19 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
     if (bd.length >= 2) {
       items.push(...bd);
       const sorted = [...bd].sort((a, b) => (b.result[k] as number) - (a.result[k] as number));
-      const winner = String(res.source ?? store.properties.find((p) => p.propertyId === res.property_id)?.name ?? '');
+      // the highlight comes from the plotted series; the engine's named winner must agree with it,
+      // or the panel is not charted (a chart never contradicts its own bars)
+      const top = seriesWinner(sorted.map((x) => ({ label: x.label, v: x.result[k!] as number })), ag === 'argmin' ? 'min' : 'max');
+      const named = String(res.source ?? store.properties.find((p) => p.propertyId === res.property_id)?.name ?? '');
+      if ((ag === 'argmax' || ag === 'argmin') && top !== null && named && named !== top)
+        return { spec: clarify('unknown', turn, tid, asked, 'error_data'), evidence: { items: [] } };
+      const winner = top;
       const ent = res.source !== undefined ? 'Source' : 'Building';
       if (RANK.test(question) || intent.topK) {
         const top = sorted.slice(0, intent.topK ?? sorted.length);
-        return done({ ...base, template: 'ranked_table', props: { columns: [{ key: 'entity', label: ent, align: 'left' }, { key: 'value', label: INSIGHT[m] ?? m, unit, align: 'right' }], rows: top.map((x) => ({ entity: x.label, value: num(x, k!) })), rank_by: 'value', limit: 10, highlight: [winner] } });
+        return done({ ...base, template: 'ranked_table', props: { columns: [{ key: 'entity', label: ent, align: 'left' }, { key: 'value', label: INSIGHT[m] ?? m, unit, align: 'right' }], rows: top.map((x) => ({ entity: x.label, value: num(x, k!) })), rank_by: 'value', limit: 10, highlight: winner ? [winner] : [] } });
       }
-      return done({ ...base, template: 'sorted_bar', props: { items: sorted.map((x) => ({ label: x.label, value: num(x, k!) })), unit, sort: 'desc', highlight: [winner], good_direction: gd } });
+      return done({ ...base, template: 'sorted_bar', props: { items: sorted.map((x) => ({ label: x.label, value: num(x, k!) })), unit, sort: 'desc', highlight: winner ? [winner] : [], good_direction: gd } });
     }
   }
   // kpi: one value

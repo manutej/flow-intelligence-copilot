@@ -598,10 +598,18 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_lead') {
-      const row =
+      const rows =
         matchedPropIds && matchedPropIds.length === 1
-          ? mkt.byPropertySource[0]
-          : mkt.bySource[0];
+          ? mkt.byPropertySource
+          : mkt.bySource;
+      // "which source had the lowest/highest CPL": the winner is the extreme of the same
+      // converted per-source values a breakdown shows, never the first row
+      const rankable = rows.filter((r) => r.costPerLeadUsd !== null);
+      const ranked =
+        (intent.aggregation === 'argmin' || intent.aggregation === 'argmax') && intent.mentionedSources.length !== 1 && rankable.length > 1
+          ? [...rankable].sort((a, b) => intent.aggregation === 'argmax' ? b.costPerLeadUsd! - a.costPerLeadUsd! : a.costPerLeadUsd! - b.costPerLeadUsd!)
+          : null;
+      const row = ranked ? ranked[0] : rows[0];
       if (!row) {
         const src = intent.mentionedSources[0] ?? null;
         return finalize(
@@ -619,8 +627,14 @@ export function executeCompositionalPlan(
           row.citations.slice(0, 8),
         );
       }
+      const word = intent.aggregation === 'argmax' ? 'highest' : 'lowest';
+      const tied = ranked ? ranked.filter((r) => r.costPerLeadUsd === row.costPerLeadUsd) : [];
       return finalize(
-        `In ${mkt.windowLabel}, ${row.source} had a cost per lead of ${fmtUsd(row.costPerLeadUsd)} (${fmtUsd(row.spendUsd)} spend / ${plural(row.leadsCreatedCount, 'deduplicated lead')}).`,
+        ranked && tied.length > 1
+          ? `In ${mkt.windowLabel}, ${tied.map((r) => r.source).join(' and ')} tie for the ${word} cost per lead at ${fmtUsd(row.costPerLeadUsd)}.`
+          : ranked
+            ? `In ${mkt.windowLabel}, ${row.source} had the ${word} cost per lead at ${fmtUsd(row.costPerLeadUsd)} (${fmtUsd(row.spendUsd)} spend / ${plural(row.leadsCreatedCount, 'deduplicated lead')}; next: ${ranked[1].source} at ${fmtUsd(ranked[1].costPerLeadUsd!)}).`
+            : `In ${mkt.windowLabel}, ${row.source} had a cost per lead of ${fmtUsd(row.costPerLeadUsd)} (${fmtUsd(row.spendUsd)} spend / ${plural(row.leadsCreatedCount, 'deduplicated lead')}).`,
         {
           source: row.source,
           usd: row.costPerLeadUsd,
@@ -875,12 +889,19 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'renewal_rate') {
+      // the count in the text is the rate's own denominator: renewed + pending + notice given
+      // (not-due leases have no decision yet), and the window is named only when leases were
+      // filtered by end date
+      const decided = leaseSummary.renewedCount + leaseSummary.pendingCount + leaseSummary.noticeGivenCount;
+      const denom = decided > 0 ? decided : leaseSummary.totalMatchingLeases;
+      const scope = intent.leaseEndWindow ? `ending in ${intent.dateWindow.label}` : 'with any end date';
+      const notDue = decided > 0 && leaseSummary.notDueCount > 0 ? ` (${leaseSummary.notDueCount} not yet due excluded)` : '';
       return finalize(
-        `For the ${plural(leaseSummary.totalMatchingLeases, 'matching lease')} ending in ${intent.dateWindow.label}, ${leaseSummary.renewedCount} have renewed, giving a renewal rate of ${leaseSummary.renewalRatePercent.toFixed(1)}%.`,
+        `For the ${plural(denom, 'matching lease')} ${scope} that are renewed, pending or on notice${notDue}, ${leaseSummary.renewedCount} have renewed, giving a renewal rate of ${leaseSummary.renewalRatePercent.toFixed(1)}%.`,
         {
           percent: leaseSummary.renewalRatePercent,
           renewed: leaseSummary.renewedCount,
-          ending: leaseSummary.totalMatchingLeases,
+          ending: denom,
         },
         leaseSummary.citations.slice(0, 8),
       );

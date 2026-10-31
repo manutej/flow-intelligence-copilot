@@ -169,6 +169,7 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
     if (x && typeof x === 'object') for (const [k, v] of Object.entries(x)) walk(v, `${path}.${k}`, exempt || TEXT_EXEMPT.has(k));
   };
   walk(spec, 'spec', false);
+  errs.push(...highlightErrors(spec));
   if (spec.template !== 'clarify_card' && nums === 0) errs.push('a chart spec must carry at least one traced number');
   return errs;
 }
@@ -198,6 +199,25 @@ export function recomputeErrors(ev: Evidence, store: PortfolioStore): string[] {
     if (h !== it.result_hash || hashOf(it.result) !== h) errs.push(`evidence ${it.key}: stored result differs from recomputed result`);
   }
   return errs;
+}
+
+/**
+ * A highlight must be read off the plotted series: one plotted label whose value is the
+ * unique largest or unique smallest plotted value. A tie highlights nothing.
+ */
+export function highlightErrors(spec: ChartSpec): string[] {
+  const series = spec.template === 'sorted_bar' ? spec.props.items.map((x) => ({ label: x.label, v: x.value.v }))
+    : spec.template === 'ranked_table' ? spec.props.rows.map((r) => ({ label: String(r.entity), v: (r.value as Num | undefined)?.v ?? NaN })) : null;
+  const hl = spec.template === 'sorted_bar' || spec.template === 'ranked_table' ? spec.props.highlight ?? [] : [];
+  if (!series || !hl.length) return [];
+  if (hl.length > 1) return ['spec.props.highlight: more than one winner highlighted'];
+  const v = series.filter((x) => x.label === hl[0]);
+  if (v.length !== 1) return [`spec.props.highlight: ${JSON.stringify(hl[0])} is not a plotted label`];
+  const vals = series.map((x) => x.v);
+  const unique = (b: number) => vals.filter((x) => x === b).length === 1;
+  const max = Math.max(...vals), min = Math.min(...vals);
+  if (!((v[0].v === max && unique(max)) || (v[0].v === min && unique(min)))) return [`spec.props.highlight: ${JSON.stringify(hl[0])} is not the unique extreme of the plotted values`];
+  return [];
 }
 
 /** Counts traced numbers in a spec (for fidelity reporting). */
