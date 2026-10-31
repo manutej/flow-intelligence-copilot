@@ -174,10 +174,10 @@ test('turn-leading numbers, standalone turns with tails, counts and the pronoun 
 test('learner with no setting: numbers clarify unless the turn is clearly non-editing (TENACITY 6a56c25)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
   const noset = ['1800 dollars','4 leases','3250 units per month','use 4 months','1800 bucks instead','make it 4 percent','use 1800 euros','1800 pesos please','make it 1800 dollares','use 4 weeks','4 months instead','try 1800 credits','use 4 units instead','1800 units','go with 4 observations','prior of 4 leads','1800 dólares','mejor 4 meses','mettons 1800 euros','4 cents','1800 people','4 children','4 data','use 1800 USDs','1800 grand','use 4 pseudo-leases','4 pseudoleases','4 pseudo leases','4 leases instead','alpha0 4 leads','4 pseudo-observations','half a dozen months','1800 yen'];
-  const oneNoset = ['make it one', 'use one instead', 'one more', 'go with one', 'make it a thousand'];
+  const oneNoset = ['one question', 'make it one', 'use one instead', 'one more', 'go with one', 'make it a thousand'];
   for (const c of [...noset, ...oneNoset]) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
   for (const c of ['Show me 3 properties with highest vacancy', 'Thanks for the 12 numbers.', 'I manage 4 buildings',
-    'Hello there, quick one', 'We had 2 meetings today', 'one question', 'I have one more question'])
+    'Hello there, quick one', 'We had 2 meetings today', 'I have one more question'])
     assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
 });
 test('no-setting numbers: corrections clarify, small talk charts (TENACITY 06921c8)', async () => {
@@ -204,7 +204,8 @@ const B: [string,string][] = [
   // the settings' declared units decide: a bedroom is no setting's unit, so this row charts
   const BY_UNIT = new Set(['assume one bedroom for it']);
   for (const [, c] of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, BY_UNIT.has(c) ? 'sorted_bar' : 'clarify_card', c);
-  for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+  // no noun evidence: clarifies (fail closed, needs TENACITY approval)
+  for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, c === 'one question' ? 'clarify_card' : 'sorted_bar', c);
 });
 test('no-setting numbers are read by the learner settings\' declared units (TENACITY ebd7e8c)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
@@ -234,22 +235,59 @@ const B: [string,string][] = [
 ];
   // a count of a noun no setting is stated in (properties, buildings, rows, charts, bedrooms) is not a
   // prior value and charts; a request parse reads its own count (ebd7e8c finding 4, LOW)
-  const BY_UNIT = new Set(['assume 3 properties', 'assume 12 rows', 'assume 4 charts', 'I think 4 properties is right',
+  // rows, charts, propiedades, edificios, immeubles are no noun the parser or schema knows: they clarify (fail closed)
+  const BY_UNIT = new Set(['assume 3 properties', 'I think 4 properties is right',
     'what if it were 4 properties', 'what if it were 4 buildings', 'suppose 4 buildings', 'treat it as 4 properties',
     'pretend there are 4 buildings', '4 properties would be better', 'I would prefer 4 buildings',
     'show me 3 properties with highest vacancy, I think 4 properties', 'How many units at P01 have 4 bedrooms, assume that',
-    'How many units at P01 have 1800 bedrooms?', 'assume one bedroom for it', 'supongamos 4 propiedades', 'prefiero 4 edificios',
-    'disons 4 immeubles', 'mejor 3 properties', 'je préfère 4 properties', 'ich nehme 4 buildings']);
+    'How many units at P01 have 1800 bedrooms?', 'assume one bedroom for it', 'mejor 3 properties', 'je préfère 4 properties', 'ich nehme 4 buildings']);
   for (const [, c] of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, BY_UNIT.has(c) ? 'sorted_bar' : 'clarify_card', c);
   for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
-  // held-out rewordings: bare values, setting units, linking verbs and counts that do not agree clarify
+  // held-out rewordings: bare values, setting units, and counts with no noun evidence clarify
   for (const c of ['make it four', 'maybe 1800 then', 'go 4 months', 'how about 3 percent', 'say 1800 USD', '4 pseudo-observations would be better',
     'honestly 1800', '1,800 dollars feels right', '3k', 'two leases please', 'what about 1800?', 'prefiero 1800 dólares', 'disons 4 mois',
     'nehmen wir 4 Monate', '1800 works', 'I think 1800 works', '4 seems right', '1800 sounds good', 'one works', '4 tho', '1800 imo', 'one tho',
-    '1800 people', 'just one', '1800 passt', '4 funciona'])
+    '1800 people', 'just one', '1800 passt', '4 funciona', 'one small question', 'hola, tengo 2 preguntas'])
     assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
   // held-out small talk: counts of nouns that no setting takes
   for (const c of ['We met 3 clients today', 'I read 2 articles', 'Thanks for the 4 slides', 'My 2 colleagues say hi', 'We visited 5 sites',
-    'hola, tengo 2 preguntas', "j'ai 3 questions", 'Just a quick one', 'one small question'])
+    "j'ai 3 questions", 'Just a quick one'])
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+});
+test('a no-setting number is let off only on noun evidence (TENACITY 724ce96)', async () => {
+  const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
+  // rows copied verbatim from genui-units-724ce96.ts
+const R: [string,string,string][] = [
+ // unknown verbs after a number (bare value + verb) -> C
+ ['verb','C','1800 rocks'],['verb','C','1800 sounds right'],['verb','C','1800 nails it'],['verb','C','1800 tops'],['verb','C','1800 rules'],['verb','C','1800 beats that'],
+ ['verb','C','4 checks out'],['verb','C','4 holds up'],['verb','C','1800 matches better'],['verb','C','1800 helps'],['verb','C','4 suffices'],['verb','C','1800 feels better'],
+ ['verb','C','1800 vaut mieux'],['verb','C','1800 basta'],['verb','C','1800 stimmt'],['verb','C','4 gewinnt'],['verb','C','1800 seems fine'],['verb','C','1800 fine'],
+ // setting-unit numbers -> C
+ ['unit','C','2 weeks'],['unit','C','3 months'],['unit','C','5k'],['unit','C','$2k'],['unit','C','20%'],['unit','C','30 days'],['unit','C','make it 1800'],['unit','C','go with 12'],
+ ['abbr','C','4 mo'],['abbr','C','4 mos'],['abbr','C','2 yrs'],['abbr','C','20 pct'],['abbr','C','1800 USD'],['abbr','C','1800 pesos'],['abbr','C','1800 euros'],['abbr','C','4 Monate'],
+ ['abbr','C','4 mois'],['abbr','C','30 Tage'],['abbr','C','2 wks'],['abbr','C','3 mths'],['abbr','C','2 hrs'],['abbr','C','20 percent'],['abbr','C','1800 bucks'],['abbr','C','1800 dollars'],
+ ['abbr','C','1800 CAD'],['abbr','C','1800 GBP'],['abbr','C','1800 MXN'],['abbr','C','1800 dlls'],['abbr','C','1.8k'],['abbr','C','4 leases'],['abbr','C','4 pseudo-leases'],['abbr','C','4 pseudo-observations'],
+ ['abbr','C','4 pseudoobs'],['abbr','C','4 obs'],['abbr','C','4 observaciones'],['abbr','C','4 Beobachtungen'],['abbr','C','4 contrats'],['abbr','C','20 Prozent'],['abbr','C','4 quarters'],['abbr','C','6 weeks'],
+ ['abbr','C','4 meses'],['abbr','C','4 semanas'],['abbr','C','4 Wochen'],['abbr','C','4 semaines'],['abbr','C','4 años'],['abbr','C','4 Jahre'],['abbr','C','4 libras'],['abbr','C','1800 francos'],
+ // mixed and number words -> C
+ ['mixed','C','3 properties but 1800 dollars'],['mixed','C','2 meetings, then use 4 months'],['mixed','C','4 buildings at 1800'],['mixed','C','3 properties and 20%'],['mixed','C','4 charts and 4 instead'],
+ ['words','C','eighteen hundred'],['words','C','eighteen hundred dollars'],['words','C','four months'],['words','C','twenty percent'],['words','C','make it four'],['words','C','four instead'],['words','C','cuatro meses'],['words','C','vier Monate'],['words','C','quatre mois'],['words','C','a thousand bucks'],
+ // pronoun / one cases
+ ['one','B','Hello there, quick one'],['one','B','just a quick one'],['one','B','one more thing'],['one','B','a small one'],['one','C','use one'],['one','C','make it one'],['one','C','one instead'],
+ ['one','C','one lease'],['one','C','one month'],['one','C','the prior is one'],['one','C','assume one'],['one','?','that one'],['one','?','this one is great'],['one','C','try one, quick one'],
+ // entity counts -> B by rule
+ ['entity','B','We had 2 meetings today'],['entity','B','I read 3 papers'],['entity','B','I manage 4 buildings'],['entity','B','nehmen wir 4 Gebäude an'],['entity','B','wir haben 4 Gebäude'],
+ ['entity','B','tenemos 4 edificios'],['entity','B','I have 2 kids'],['entity','B','we have 4 people'],['entity','B','I have 3 children'],['entity','B','2 mice ran by'],['entity','B','4 Häuser'],
+ // units as entity? ('units' is a setting unit)
+ ['units','C','4 units instead'],['units','?','we have 200 units'],['units','?','I manage 2000 units'],
+];
+  // no noun the parser or schema knows and no counting frame: these clarify (fail closed, needs TENACITY approval)
+  const NO_EVIDENCE = new Set(['one more thing', 'nehmen wir 4 Gebäude an', 'tenemos 4 edificios', '2 mice ran by', '4 Häuser']);
+  for (const [, e, c] of R) if (e !== '?') assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, e === 'C' || NO_EVIDENCE.has(c) ? 'clarify_card' : 'sorted_bar', c);
+  // held-out rewordings, not run against the code before they were written
+  for (const c of ['1800 wins', '4 does the trick', '1800 slaps', 'they said 4 works', 'I said 1800 tops', 'cinco meses', 'drei Monate', 'deux semaines',
+    '4 contratos', '1800 libras', '3 mnths', '2 wk', '4 Verträge', '1800 dls', 'what about 4', 'honestly 4 is plenty', 'one tops', 'quatre contrats'])
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
+  for (const c of ['We toured 3 apartments', 'I saw 2 studios', 'Thanks for the 5 answers', 'our 3 leads called', 'they own 6 homes', 'ich habe 2 Fragen'])
     assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
 });
