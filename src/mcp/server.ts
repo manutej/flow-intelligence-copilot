@@ -19,6 +19,22 @@ import {
 } from './catalog.ts';
 import { validateToolArguments } from './validate.ts';
 
+/**
+ * Tool data as it leaves the server. Any property record, wherever it sits
+ * in a tool's output, is cut to its public fields, so aliases, addresses
+ * and onboarding diagnostics never reach the client.
+ */
+export function publicView(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(publicView);
+  if (value === null || typeof value !== 'object') return value;
+  const o = value as Record<string, unknown>;
+  if ('propertyId' in o && 'onboardingReadiness' in o) {
+    return { propertyId: o.propertyId, name: o.name, neighborhood: o.neighborhood, buildingClass: o.buildingClass, status: o.isOperating ? 'operating' : 'onboarding' };
+  }
+  return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, publicView(v)]));
+}
+
+
 export interface JsonRpcRequest {
   readonly jsonrpc: '2.0';
   readonly id?: string | number | null;
@@ -359,7 +375,7 @@ export async function handleMcpJsonRpcRequest(
         toolName: trace.toolName,
         summary: trace.outputSummary,
         citations: trace.citations,
-        data: trace.rawOutput,
+        data: publicView(trace.rawOutput),
       };
       return ok({
         content: [
