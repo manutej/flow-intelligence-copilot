@@ -90,10 +90,10 @@ const ECHO_KEYS = new Set(['title', 'subtitle']);
 /** Whole numeric tokens as the user typed them, with a $ or # prefix and a % suffix kept attached. */
 const NUM_TOKEN = /[$#]?\p{N}+(?:[.,]\p{N}+)*%?/gu;
 const escRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-/** Remove each echoed token where it stands whole (not inside a longer number, and with the same prefix and suffix). */
+/** Remove each echoed token where it stands whole: not inside a longer number or word ("$1800k"), same prefix and suffix. */
 const stripEcho = (t: string, echo: ReadonlySet<string>) => {
   const toks = [...echo].filter((x) => /\p{N}/u.test(x)).sort((a, b) => b.length - a.length);
-  for (const k of toks) t = t.replace(new RegExp(`(?<![\\p{N}.,$#])${escRe(k)}(?![\\p{N}%]|[.,]\\p{N})`, 'gu'), ' ');
+  for (const k of toks) t = t.replace(new RegExp(`(?<![\\p{N}.,$#])${escRe(k)}(?![\\p{L}\\p{N}%]|[.,]\\p{N})`, 'gu'), ' ');
   return t;
 };
 const carriesFigure = (raw: string, echo: ReadonlySet<string> = new Set()) => {

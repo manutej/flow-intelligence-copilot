@@ -85,3 +85,11 @@ test('MEDIUM: intent and source must be id-shaped and intent must be the main it
   assert.ok(specErrors(s2, ev, store).some((e) => /template id/.test(e)));
   assert.deepEqual(set(() => {}), []);
 });
+
+// TENACITY VERDICT-GENUI-59be53f LOW: an echoed token must not take a letter suffix.
+test('LOW: the echo rejects a letter suffix such as $3250k', async () => {
+  const a = await askPanel('At The Clarendon (P04) with prior beta0=$3250, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD', store);
+  const t = (title: string) => { const s = structuredClone(a.spec) as any; s.title = title; return specErrors(s, a.evidence, store); };
+  for (const bad of ['Prior $3250k', 'Prior $3250M', 'ranked #1st']) assert.ok(t(bad).length > 0, `accepted: ${bad}`);
+  assert.deepEqual(t('Prior $3250, ranked #1.'), []);
+});
