@@ -1560,6 +1560,8 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
   // A measure that compares two periods (H1 versus Q3) consumes both.
   const period = /_vs_|comparison|delta|change/.test(intent.measure) ? null : unconsumedPeriod(question, intent);
   if (period) return `a second period ("${period}")`;
+  const token = MARKETING_MEASURES.has(intent.measure) ? uncoveredToken(question, store) : null;
+  if (token) return `a term FlowIQ could not place in the question ("${token}")`;
   const named = namedProperties(question, store);
   // Two named properties are a comparison unless the question pools them outright.
   if (named.length > 1 && !/\b(?:across|combined|together|altogether|in\s+total|total|sum|all\s+of)\b/i.test(question)) return `more than one property (${named.join(', ')})`;
@@ -1678,6 +1680,7 @@ const DATE_TOKEN_RE = new RegExp(
   String.raw`\b(?:(?<iso>20\d{2}-(?:0[1-9]|1[0-2]))(?:-(?<day>\d{2}))?(?!\d)|(?<yq>20\d{2})\s+q(?<yqn>[1-4])\b|(?<tok>q[1-4]|h[12]|(?:first|second)\s+half|${ORD_Q}(?=(?:\s*(?:,|and|&|or|to|through|thru|-)\s*(?:the\s+)?${ORD_Q})*\s+quarters?\b)|${MONTH_WORD})(?:\s*,?\s*(?<year>20\d{2}|'\d{2}))?)\b`,
   'gi',
 );
+const PERIOD_JOINER_RE = /^\s*(?:,\s*(?:and\s+)?|and\s+|&\s*|)(?:the\s+)?$/i;
 const RANGE_GAP_RE = /^\s*(?:[-\u2013\u2014]|to|through|thru|until|till)\s*(?:the\s+)?$/i;
 
 function monthSpan(from: string, to: string): string[] {
@@ -1737,12 +1740,61 @@ function unconsumedPeriod(question: string, intent: ParsedQueryIntent): string |
     }
     // One day is not a month.
     if (cur.day) return cur.text;
+    // Only "and", "&" or a comma joins two periods into their union; any
+    // other word between them ("Q3 for July", "Q3 excluding July") narrows
+    // or cuts the window in a way the parse does not carry.
+    if (next && !PERIOD_JOINER_RE.test(gap) && cur.text.toLowerCase() !== next.text.toLowerCase()) return `${cur.text}${gap}${next.text}`.trim();
     for (const m of cur.months) want.add(m);
   }
   const used = [intent.dateWindow, intent.leaseStartWindow, intent.leaseEndWindow].filter((w): w is DateWindowSpec => w !== undefined);
   const same = (w: DateWindowSpec) => w.months.length === want.size && w.months.every((m) => want.has(m));
   return used.some(same) ? null : spans.map((s) => s.text).join(', ');
 }
+
+/**
+ * Coverage fails closed at the token level. After every span the parse
+ * consumes is removed (bound date tokens, a bare year, bedroom phrases,
+ * money, property names and ids, full source names), any digit group left
+ * is a date, count or id the parse did not bind, and any word of a source
+ * name left over ("Facebook", "Google") is a source named in a shape the
+ * parse did not resolve. Either way one figure would answer a wider
+ * question, so the turn says it does not know.
+ */
+const MARKETING_MEASURES: ReadonlySet<string> = new Set(['spend_total', 'cost_per_lead', 'cost_per_tour', 'cost_per_signed_lease', 'tour_to_lease_rate', 'lead_count']);
+function uncoveredToken(question: string, store: PortfolioStore): string | null {
+  let q = ` ${spellIsoMonths(spellCalendarYear(question.normalize('NFKC')))} `;
+  const blank = (re: RegExp) => { q = q.replace(re, (m) => ' '.repeat(m.length)); };
+  blank(new RegExp(DATE_TOKEN_RE.source, 'gi'));
+  blank(/(?<![\p{L}\p{N}\-\/.])20\d{2}(?![\p{L}\p{N}\-\/._])/gu);
+  blank(/\b(?:last|this|next|past|previous|prior)\s+(?:\d+\s+)?(?:days?|months?|quarters?|years?|weeks?)\b/gi);
+  blank(/\b(?:to\s+|rounded\s+to\s+)?\d+\s*(?:decimals?|decimal\s+places?|dp|d\.p\.|places?|sig(?:nificant)?\s+figs?(?:ures)?)\b/gi);
+  blank(BEDROOM_PHRASE_RE);
+  blank(/\$\s?[\d,]+(?:\.\d+)?\s*[kKmM]?|\b\d+(?:\.\d+)?\s*%/g);
+  for (const p of store.properties) {
+    for (const l of [p.name, p.propertyId, ...p.aka, ...distinctiveTokens(store).get(p.propertyId)!].map((x) => x.trim()).filter((x) => x.length >= 2)) {
+      blank(new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeRegExp(l)}(?![\p{L}\p{N}])`, 'giu'));
+    }
+  }
+  const sources = [...new Set([...store.paidSources, ...store.organicSources])].sort((a, b) => b.length - a.length);
+  for (const s of sources) blank(new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeRegExp(s)}(?![\p{L}\p{N}])`, 'giu'));
+  const digits = /[^\s,;:?!()]*\p{N}[^\s,;:?!()]*/u.exec(q);
+  if (digits) return digits[0].trim();
+  // A distinctive word of a source name, left once the full names are gone.
+  const words = new Set(sources.flatMap((s) => s.toLowerCase().split(/[^\p{L}]+/u)).filter((w) => w.length > 2 && !SOURCE_GENERIC_WORD.test(w)));
+  for (const m of q.matchAll(/\p{L}+/gu)) if (words.has(m[0].toLowerCase())) return m[0];
+  // A capitalised word inside a sentence is a name; once every name the
+  // parse knows is gone, one that is left ("for May", "on Instagram") was
+  // not bound to anything.
+  for (const m of q.matchAll(/(?<![\p{L}\p{N}'’])\p{Lu}[\p{L}'’]*/gu)) {
+    if (/(?:^|[.?!:;]|\.\.\.)\s*["'“(]?\s*$/u.test(q.slice(0, m.index))) continue;
+    if (CAPITALISED_OK.test(m[0])) continue;
+    return m[0];
+  }
+  return null;
+}
+/** Capitalised words that are not names: the pronoun, units and metric acronyms. */
+const CAPITALISED_OK = /^(?:I|I'm|I'd|I've|USD|CAD|CPL|CPT|CPSL|CPA|ILS|YTD|QTD|MTD|YoY|QoQ|MoM|FY|PMS|CRM|NOI|ID|IDs|OK)$/u;
+const SOURCE_GENERIC_WORD = /^(?:apartments?|list|com|ads|rent|website|referrals?)$/i;
 
 /** Building-type words that name no one property on their own. */
 const GENERIC_NAME_WORD = /^(?:the|and|residences?|works|yards?|tower|towers|point|commons|lake|row|annex|lofts?|shore|place|park|house|apartments?|street|square|heights|court|view|plaza|station|building)$/i;
