@@ -1492,7 +1492,7 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
     const m = re.exec(q);
     if (m) return `${what} ("${m[0].trim()}")`;
   }
-  const noun = unconsumedMeasureNoun(question, intent);
+  const noun = unconsumedMeasureNoun(question, intent, store);
   if (noun) return `a second measure ("${noun}")`;
   // A measure that compares two periods (H1 versus Q3) consumes both.
   const period = /_vs_|comparison|delta|change/.test(intent.measure) ? null : unconsumedPeriod(question, intent);
@@ -1504,17 +1504,27 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
 }
 
 /**
- * Marketing measure nouns, by the quantity each names. A scalar consumes
- * the nouns of its own measure and nothing else: the parse has no slot for
- * a second quantity or for a lead stage (toured, applied, leased), so any
- * other measure noun in the question, whatever word joins it, is left over.
+ * Measure nouns the schema knows, in every domain, by the quantity each
+ * names. A scalar consumes the nouns of its own measure and nothing else:
+ * the parse has no slot for a second quantity or for a lead stage (toured,
+ * applied, leased, converted, moved in), so any other measure noun in the
+ * question, whatever word joins it ("and", "per", "plus"), is left over.
  */
 const MEASURE_NOUNS: ReadonlyArray<readonly [string, RegExp]> = [
-  ['spend', /\b(?:spend\w*|spent|costs?|budget|dollars)\b/gi],
+  ['spend', /\b(?:spend\w*|spent|costs?|budgets?|dollars?|money)\b/gi],
   ['lead', /\b(?:leads?|prospects?|inquir(?:y|ies)|enquir(?:y|ies))\b/gi],
   ['tour', /\b(?:tour(?:s|ed|ing)?)\b/gi],
   ['lease', /\b(?:leases?|leased|leasing|signings?|signed|signups?)\b/gi],
-  ['application', /\b(?:applications?|applied|applying|apps?)\b/gi],
+  ['application', /\b(?:applications?|applied|applying|apps?|applicants?)\b/gi],
+  ['conversion', /\b(?:conver(?:sions?|ted|ts?|ting))\b/gi],
+  ['renewal', /\b(?:renew(?:als?|ed|ing|s)?)\b/gi],
+  ['move_in', /\b(?:move[-\s]?ins?|moved[-\s]+in|moving[-\s]+in)\b/gi],
+  ['occupancy', /\b(?:occupan(?:cy|t|ts)|occupied|vacan(?:cy|cies|t)|vacancy)\b/gi],
+  ['resident', /\b(?:residents?|tenants?|renters?)\b/gi],
+  ['rent', /\b(?:rents?|rental\s+income|revenue)\b/gi],
+  ['concession', /\b(?:concessions?)\b/gi],
+  ['unit', /\b(?:units?|doors?)\b/gi],
+  ['area', /\b(?:sq\.?\s*ft|sqft|square\s+(?:foot|feet))\b/gi],
 ];
 /** The nouns each marketing scalar names; a measure not listed is not checked. */
 const MEASURE_CONSUMES: Readonly<Partial<Record<IntentMeasure, readonly string[]>>> = {
@@ -1524,15 +1534,15 @@ const MEASURE_CONSUMES: Readonly<Partial<Record<IntentMeasure, readonly string[]
   cost_per_tour: ['spend', 'tour'],
   cost_per_lead_and_tour: ['spend', 'lead', 'tour'],
   cost_per_signed_lease: ['spend', 'lease'],
-  tour_to_lease_rate: ['tour', 'lease'],
-  apply_rate: ['application', 'lead'],
+  tour_to_lease_rate: ['tour', 'lease', 'conversion'],
+  apply_rate: ['application', 'lead', 'conversion'],
 };
 
-function unconsumedMeasureNoun(question: string, intent: ParsedQueryIntent): string | null {
+function unconsumedMeasureNoun(question: string, intent: ParsedQueryIntent, store: PortfolioStore): string | null {
   if (intent.domain !== 'marketing') return null;
   const own = MEASURE_CONSUMES[intent.measure];
   if (!own) return null;
-  // Source and property names are not quantities ("Apartments.com", "Logan Lofts").
+  // Source and property names are not quantities ("Apartments.com", "Marlowe Residences").
   let q = question;
   // A lead-cohort measure counts leads, so "Zillow leads" names its population.
   const cohort = own.some((k) => k === 'tour' || k === 'lease' || k === 'application');
@@ -1540,6 +1550,8 @@ function unconsumedMeasureNoun(question: string, intent: ParsedQueryIntent): str
     if (cohort) q = q.split(new RegExp(`${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:-(?:sourced|driven|origin(?:ated)?))?\\s+leads?\\b`, 'gi')).join(' ');
     q = q.split(s).join(' ');
   }
+  const names = store.properties.flatMap((p) => [p.name, ...p.aka]).filter((n) => n.trim().length >= 2).sort((x, y) => y.length - x.length);
+  for (const n of names) q = q.replace(new RegExp(`(?<![\\p{L}\\p{N}])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'giu'), ' ');
   for (const [kind, re] of MEASURE_NOUNS) {
     if (own.includes(kind)) continue;
     const m = q.match(re);
