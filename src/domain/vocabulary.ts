@@ -93,6 +93,14 @@ const amenityWords = (amenities: readonly string[]) =>
   new Set(amenities.join(' ').toLowerCase().match(/[a-z]+/g) ?? []);
 
 /** Words in the question that no part of FlowIQ gives a meaning to. */
+/**
+ * Words that carry no constraint in any question: greetings, hedges and
+ * thanks. Typos are not here; a misspelled word may be the measure or a
+ * period, so it stays unknown. "about" is not filler: "and what about X?"
+ * is a follow-up that changes scope, and "about 40" is an approximation.
+ */
+const FILLER = new Set(['um', 'uh', 'umm', 'hmm', 'lol', 'hey', 'hi', 'hello', 'thx', 'thanks', 'thank', 'please', 'pls', 'quick', 'quickly', 'just', 'ok', 'okay', '🙏']);
+
 export function unknownWords(question: string, store: PortfolioStore): string[] {
   const known = new Set(wordsOf(store));
   const named = resolvePropertiesFromText(store, question, { includeOnboarding: true }).matched;
@@ -106,7 +114,7 @@ export function unknownWords(question: string, store: PortfolioStore): string[] 
   // outside the vocabulary (Cyrillic, Arabic, CJK, emoji alike) is unknown.
   for (const raw of text.normalize('NFKC').match(/[\p{L}\p{M}]+(?:['’][\p{L}]+)?|\p{Extended_Pictographic}|(?:(?![0-9])\p{N})+/gu) ?? []) {
     const w = raw.replace(/['’]s$|n['’]t$/, '');
-    if (FIXED.has(raw) || FIXED.has(w) || known.has(w) || /^[a-z]$/.test(w)) continue;
+    if (FILLER.has(raw) || FIXED.has(raw) || FIXED.has(w) || known.has(w) || /^[a-z]$/.test(w)) continue;
     if (FIXED.has(w.replace(/s$/, '')) || FIXED.has(w + 's') || FIXED.has(w.replace(/ies$/, 'y'))) continue;
     out.add(raw);
   }
