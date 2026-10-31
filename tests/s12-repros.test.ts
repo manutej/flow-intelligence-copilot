@@ -39,14 +39,14 @@ for (const q of [
 
 for (const [q, want] of [
   // Finding 4: the eight P32 lead counts, with building and filter restated.
-  ['How many leads wanted 1-bedroom units at the Commons?', /Armitage Commons \(P05\).*\b31 leads that wanted a 1-bedroom unit/],
-  ['How many leads wanted studio units at PRT?', /Printers Row Tower \(P07\).*\b51 leads that wanted a studio/],
-  ['How many leads wanted 2-bedroom units at Printers Row Tower?', /Printers Row Tower \(P07\).*\b77 leads that wanted a 2-bedroom unit/],
-  ['How many leads wanted 1-bedroom units at Marlowe Residences?', /Marlowe Residences \(P02\).*\b87 leads that wanted a 1-bedroom unit/],
-  ['How many leads did Halsted & Lake get this year? Exclude down units.', /Halsted & Lake \(P01\).*\b179 leads.*Unit status/],
-  ['How many leads wanted 1-bedroom units at the Yards?', /Fulton Yards \(P03\).*\b57 leads that wanted a 1-bedroom unit/],
-  ['How many leads wanted studio units at Fulton Yards?', /Fulton Yards \(P03\).*\b28 leads that wanted a studio/],
-  ['How many leads wanted studio units at the Point?', /Wabash Point \(P08\).*\b28 leads that wanted a studio/],
+  ['How many leads wanted 1-bedroom units at the Commons?', /Armitage Commons.*\b31 leads that wanted a 1-bedroom unit/],
+  ['How many leads wanted studio units at PRT?', /Printers Row Tower.*\b51 leads that wanted a studio/],
+  ['How many leads wanted 2-bedroom units at Printers Row Tower?', /Printers Row Tower.*\b77 leads that wanted a 2-bedroom unit/],
+  ['How many leads wanted 1-bedroom units at Marlowe Residences?', /Marlowe Residences.*\b87 leads that wanted a 1-bedroom unit/],
+  ['How many leads did Halsted & Lake get this year? Exclude down units.', /Halsted & Lake.*\b179 leads.*Unit status/],
+  ['How many leads wanted 1-bedroom units at the Yards?', /Fulton Yards.*\b57 leads that wanted a 1-bedroom unit/],
+  ['How many leads wanted studio units at Fulton Yards?', /Fulton Yards.*\b28 leads that wanted a studio/],
+  ['How many leads wanted studio units at the Point?', /Wabash Point.*\b28 leads that wanted a studio/],
   // Finding 1 and LOW: windows that do parse answer their own figure.
   ['Marketing spend in H2 2026?', /2026-07-01 to 2026-12-31.*\$111,893\.30/],
   ['Marketing spend in 2026-07?', /\$35,592\.80/],
@@ -55,13 +55,13 @@ for (const [q, want] of [
   ['Marketing spend between 2026-07-01 and 2026-08-31?', /\$73,301\.60/],
   ['Marketing spend in 2026-07 through 2026-08?', /\$73,301\.60/],
   // Finding 5: one resolver for every source measure.
-  ['Cost per signed lease by source at Kedzie Works in Q3 2026?', /Kedzie Works \(P06\).*by paid source:.*Apartments\.com \$2,150\.00.*Google Ads \$1,830\.00.*Zillow \$1,750\.00/],
+  ['Cost per signed lease by source at Kedzie Works in Q3 2026?', /Kedzie Works.*by paid source:.*Apartments\.com \$2,150\.00.*Google Ads \$1,830\.00.*Zillow \$1,750\.00/],
   ['Which channel had the lowest cost per lead at Kedzie Works in Q3 2026?', /Facebook Ads had the lowest cost per lead.*\$120\.45/],
   ['Which source had the highest cost per lead at Kedzie Works in Q3 2026?', /Apartments\.com had the highest cost per lead.*\$330\.77/],
   ['Which source had the lowest cost per tour at Kedzie Works in Q3 2026?', /Apartment List had the lowest cost per tour.*\$510\.00/],
   ['Which channel had the highest tour to lease rate at Kedzie Works in Q3 2026?', /Referral.*62\.5%/],
   // Controls (03:44 file).
-  ['Facebook Ads cost per lead at Kedzie Works in Q3 2026?', /Kedzie Works \(P06\).*\$120\.45/],
+  ['Facebook Ads cost per lead at Kedzie Works in Q3 2026?', /Kedzie Works.*\$120\.45/],
   ['How many leads wanted studio apartments at Fulton Yards?', /\b28 leads that wanted a studio/],
   ['Marketing spend in July 2026?', /\$35,592\.80/],
   ['Spend at FY in Q3 2026?', /Fulton Yards \(P03\).*\$13,640\.00/],
