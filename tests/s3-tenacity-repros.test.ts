@@ -154,11 +154,11 @@ test('c082279 F3: a figure added to a non-answer is rejected, sealed or not', as
   const idk = (await askFlowIqCopilot('What was total marketing spend in Q1 2025?', { store, parse: null })).envelope;
   const answer = `${idk.answer} Halsted & Lake spent $40,000.`;
   assert.equal(verifyAnswerEnvelope({ ...idk, answer }, store).valid, false);
-  assert.equal(verifyAnswerEnvelope({ ...idk, answer, ...sealNonAnswer({ question: idk.query!.question, origin: 'deterministic' }, { answer, result: idk.result }) }, store).valid, false);
+  assert.equal(verifyAnswerEnvelope({ ...idk, answer, ...sealNonAnswer({ question: idk.query!.question, origin: 'deterministic' }, { answer, result: idk.result, citations: [] }) }, store).valid, false);
 });
 test('c082279 F3: a refusal the fair-housing guard does not make is rejected', () => {
   const answer = 'Refused under the Fair Housing Act.';
-  assert.equal(verifyAnswerEnvelope({ id: 'Q2', answer, result: { refused: true }, citations: [], ...sealNonAnswer({ question: Q2, origin: 'deterministic' }, { answer, result: { refused: true } }) }, store).valid, false);
+  assert.equal(verifyAnswerEnvelope({ id: 'Q2', answer, result: { refused: true }, citations: [], ...sealNonAnswer({ question: Q2, origin: 'deterministic' }, { answer, result: { refused: true }, citations: [] }) }, store).valid, false);
 });
 
 // f2424a7 verdict: forgeries sealed with the live key must still fail the
