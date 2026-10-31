@@ -68,7 +68,7 @@ const ASK_WORD = /^(?:highest|lowest|most|least|top|bottom|best|worst|slowest|fa
  * "vacant units at Riverside" read for the portfolio, "which property has
  * the highest vacancy" read as one count. No reading is offered when the
  * question names a place that resolves to no building, when a dropped word
- * stands where a place does (after at/near/for/in, or a capitalised word
+ * stands where a place does (after at/near/in/around, or a capitalised word
  * inside a sentence), when an unresolved capitalised name sits in the
  * question, or when a dropped word is the ranking, comparison or cause.
  */
@@ -78,10 +78,11 @@ function dropsPlaceOrAsk(question: string, unbound: readonly string[], store: Po
   const labels = store.properties.flatMap((p) => [p.name, ...p.aka]).map((l) => l.toLowerCase());
   const labelWords = new Set(labels.flatMap((l) => l.split(/\s+/)));
   for (const w of unbound) {
-    const at = new RegExp(`\\b(?:at|near|for|in|by|around)\\s+(?:the\\s+)?(?:[\\p{L}'’&-]+\\s+){0,2}${escape(w)}(?![\\p{L}\\p{N}])`, 'iu');
+    const at = new RegExp(`\\b(?:at|near|in|around)\\s+(?:the\\s+)?(?:[\\p{L}'’&-]+\\s+){0,2}${escape(w)}(?![\\p{L}\\p{N}])`, 'iu');
     if (at.test(question)) return true;
     const cap = new RegExp(`(?<=[\p{L}\p{N},;]\s+)(${escape(w)})(?![\p{L}\p{N}])`, 'giu');
-    for (const m of question.matchAll(cap)) if (/^\p{Lu}/u.test(m[1])) return true;
+    // Acronyms ("LPs", "NOI") are not names.
+    for (const m of question.matchAll(cap)) if (/^\p{Lu}/u.test(m[1]) && !/^\p{Lu}{2,}s?$/u.test(m[1])) return true;
   }
   // A capitalised name of two or more words inside the sentence ("the
   // Market Square retail vacancy") that is no building's name or alias.
@@ -124,7 +125,6 @@ export function clarifyOptions(question: string, unbound: readonly string[], sto
   const unfiltered: ParsedQueryIntent = { ...asked, ...Object.fromEntries(FILTER_KEYS.map((k) => [k, undefined])) } as ParsedQueryIntent;
   const readings: Array<[ParsedQueryIntent, boolean, string]> = [
     [strippedIntent, true, `Without ${quoted}: `],
-    [strippedIntent, false, `Without ${quoted}, across the portfolio: `],
     [unfiltered, true, 'No filters: '],
   ];
   for (const [intent, here, prefix] of readings) {
@@ -159,7 +159,8 @@ function negatedStatusOptions(question: string, store: PortfolioStore): ClarifyO
   // contradiction with no reading.
   if (base.unitStatus !== undefined) {
     if (base.unitStatus === neg) return [];
-    const scopes = named0.length === 1 ? [named0[0].name, undefined] : [undefined];
+    // A named building stays named: widening to the portfolio drops the place.
+    const scopes = named0.length === 1 ? [named0[0].name] : [undefined];
     return scopes.flatMap((b, k) => {
       const q = canonicalQuestion(base, b);
       if (q === null) return [];
