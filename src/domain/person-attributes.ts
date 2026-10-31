@@ -34,8 +34,8 @@ people persons person lessee lessees leaseholder leaseholders folks prospect pro
 /** Nouns naming people: the subject a person lookup asks about. */
 const PEOPLE = /\b(?:tenants?|residents?|renters?|applicants?|occupants?|households?|people|persons?|lessees?|leaseholders?|folks|prospects?)\b/;
 const LOOKUP_VERB = /\b(?:which|who|whom|whose|list|show|find|name|identify|flag|count|display|pull\s+up|look\s+up|how\s+many|what)\b/;
-/** Counting or summing people by a trait is a lookup of them too. */
-const AGGREGATE = /\b(?:number\s+of|count|total|sum|average|avg|mean|share|percent(?:age)?)\b/;
+/** Counting, summing or asking to be given people's rows by a trait is a lookup of them too. */
+const AGGREGATE = /\b(?:number\s+of|count|total|sum|average|avg|mean|share|percent(?:age)?|give|get|send|provide|export|tell|need|want)\b/;
 /** "who at Kedzie Works ...", "who here is ...": a person lookup with no people noun. */
 const WHO_LOOKUP = /^\s*(?:and\s+|so\s+|now\s+)?who\b/;
 /** "who covers ... for the leasing team": a bare who about the operator's own staff is not a resident lookup. */
@@ -93,6 +93,8 @@ const FILLER = 'hey hi hello um uh er hmm ok okay so basically actually kindly p
 const isTrait = (w: string) => PROTECTED_CLASS_RULES.some((r) => r.pattern.test(w));
 
 const vocabularies = new WeakMap<PortfolioStore, Set<string>>();
+/** Column names and data values only (not grammar or filler): the things a measure can be. */
+const schemaNouns = new WeakMap<PortfolioStore, Set<string>>();
 /** Every column name and every categorical value in the store, as stems. */
 export function schemaVocabulary(store: PortfolioStore): Set<string> {
   const cached = vocabularies.get(store);
@@ -106,6 +108,7 @@ export function schemaVocabulary(store: PortfolioStore): Set<string> {
     if (SKIP_FIELD.test(k)) continue;
     for (const x of Array.isArray(v) ? v : [v]) if (typeof x === 'string' && !/\d{3,}/.test(x)) add(x.replace(/_/g, ' '));
   }
+  schemaNouns.set(store, new Set(words));
   // the words the question parser itself reads (its closed vocabulary and structure words),
   // dates, and filler: none is an attribute of a person
   for (const w of [...FIXED, ...STRUCTURE_WORDS, ...MONTHS, ...FILLER]) if (!isTrait(w)) { words.add(w); words.add(stem(w)); }
@@ -136,6 +139,7 @@ export function personAttributeLookup(question: string, store: PortfolioStore): 
   const vocab = schemaVocabulary(store);
   const unknown = new Set<string>();
   const classes = new Set<ProtectedClassRule>();
+  const ambiguous = new Set<string>();
   for (const s of sentences) {
     const ws = tokens(s);
     // a protected-class match anywhere in the sentence (not one describing a thing, "family-size
@@ -150,6 +154,10 @@ export function personAttributeLookup(question: string, store: PortfolioStore): 
         if (span.length < 2 && !span.some((w) => !known(w, vocab))) continue;
         const compound = /^((?:-[a-z]+)+)\s+([a-z]+)/.exec(s.slice((m.index ?? 0) + m[0].length));
         if (compound && vocab.has(stem(compound[2])) && !PEOPLE.test(compound[2])) continue;
+        // a one-word match that modifies a staff noun or a data noun ("senior property manager",
+        // "polish vendor"), or is the head of a measure ("rent recovery"), describes a thing: it is
+        // ambiguous, so it asks which was meant instead of refusing
+        if (span.length < 2 && modifiesThing(s, m.index ?? 0, m[0].length, store)) { ambiguous.add(span[0]); continue; }
         hits.set(r, [...(hits.get(r) ?? []), ...span]);
       }
     }
@@ -162,5 +170,25 @@ export function personAttributeLookup(question: string, store: PortfolioStore): 
     for (const [r, span] of hits) { classes.add(r); for (const w of span) if (!known(w, vocab)) unknown.add(w); }
     if (!unknown.size) for (const [, span] of hits) unknown.add(span.join(' '));
   }
+  lastAmbiguous = unknown.size ? [] : [...ambiguous];
   return unknown.size ? { unknown: [...unknown], classes: [...classes] } : null;
+}
+let lastAmbiguous: string[] = [];
+
+/** Class words the question uses only as a modifier of a staff or data noun, when nothing else
+ * makes it a lookup of people: the panel asks which reading was meant. */
+export function ambiguousTraitWords(question: string, store: PortfolioStore): string[] {
+  return personAttributeLookup(question, store) ? [] : lastAmbiguous;
+}
+
+function modifiesThing(s: string, at: number, len: number, store: PortfolioStore): boolean {
+  const nouns = schemaNouns.get(store) ?? new Set<string>();
+  const isNoun = (w?: string) => !!w && (nouns.has(w) || nouns.has(stem(w))) && !PEOPLE.test(w) && !FUNCTION.has(w);
+  const after = s.slice(at + len).replace(/^-/, ' ');
+  const next = tokens(after);
+  const prev = tokens(s.slice(0, at)).at(-1);
+  if (next[0] && PEOPLE.test(next[0])) return false;
+  if (staffOf(` ${next.slice(0, 2).join(' ')}`) && (staffOf(` ${next[0]}`) || isNoun(next[0]))) return true;
+  if (isNoun(next[0])) return true;
+  return isNoun(prev);
 }

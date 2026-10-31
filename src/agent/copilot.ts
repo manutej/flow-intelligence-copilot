@@ -1,3 +1,4 @@
+import { ambiguousTraitWords } from '../domain/person-attributes.ts';
 import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
 import type { ParsedQueryIntent } from './intent.ts';
 import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
@@ -116,6 +117,20 @@ export async function askFlowIqCopilot(
         store,
         qRecord.result_schema,
       ),
+    };
+  }
+
+  // a class word used only as a modifier of a staff or data noun ("senior manager", "rent
+  // recovery") has two readings: ask which, rather than refuse or answer
+  const ambiguous = ambiguousTraitWords(question, store);
+  if (ambiguous.length) {
+    const words = ambiguous.map((w) => `"${w}"`).join(', ');
+    const ask = `Did you mean ${words} as part of a job title, vendor or measure name? FlowIQ has no column for that, and it will not look up residents, applicants or staff by a personal characteristic. Ask about a role, a building or a figure FlowIQ records instead.`;
+    const envelope: AnswerEnvelope = { id: qRecord.id, answer: ask, result: { unknown: true, clarification_needed: true }, citations: [] };
+    return {
+      envelope, toolCalls, clarificationNeeded: true, clarifyingQuestion: ask,
+      modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
+      verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
     };
   }
 
