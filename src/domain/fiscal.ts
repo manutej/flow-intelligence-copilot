@@ -37,7 +37,8 @@ export const CALENDAR_PERIOD_RE =
 
 /** "FY" with no period: a property only after at/for/in ("spend at FY"). */
 export const LOCATIVE_FY_RE = /\bat\s+(?:the\s+)?f\.?y\.?(?![\p{L}\p{N}])/iu;
-export const BARE_FY_RE = /(?<![\p{L}\p{N}])f[\s.\-]*y\.?(?![\p{L}\p{N}])/iu;
+/** Match on NFKC text: any run of spaces, punctuation or symbols may split the letters. */
+export const BARE_FY_RE = /(?<![\p{L}\p{N}])f[\s\p{P}\p{S}_]*y\.?(?![\p{L}\p{N}])/iu;
 
 const FISCAL_TOKEN_GLOBAL = new RegExp(FISCAL_TOKEN_RE.source, 'giu');
 

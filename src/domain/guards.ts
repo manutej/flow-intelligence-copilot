@@ -152,7 +152,7 @@ export function checkUnknownDataGuard(
 
   // Bare "FY" is Fulton Yards only after "at" and only when the resolver
   // binds it to that property ("at F.Y." it does not); otherwise ask.
-  const masked = maskFiscalTokens(question);
+  const masked = maskFiscalTokens(question.normalize('NFKC'));
   const fy = store.properties.find((p) => p.aka.some((a) => /^f\.?y\.?$/i.test(a.trim())));
   if (BARE_FY_RE.test(masked) && (!LOCATIVE_FY_RE.test(masked) || !fy || !resolvePropertiesFromText(store, question).matched.some((p) => p.propertyId === fy.propertyId))) {
     const place = fy ? `${fy.name} (${fy.propertyId})` : 'a property';
