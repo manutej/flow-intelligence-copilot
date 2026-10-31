@@ -302,7 +302,7 @@ export function parseUnitStatusSet(question: string): UnitStatus[] | undefined {
 
 export function parseUnitStatusFilter(question: string): UnitStatus | undefined {
   if (
-    /\b(vacant|vacanc(?:y|ies)|unoccupied|empty|open\s+(?:units?|apartments?|studios?|1br|2br)|available\s+(?:units?|apartments?|studios?)|(?:are|is)\s+(?:currently\s+|now\s+)?available|status\s*=\s*['"`]?vacant['"`]?)\b/i.test(
+    /\b(vacants?|vacanc(?:y|ies)|unoccupied|empty|open\s+(?:units?|apartments?|studios?|1br|2br)|available\s+(?:units?|apartments?|studios?)|(?:are|is)\s+(?:currently\s+|now\s+)?available|status\s*=\s*['"`]?vacant['"`]?)\b/i.test(
       question,
     ) &&
     !/\bvacancy\s+rate\b/i.test(question)
@@ -2028,7 +2028,7 @@ const COVERAGE_RULES: ReadonlyArray<{
   readonly covered: (i: ParsedQueryIntent) => boolean;
 }> = [
   // A unit status the parser did not turn into a filter.
-  { words: /\b(?:vacant|vacanc\w*|occupied|occupancy|on\s+notice|available|unoccupied|empty)\b/i,
+  { words: /\b(?:vacant\w*|vacanc\w*|occupied|occupancy|on\s+notice|available|unoccupied|empty)\b/i,
     covered: (i) => i.unitStatus !== undefined || i.unitStatusIn !== undefined || i.domain !== 'units' || /rate|share/.test(i.measure) },
   // A notice status the parser did not turn into a filter.
   { words: /(?<!occupied\s+or\s+(?:on\s+)?)\bnotice\b/i, covered: (i) => i.unitStatus === 'notice' || i.unitStatusIn?.includes('notice') === true || i.domain !== 'units' || /rate|share/.test(i.measure) },
