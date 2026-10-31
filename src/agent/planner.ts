@@ -1469,11 +1469,15 @@ export function executeCompositionalPlan(
     const tied = ranked.filter(
       (p) => p.filteredUnitCount === top.filteredUnitCount,
     );
-    const statusLabel = intent.unitStatus ?? 'matching';
+    const statusLabel = `${intent.unitStatus ?? 'matching'}${unitFilterLabel(intent)}`;
+    // Every building at the runner-up count is named, so a tie for second is not hidden.
+    const next = ranked.filter((p) => p !== top && p.filteredUnitCount === ranked[1].filteredUnitCount);
+    const nextNames = next.map((p) => p.propertyName);
+    const nextLabel = `${nextNames.length > 1 ? `${nextNames.slice(0, -1).join(', ')} and ${nextNames[nextNames.length - 1]}` : nextNames[0]}${next.length > 1 ? ' tie' : ''} with ${ranked[1].filteredUnitCount}${next.length > 1 ? ' each' : ''}`;
     return finalize(
       tied.length > 1
         ? `${tied.map((p) => `${p.propertyName} (${p.propertyId})`).join(' and ')} tie for the ${wantMax ? 'most' : 'fewest'} ${statusLabel} units at ${top.filteredUnitCount} each.`
-        : `${top.propertyName} (${top.propertyId}) has the ${wantMax ? 'most' : 'fewest'} ${statusLabel} units at ${top.filteredUnitCount} (next: ${ranked[1].propertyName} with ${ranked[1].filteredUnitCount})${buildExcludedOnboardingSuffix(store)}.`,
+        : `${top.propertyName} (${top.propertyId}) has the ${wantMax ? 'most' : 'fewest'} ${statusLabel} units at ${top.filteredUnitCount} (next: ${nextLabel})${buildExcludedOnboardingSuffix(store)}.`,
       { property_id: top.propertyId, count: top.filteredUnitCount },
       [...new Set(ranked.slice(0, 2).flatMap((p) => p.citations.slice(0, 4)))],
     );
@@ -1560,4 +1564,21 @@ export function executeCompositionalPlan(
     },
     unitSummary.citations.slice(0, 8),
   );
+}
+
+/**
+ * The unit filters a ranking applied, read off the parsed fields, so the
+ * text names the subset it ranked (" 2-bedroom", " studio, rent under $2,000").
+ */
+function unitFilterLabel(intent: ParsedQueryIntent): string {
+  const parts: string[] = [];
+  const range = (lo: number | undefined, hi: number | undefined, unit: string, fmt = (n: number) => String(n)) =>
+    lo !== undefined && hi !== undefined ? `${unit} ${fmt(lo)} to ${fmt(hi)}` : lo !== undefined ? `${unit} ${fmt(lo)} or more` : hi !== undefined ? `${unit} up to ${fmt(hi)}` : null;
+  if (intent.bedrooms !== undefined) parts.push(intent.bedrooms === 0 ? 'studio' : `${intent.bedrooms}-bedroom`);
+  if (intent.bathrooms !== undefined) parts.push(`${intent.bathrooms}-bath`);
+  const usd = (n: number) => `$${n.toLocaleString('en-US')}`;
+  for (const r of [range(intent.bedroomsMin, intent.bedroomsMax, 'bedrooms'), range(intent.bathroomsMin, intent.bathroomsMax, 'baths'), range(intent.rentMin, intent.rentMax, 'rent', usd), range(intent.sqftMin, intent.sqftMax, 'sq ft'), range(intent.floorMin, intent.floorMax, 'floor')]) if (r) parts.push(r);
+  if (intent.view) parts.push(`${intent.view} view`);
+  if (intent.buildingClass) parts.push(`class ${intent.buildingClass}`);
+  return parts.length > 0 ? ` ${parts.join(', ')}` : '';
 }
