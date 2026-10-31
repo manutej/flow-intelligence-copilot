@@ -1256,17 +1256,146 @@ const FIELD_COVERAGE: ReadonlyArray<readonly [Field, (i: ParsedQueryIntent) => b
   ['rent', (i) => i.rentMin !== undefined || i.rentMax !== undefined],
 ];
 
-const GROUP_VERB = String.raw`\b(?:by|for\s+each|for\s+every|broken\s+(?:down|out)\s+by|split\s+by|grouped\s+by|segmented\s+by|across\s+(?:each|every|all\s+the))\s+`;
-// "per" groups only by an entity; "per month" or "per lease" is a rate.
-const GROUPING_RE_RAW = new RegExp(`(?:${GROUP_VERB}(?:(?:property|building|asset|unit)\\s+)?(?:class(?:es)?|propert(?:y|ies)|buildings?|assets?|months?|quarters?|bedrooms?|bed\\s+counts?|unit\\s+types?|floorplans?|floors?|views?|pms|submarkets?|neighbou?rhoods?|regions?|vintages?)|\\bper\\s+(?:(?:property|building|asset)\\s+)?(?:class|property|building|asset|submarket|region))\\b`, 'i');
-// A parenthetical qualifies an input ("spend (by source and building)"),
-// not the requested output, so it is not a stated grouping.
-const outsideParens = (re: RegExp) => ({ test: (q: string) => re.test(q.replace(/\([^)]*\)/g, ' ')) });
-const GROUPING_RE = outsideParens(GROUPING_RE_RAW);
+/**
+ * Breakdowns (L1). A question can ask for one figure per building, source,
+ * class or period, or for the entity that ranks first. The TypedQuery has no
+ * group-by or grain field; the dimension an answer is laid out over is fixed
+ * by its measure and aggregation (ANSWER_LAYOUT). So a breakdown the question
+ * asks for is honored only if the parse's layout carries that dimension;
+ * otherwise the template would return one scalar in its place, and the parse
+ * is unsupported. Signals are read structurally (a grouping word, then the
+ * noun it governs), and the noun is mapped to a dimension; an unrecognized
+ * noun is its own dimension, which no layout carries.
+ */
+export type Dimension = 'building' | 'source' | 'class' | 'time' | 'other';
 
-const SOURCE_GROUPING_RE = outsideParens(new RegExp(`(?:${GROUP_VERB}|\\bper\\s+)(?:(?:lead|listing|marketing|ad|paid)\\s+)?(?:sources?|channels?)\\b`, 'i'));
-/** Measures whose template reports one line per source. */
-const PER_SOURCE_MEASURES: ReadonlySet<IntentMeasure> = new Set(['cost_per_lead', 'cost_per_tour', 'cost_per_lead_and_tour', 'cost_per_signed_lease', 'tour_to_lease_rate', 'signed_leases_ranking', 'apply_rate']);
+/** The dimension each answer template lists or ranks over (planner.ts). */
+function answerLayout(i: ParsedQueryIntent): ReadonlySet<Dimension> {
+  const ranked = i.aggregation === 'argmax' || i.aggregation === 'argmin';
+  const out = new Set<Dimension>();
+  if (i.isClassComparison || i.measure === 'renewal_rate_class_comparison') out.add('class');
+  switch (i.measure) {
+    case 'apply_rate': case 'cost_per_tour': out.add('source'); break;
+    // Defined over source x building pairs.
+    case 'dead_spend_pairs': case 'dead_spend_building': case 'reallocation_leases': out.add('source').add('building'); break;
+    case 'decision_outcome_learning': if (ranked) out.add('source'); break;
+    case 'applied_without_tour': case 'signed_leases_ranking': out.add('building'); break;
+    case 'cost_per_signed_lease': if (ranked) out.add('source'); break;
+    case 'average_concession': case 'rent_at_risk': case 'vacancy_rate': case 'unit_count': if (ranked) out.add('building'); break;
+    default: break;
+  }
+  return out;
+}
+
+const DIMENSION_HEADS: ReadonlyArray<readonly [Dimension, RegExp]> = [
+  ['other', /^(?:year\s+built|build\s+year|vintages?|unit\s+types?|bed(?:room)?s?|bed\s+counts?|bedroom\s+counts?|floorplans?|floors?|views?|sizes?|ages?|tenant\s+ages?|lease\s+terms?|terms?|neighbou?rhoods?|submarkets?|regions?|markets?|zip(?:\s+codes?)?|pms|managers?|cities|city|states?)\b/i],
+  ['class', /^(?:(?:property|building|asset)\s+)?class(?:es)?\b/i],
+  ['source', /^(?:(?:lead|listing|marketing|ad|paid|ils)\s+)?(?:sources?|channels?|vendors?|ils|sites?|platforms?)\b/i],
+  ['building', /^(?:operating\s+)?(?:propert(?:y|ies)|buildings?|assets?|communit(?:y|ies)|sites?|locations?)\b/i],
+  ['time', /^(?:months?|quarters?|weeks?|years?|days?|periods?|half|halves)\b/i],
+];
+/** The denominator of a rate ("cost per lead", "rent per unit"), not a group. */
+const RATE_DENOMINATOR = /^(?:(?:signed\s+)?leases?|leads?|tours?|units?|apartments?|doors?|sq\.?\s*ft|sqft|square\s+(?:foot|feet)|sf|applications?|applicants?|renewals?|move[-\s]?ins?)\b/i;
+/** A recurring amount: "monthly rent" or "rent per month" is its unit, not a grain. */
+const AMOUNT_NOUN = String.raw`(?:contract\s+|market\s+|lease\s+)?(?:rents?|deltas?|payments?|fees?|charges?|budgets?|concessions?)`;
+const DATE_HEAD = /^(?:the\s+end\b|end\b|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b|q[1-4]\b|\d|today|now|then|tomorrow)/i;
+
+function isQualifiedScope(rest: string): boolean {
+  const np = rest.replace(/^(?:the|our)\s+/i, '');
+  if (/^(?:operating|onboarding|paid|active)\b/i.test(np)) return true;
+  const h = headOf(np);
+  if (!h) return false;
+  // A modifier before the head ("Yardi buildings") narrows the set.
+  if (!DIMENSION_HEADS.some(([, re]) => re.test(np))) return true;
+  const after = np.slice(np.toLowerCase().indexOf(h.head.toLowerCase()) + h.head.length);
+  // A label after the head ("class A+") or a relative/prepositional qualifier.
+  return /^\s*(?:[a-d]\+?(?![a-z])|with\b|that\b|which\b|on\b|in\b|running\b|having\b|where\b|whose\b)/i.test(after) || /^\S+\s+buildings?\b/i.test(after.trim() ? after.trim() : '');
+}
+
+function headOf(rest: string): { dim: Dimension; head: string } | null {
+  const np = rest.replace(/^(?:of\s+)?(?:the|our|all\s+the|all|my|its|their)\s+/i, '').trim();
+  for (const [dim, re] of DIMENSION_HEADS) { const m = re.exec(np); if (m) return { dim, head: m[0] }; }
+  // A modifier before the head ("bldg class", "lead channel"): one word.
+  const mod = /^([a-z][\w.-]*)\s+(.*)$/i.exec(np);
+  if (mod && !/^(?:and|or|the|a|an|of|in|at|on|for|to|with|from)$/i.test(mod[1])) {
+    for (const [dim, re] of DIMENSION_HEADS) { const m = re.exec(mod[2]); if (m) return { dim, head: `${mod[1]} ${m[0]}` }; }
+  }
+  return null;
+}
+const headDimension = (rest: string): Dimension | null => headOf(rest)?.dim ?? null;
+
+/** The breakdowns a question asks for: [dimension, words, ranked?]. */
+export function requestedBreakdowns(question: string): Array<{ dim: Dimension; words: string; ranked: boolean }> {
+  const q = question.replace(/[()\[\],;:]/g, ' ').replace(/\s+/g, ' ');
+  const out: Array<{ dim: Dimension; words: string; ranked: boolean }> = [];
+  // Time grain as an adjective or adverb ("monthly renewal rate", "month by month").
+  // "Monthly rent" is the rent's own unit, not a grain.
+  for (const m of q.matchAll(new RegExp(String.raw`\b(monthly|quarterly|weekly|yearly|annually|month[-\s]+(?:by|over)[-\s]+month|quarter[-\s]+(?:by|over)[-\s]+quarter|year[-\s]+over[-\s]+year|mom|qoq|yoy)\b(?!\s+(?:\w+\s+)?${AMOUNT_NOUN}\b)`, 'gi'))) {
+    // "my monthly review" names the asker's own artifact, not a grain.
+    if (/\b(?:my|our|your)\s+$/i.test(q.slice(0, m.index))) continue;
+    out.push({ dim: 'time', words: m[1], ranked: false });
+  }
+  // A grouping word and the noun phrase it governs.
+  for (const m of q.matchAll(/\b(by|per|each|every|across|between|among|amongst|split\s+(?:by|across)|grouped\s+by|broken\s+(?:down|out)\s+by|segmented\s+by)\s+(?:each\s+|every\s+|of\s+the\s+)?(?=([^?.!]*))/gi)) {
+    const verb = m[1].toLowerCase().replace(/\s+/g, ' ');
+    const rest = m[2];
+    if (verb === 'by' && DATE_HEAD.test(rest)) continue; // "by June 30", a deadline
+    if (verb === 'per' && RATE_DENOMINATOR.test(rest)) continue; // a rate
+    // "rent per month": the amount's own unit.
+    if (verb === 'per' && new RegExp(String.raw`\b${AMOUNT_NOUN}\s+$`, 'i').test(q.slice(0, m.index))) continue;
+    // "across all/every X", "across the portfolio": scope, not a breakdown.
+    if (verb === 'across' && /^(?:all|every|the\s+(?:whole|entire|operating)?\s*portfolio|the\s+board|our\s+portfolio|portfolio)\b/i.test(m[0].slice(m[1].length).trim() + ' ' + rest)) continue;
+    // "across all properties" or "across the portfolio" is scope, not a breakdown.
+    if ((verb === 'across' || verb === 'among') && /^(?:all|the\s+(?:whole|entire|operating)?\s*portfolio|the\s+board|our\s+portfolio|portfolio)\b/i.test(rest)) continue;
+    const dim = headDimension(rest);
+    // A noun outside the dimension lexicon is a quantifier's object ("every
+    // dollar"), an agent ("signed by") or a rate's unit, not a breakdown.
+    if (dim === null) continue;
+    // A qualified noun phrase is a filter, not a breakdown: "across class A
+    // buildings", "across buildings with coworking", "across operating buildings".
+    if ((verb === 'across' || verb === 'among' || verb === 'amongst' || verb === 'between') && isQualifiedScope(rest)) continue;
+    if ((verb === 'between' || verb === 'among' || verb === 'amongst') && !/s\b|ies\b/i.test(rest.split(/\s+/).slice(0, 3).join(' '))) continue;
+    const h = headOf(rest)!;
+    out.push({ dim, words: `${m[0].trim()} ${h.head}`, ranked: false });
+    // A conjoined dimension ("by source and building") is a second breakdown.
+    const tail = rest.slice(rest.indexOf(h.head) + h.head.length).match(/^\s*(?:and|&|\+|then|x)\s+(.*)$/i);
+    const h2 = tail ? headOf(tail[1]) : null;
+    if (h2) out.push({ dim: h2.dim, words: `${verb} ${h.head} and ${h2.head}`, ranked: false });
+  }
+  // A superlative over an entity type ("which building has the highest ...",
+  // "the top source", "highest renewal rate of any property").
+  const SUP = String.raw`(?:tops|ranks\s+(?:first|#?1)|highest|lowest|most|least|fewest|best|worst|top|bottom|largest|smallest|biggest|max(?:imum)?|min(?:imum)?|strongest|weakest|leading|cheapest|priciest)`;
+  for (const m of q.matchAll(new RegExp(String.raw`\b(?:which|what)\s+((?:\w+\s+){0,2}?)(\w+(?:\s+\w+)?)\b(?=[^?.!]*\b${SUP}\b)`, 'gi'))) {
+    const h = headOf(m[2]) ?? headOf(`${m[1]}${m[2]}`.trim());
+    if (h) out.push({ dim: h.dim, words: `which ${h.head}`, ranked: true });
+  }
+  for (const m of q.matchAll(new RegExp(String.raw`\b${SUP}\b[^?.!]*?\b(?:of\s+any|among(?:st)?\s+(?:the\s+)?|of\s+all(?:\s+the)?|of\s+the)\s+(\w+(?:\s+\w+)?)`, 'gi'))) {
+    const dim = headDimension(m[1]);
+    if (dim) out.push({ dim, words: m[0].trim(), ranked: true });
+  }
+  // "at most 3" is a bound and "top floor" a position, not a ranking.
+  for (const m of q.matchAll(new RegExp(String.raw`(?<!\bat\s)\b${SUP}\s+((?:paid\s+|operating\s+)?\w+)`, 'gi'))) {
+    if (/^(?:top|bottom)\s+floor\b/i.test(m[0])) continue;
+    const dim = headDimension(m[1]);
+    if (dim) out.push({ dim, words: m[0].trim(), ranked: true });
+  }
+  return out;
+}
+
+/** The first breakdown the parse does not carry, or null. */
+export function droppedBreakdown(question: string, intent: ParsedQueryIntent): { dim: Dimension; words: string } | null {
+  const layout = answerLayout(intent);
+  for (const b of requestedBreakdowns(question)) {
+    if (!layout.has(b.dim)) return b;
+  }
+  return null;
+}
+
+const DROPPED = new WeakMap<object, { dim: Dimension; words: string }>();
+/** Why a parse was made unsupported by a dropped breakdown, if it was. */
+export function droppedBreakdownOf(intent: ParsedQueryIntent): { dim: Dimension; words: string } | undefined {
+  return DROPPED.get(intent);
+}
 
 const COVERAGE_RULES: ReadonlyArray<{
   readonly words: { test(q: string): boolean };
@@ -1284,11 +1413,6 @@ const COVERAGE_RULES: ReadonlyArray<{
   })),
   // A view the parser did not turn into a filter.
   { words: /\bviews?\b/i, covered: (i) => i.view !== undefined || i.domain !== 'units' },
-  // A stated grouping ("by property class", "for each building") needs a
-  // per-group answer; a single scalar would silently drop it (343668c F4).
-  { words: GROUPING_RE, covered: (i) => i.aggregation !== 'value' || i.isClassComparison },
-  // Per-source templates list every source, so they honor "by source".
-  { words: SOURCE_GROUPING_RE, covered: (i) => i.aggregation !== 'value' || PER_SOURCE_MEASURES.has(i.measure) },
   // Lease rent is not market rent.
   { words: /\b(?:lease|leased|monthly)\s+rents?\b|\brent\s+on\s+leases\b/i,
     covered: (i) => !/market_rent|rent_per_sqft/.test(i.measure) },
@@ -1311,7 +1435,11 @@ export function parseQueryIntent(question: string, store: PortfolioStore): Parse
   // One exact value per field: two different ones cannot both hold.
   const conflicting = (['bedrooms', 'bathrooms'] as const).some((f) => intent[f] !== undefined && statedValues(question, f).length > 1);
   const setStated = intent.unitStatusIn !== undefined && [...statuses].every((s) => intent.unitStatusIn!.includes(s as UnitStatus));
-  const uncovered = (statuses.size > 1 && !setStated) || conflicting || COVERAGE_RULES.some((r) => r.words.test(question) && !r.covered(intent));
+  const dropped = droppedBreakdown(question, intent);
+  const uncovered = (statuses.size > 1 && !setStated) || conflicting || dropped !== null || COVERAGE_RULES.some((r) => r.words.test(question) && !r.covered(intent));
   // Only a valid TypedQuery is ever executed (S1R-L1-4).
-  return unmet || uncovered || typedQueryErrors(intent).length > 0 ? { ...intent, measure: 'unsupported' } : intent;
+  if (!(unmet || uncovered || typedQueryErrors(intent).length > 0)) return intent;
+  const out: ParsedQueryIntent = { ...intent, measure: 'unsupported' };
+  if (dropped && intent.measure !== 'unsupported') DROPPED.set(out, dropped);
+  return out;
 }

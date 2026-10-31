@@ -9,6 +9,7 @@ import type {
   QuestionRecord,
 } from '../data/schema.ts';
 import { verifyAnswerEnvelope } from '../domain/guards.ts';
+import { unknownWords } from '../domain/vocabulary.ts';
 import type { OutcomeLearningReport } from '../domain/learner.ts';
 import type {
   DataQualityAuditSummary,
@@ -17,7 +18,7 @@ import type {
   UnitQuerySummary,
 } from '../domain/metrics.ts';
 import type { PropertyResolutionResult } from '../domain/resolver.ts';
-import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
+import { droppedBreakdownOf, parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 import {
   dataCoverage,
   describeCoverage,
@@ -173,6 +174,16 @@ export function executeCompositionalPlan(
   }
 
   if (intent.measure === 'unsupported') {
+    const dropped = droppedBreakdownOf(intent);
+    if (dropped) {
+      // The measure may be computable; the breakdown is what is missing.
+      const what = dropped.dim === 'time' ? 'a figure per period' : `a figure for each ${dropped.dim === 'other' ? 'group' : dropped.dim}`;
+      // Keep the more specific unbound-word note too (TENACITY 2899192 F9).
+      const unbound = unknownWords(question, store);
+      return unknown(
+        `the question asks for ${what} ("${dropped.words}"), and FlowIQ has no answer laid out that way for this measure, so it will not give one overall figure in its place.${unbound.length > 0 ? ` FlowIQ also has no meaning for ${unbound.map((w) => `"${w}"`).join(', ')} in this question.` : ''}`,
+      );
+    }
     return unknown(
       `the ${intent.domain} exports cannot compute the measure asked for in "${question.trim()}".`,
     );
