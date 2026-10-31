@@ -224,11 +224,18 @@ export async function modelParse(
   } catch {
     return record({ ...fallback(`model output is not JSON (${raw.length} chars, head ${JSON.stringify(raw.slice(0, 160))})`, raw, latencyMs, key), cacheHit });
   }
+  // A reply that opens with anything but the object (e.g. "<think>") cannot
+  // come from the grammar: the server did not apply it. Say so in the log.
+  const unconstrained = !/^\s*\{/.test(raw) ? ' (reply not grammar-constrained: server ignored the grammar)' : '';
+  const kind = (obj as { kind?: unknown } | null)?.kind;
+  if (kind === 'clarify' || kind === 'draft') {
+    // A model clarify or draft goes to the deterministic path, which owns
+    // clarify options (built by template) and drafts (L2): the model-off turn.
+    return record({ ...fallback(`model declined (kind=${kind}); answered as with the model off${unconstrained}`, raw, latencyMs, key), cacheHit });
+  }
   const intent = toIntent(obj);
   if (typeof intent === 'string') {
-    // A model clarify or draft goes to the deterministic path, which owns
-    // clarify options (built by template) and drafts (L2).
-    return record({ ...fallback(`model output not a valid TypedQuery: ${intent}`, raw, latencyMs, key), cacheHit });
+    return record({ ...fallback(`model output not a valid TypedQuery: ${intent}${unconstrained}`, raw, latencyMs, key), cacheHit });
   }
   const cov = coverage(question, intent, det, store);
   return record({ path: cov.ok ? 'model' : 'model-clarify', intent, deterministic: det, raw, coverage: cov, fallbackReason: null, latencyMs, cacheHit, runKey: key, call });

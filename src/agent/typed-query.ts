@@ -1,8 +1,8 @@
 import type { ParsedQueryIntent } from './intent.ts';
 
 /**
- * The closed TypedQuery schema (S1R-L1-4), mirrored from the GBNF in
- * orion-lab/inputs/flowiq-typedquery.gbnf. Whatever produced an intent (the
+ * The closed TypedQuery schema (S1R-L1-4), the one source the GBNF is
+ * generated from (typed-query-grammar.ts). Whatever produced an intent (the
  * deterministic parser or a grammar-constrained model), it is executed only
  * if it validates here: every enum is closed, every bound is a finite
  * number in range, and no lower bound exceeds its upper bound.
@@ -19,13 +19,15 @@ export const MEASURES = new Set(['void_and_duplicate_counts', 'decision_lookup',
   'lease_count', 'vacancy_rate', 'occupied_share', 'avg_market_rent_and_sqft', 'avg_market_rent', 'avg_sqft',
   'rent_per_sqft', 'unit_count']);
 export const DOMAIN_SET = DOMAINS, AGGREGATION_SET = AGGREGATIONS;
-const STATUSES = new Set(['occupied', 'notice', 'vacant']);
-const LEASE_TYPES = new Set(['new', 'renewal']);
-const RENEWAL = new Set(['renewed', 'pending', 'notice_given', 'not_due']);
-const ACCEPTED = new Set(['yes', 'no', 'all']);
-const DIRECTIONS = new Set(['increase', 'decrease']);
+export const STATUSES = new Set(['occupied', 'notice', 'vacant']);
+export const LEASE_TYPES = new Set(['new', 'renewal']);
+export const RENEWAL = new Set(['renewed', 'pending', 'notice_given', 'not_due']);
+export const ACCEPTED = new Set(['yes', 'no', 'all']);
+export const DIRECTIONS = new Set(['increase', 'decrease']);
+export const TOPK = [2, 10] as const;
+export const COUNT_MAX = 9.5;
 
-const BOUNDS: ReadonlyArray<readonly [keyof ParsedQueryIntent, keyof ParsedQueryIntent, number, number]> = [
+export const BOUNDS: ReadonlyArray<readonly [keyof ParsedQueryIntent, keyof ParsedQueryIntent, number, number]> = [
   ['bedroomsMin', 'bedroomsMax', 0, 9],
   ['bathroomsMin', 'bathroomsMax', 0, 9.5],
   ['sqftMin', 'sqftMax', 0, 999_999],
@@ -51,10 +53,10 @@ export function typedQueryErrors(i: ParsedQueryIntent): string[] {
   inSet('renewalStatus', i.renewalStatus, RENEWAL);
   inSet('decisionAccepted', i.decisionAccepted, ACCEPTED);
   inSet('decisionDirection', i.decisionDirection, DIRECTIONS);
-  if (i.topK !== undefined && !(Number.isInteger(i.topK) && i.topK >= 2 && i.topK <= 10)) errs.push(`topK=${i.topK} is outside 2..10`);
+  if (i.topK !== undefined && !(Number.isInteger(i.topK) && i.topK >= TOPK[0] && i.topK <= TOPK[1])) errs.push(`topK=${i.topK} is outside ${TOPK[0]}..${TOPK[1]}`);
   for (const k of ['bedrooms', 'bathrooms'] as const) {
     const v = i[k];
-    if (v !== undefined && !(Number.isFinite(v) && v >= 0 && v <= 9.5)) errs.push(`${k}=${v} is out of range`);
+    if (v !== undefined && !(Number.isFinite(v) && v >= 0 && v <= COUNT_MAX)) errs.push(`${k}=${v} is out of range`);
   }
   for (const [lo, hi, min, max] of BOUNDS) {
     const a = i[lo] as number | undefined, b = i[hi] as number | undefined;
