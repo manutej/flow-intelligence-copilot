@@ -637,7 +637,11 @@ export function parseExplicitDateWindow(
 
   // A bare year other than the reporting year ("in 2025") is a whole calendar
   // year; it must not silently become the default reporting window.
-  const bareYear = question.match(/\b(20\d{2})\b/);
+  // A money amount is not a year: skip numbers after a currency sign or
+  // code, inside a larger figure, or before a currency word or k/m suffix.
+  const bareYear = question.match(
+    /(?<!(?:[$€£]|\busd|\bdollars?)\s*)(?<![\d.,])\b(20\d{2})\b(?![.,]\d)(?!\s*(?:dollars?|bucks|usd|k|m)\b)/i,
+  );
   if (bareYear) {
     const yNum = Number.parseInt(bareYear[1], 10);
     if (yNum !== defaultYear) {
