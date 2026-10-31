@@ -42,9 +42,10 @@ export function checkFairHousingGuard(
   }
 
   const classification0 = classifyFairHousingRequest(question);
-  // a lookup of people by a trait no column records is refused whatever its wording
+  // a lookup of people by anything no column records is refused whatever its wording: the
+  // category lexicon only names the class in the reason, so a trait it lacks still refuses
   const lookup = classification0.refused ? null : personAttributeLookup(question, store);
-  const classification = lookup?.classes.length
+  const classification = lookup
     ? { ...classification0, refused: true, classes: lookup.classes, actions: [...new Set([...classification0.actions, 'identification' as const])] }
     : classification0;
   const matchedRules = classification.classes;
@@ -83,7 +84,7 @@ export function checkFairHousingGuard(
     refused: true,
     protectedClass: classLabels,
     legalBasis: legalBases,
-    reason: `Refused: this asks for ${classification.actions.join(' and ')} based on ${classLabels || 'who the people are'}${propContext}. That would violate the ${legalBases}, which ${prohibitVerb} discriminatory advertising, steering, and exclusion in housing. I can help with the same task without that criterion, for example a listing that welcomes all applicants.`,
+    reason: `Refused: this asks for ${classification.actions.join(' and ')} based on ${classLabels || (lookup ? `a personal characteristic FlowIQ does not record (${lookup.unknown.map((w) => `"${w}"`).join(', ')}), which may be a protected trait` : 'who the people are')}${propContext}. ${!classLabels && lookup ? 'Looking people up by it could violate' : 'That would violate'} the ${legalBases}, which ${prohibitVerb} discriminatory advertising, steering, and exclusion in housing. I can help with the same task without that criterion, for example a listing that welcomes all applicants.`,
     citations,
   };
 }
@@ -146,16 +147,6 @@ export function checkUnknownDataGuard(
     };
   }
 
-  const lookup = personAttributeLookup(question, store);
-  if (lookup && !lookup.classes.length) {
-    const words = lookup.unknown.map((w) => `"${w}"`).join(', ');
-    return {
-      unknown: true,
-      missingCategory: 'Personal attributes of residents',
-      reason: `I don't know — FlowIQ holds no record of ${words} for any resident. People appear in the exports only through lease, unit and lead columns (lease type, dates, rent, concession, renewal status, unit and building), so a lookup filtered on anything else cannot be answered.`,
-      citations: ['properties:P01'],
-    };
-  }
   for (const rule of UNMODELED_DATA_RULES) {
     if (rule.pattern.test(question)) {
       const mentionedProps = resolvePropertiesFromText(store, question, {

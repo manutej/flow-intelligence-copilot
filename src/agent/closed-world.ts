@@ -43,7 +43,7 @@ const STATUS_WORDS = ['vacant', 'vacancy', 'vacancies', 'unoccupied', 'empty', '
 
 // downtown: a region the property resolver maps to neighborhoods.
 // Count cues, unit nouns, scope words and function words: structure, not conditions.
-const STRUCTURE_WORDS = `
+export const STRUCTURE_WORDS = `
   how many much number count counts total totals list show give tell me please what which whats
   is are was were be been there do does did have has had it its they them their this that these those
   of in at on for to from with by across among within inside per each every all any our we us you your

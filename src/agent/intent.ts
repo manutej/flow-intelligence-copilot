@@ -124,6 +124,9 @@ function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Wording that names the rent on a lease (what tenants pay), not the unit's market rent. */
+const LEASE_RENT_CUE_RE = /\b(?:paid|pays?|paying|in[-\s]place|contract(?:ed)?|effective|actual)\b[^.?!]{0,30}\brents?\b|\brents?\b[^.?!]{0,30}\b(?:paid|pays?|paying|charged)\b|\blease\s+rents?\b/i;
+
 export function parseTopKCount(question: string): number | undefined {
   const m =
     question.match(/\b(?:top|first|highest|lowest)\s+(\d+|two|three|four|five)\b/i) ??
@@ -1154,7 +1157,9 @@ function parseQueryIntentRaw(
     unitMeasure = 'avg_sqft';
   } else if (
     (/\b(average|avg\.?|mean)\b/i.test(question) &&
-      /\b(market\s+rent|asking\s+rent|rent)\b/i.test(measureText(question))) ||
+      /\b(market\s+rent|asking\s+rent|rent)\b/i.test(measureText(question)) &&
+      // rent tenants pay is leases.monthly_rent, a different column: never answered as market rent
+      !(LEASE_RENT_CUE_RE.test(question) && !/\b(?:market|asking)\s+rents?\b/i.test(question))) ||
     /\bmarket\s+rent\s+(?:average|mean)\b/i.test(question)
   ) {
     unitMeasure = 'avg_market_rent';
