@@ -18,13 +18,15 @@ const out: Record<string, unknown> = {};
 let fail = false;
 for (const f of sets) {
   const rows = fs.readFileSync(path.join(ROOT, 'tests/fixtures', f), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
-  let right = 0, nums = 0, bad = 0, forged = 0, caught = 0, resealed = 0, resealCaught = 0, textForged = 0, textCaught = 0; const miss: string[] = [];
+  let right = 0, nums = 0, bad = 0, forged = 0, caught = 0, resealed = 0, resealCaught = 0, textForged = 0, textCaught = 0, honestAccepted = 0; const miss: string[] = [];
   const byT: Record<string, [number, number]> = {};
   for (const r of rows) {
     const p = await askPanel(r.text, store);
     const ok = p.spec.template === r.expected_template;
     byT[r.expected_template] ??= [0, 0]; byT[r.expected_template][1]++;
     if (ok) { right++; byT[r.expected_template][0]++; } else miss.push(`${r.id}: expected ${r.expected_template}, got ${p.spec.template} (${p.spec.intent})`);
+    // control (TENACITY L3): the honest panel must be accepted, or an always-reject check would score perfectly
+    if ((await panelErrors(r.text, p.spec, store)).length === 0) honestAccepted++;
     nums += countNums(p.spec); bad += p.errors.length;
     const s = JSON.stringify(p.spec);
     if (countNums(p.spec) > 0) {
@@ -43,12 +45,12 @@ for (const f of sets) {
       if ((await panelErrors(r.text, t2, store)).length) textCaught++;
     }
   }
-  out[f] = { questions: rows.length, chart_choice_correct: right, accuracy: +(right / rows.length).toFixed(4), traced_numbers: nums, fidelity_errors: bad, forged_specs: forged, forged_rejected: caught, resealed_x10: resealed, resealed_x10_rejected: resealCaught, integer_text: textForged, integer_text_rejected: textCaught, by_template: byT, misses: miss };
-  if (bad || caught !== forged || resealCaught !== resealed || textCaught !== textForged) fail = true;
+  out[f] = { questions: rows.length, chart_choice_correct: right, accuracy: +(right / rows.length).toFixed(4), traced_numbers: nums, fidelity_errors: bad, honest_accepted: honestAccepted, forged_specs: forged, forged_rejected: caught, resealed_x10: resealed, resealed_x10_rejected: resealCaught, integer_text: textForged, integer_text_rejected: textCaught, by_template: byT, misses: miss };
+  if (bad || honestAccepted !== rows.length || caught !== forged || resealCaught !== resealed || textCaught !== textForged) fail = true;
 }
 if (process.argv.includes('--json')) console.log(JSON.stringify(out, null, 2));
 else for (const [f, r] of Object.entries(out) as [string, any][]) {
-  console.log(`${f}: chart choice ${r.chart_choice_correct}/${r.questions} (${(r.accuracy * 100).toFixed(1)}%), numbers traced ${r.traced_numbers} with ${r.fidelity_errors} fidelity errors, forged ${r.forged_rejected}/${r.forged_specs}, resealed x10 ${r.resealed_x10_rejected}/${r.resealed_x10}, integer text ${r.integer_text_rejected}/${r.integer_text} rejected`);
+  console.log(`${f}: chart choice ${r.chart_choice_correct}/${r.questions} (${(r.accuracy * 100).toFixed(1)}%), numbers traced ${r.traced_numbers} with ${r.fidelity_errors} fidelity errors, honest accepted ${r.honest_accepted}/${r.questions}, forged ${r.forged_rejected}/${r.forged_specs}, resealed x10 ${r.resealed_x10_rejected}/${r.resealed_x10}, integer text ${r.integer_text_rejected}/${r.integer_text} rejected`);
   for (const m of r.misses) console.log(`  miss ${m}`);
 }
 process.exit(fail ? 1 : 0);
