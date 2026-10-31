@@ -9,8 +9,8 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
-import { askPanel } from './picker.ts';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { askPanel, panelErrors } from './picker.ts';
 import { parseConfigFromEnv } from '../agent/model-parse.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
 
@@ -31,10 +31,31 @@ const body = (req: http.IncomingMessage) => new Promise<any>((ok) => { let b = '
 const send = (res: http.ServerResponse, code: number, v: unknown, type = 'application/json') => { res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store' }); res.end(type === 'application/json' ? JSON.stringify(v) : v as Buffer); };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.woff2': 'font/woff2', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain' };
 
+const canon = (x: unknown): string => JSON.stringify(x, (_k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v);
+/** Draft ids are keyed on the spec hash, so the same panel always maps to the same draft. */
+const draftId = (spec: unknown) => `D-${createHash('sha256').update(canon(spec)).digest('hex').slice(0, 8)}`;
+const LOCAL_HOST = /^(127\.0\.0\.1|localhost):\d+$/;
+
+/**
+ * Write guard for every non-GET request: JSON only (text/plain is a CORS simple
+ * request any page could send), a loopback Host (blocks DNS rebinding), an Origin
+ * equal to that host, and the per-process CSRF token served inside index.html.
+ */
+function writeGuard(req: http.IncomingMessage, token: string): [number, string] | null {
+  if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return [415, 'application/json required'];
+  const host = String(req.headers.host ?? '');
+  if (!LOCAL_HOST.test(host) || req.headers.origin !== `http://${host}`) return [403, 'origin not allowed'];
+  const got = Buffer.from(String(req.headers['x-genui-csrf'] ?? '')), want = Buffer.from(token);
+  if (got.length !== want.length || !timingSafeEqual(got, want)) return [403, 'csrf token required'];
+  return null;
+}
+
 export function createServer() {
+  const token = randomBytes(24).toString('hex');
   return http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     try {
+      if (req.method !== 'GET') { const g = writeGuard(req, token); if (g) return send(res, g[0], { error: g[1] }); }
       if (req.method === 'POST' && url.pathname === '/api/ask') {
         const { question } = await body(req);
         if (typeof question !== 'string' || !question.trim() || question.length > 2000) return send(res, 400, { error: 'question required' });
@@ -44,8 +65,12 @@ export function createServer() {
       }
       if (url.pathname === '/api/panels' && req.method === 'GET') return send(res, 200, readJson(PANELS, []));
       if (url.pathname === '/api/panels' && req.method === 'POST') {
-        const p = await body(req); if (!p?.id || !p?.spec) return send(res, 400, { error: 'panel required' });
-        const all = readJson<any[]>(PANELS, []).filter((x) => x.id !== p.id); all.unshift(p); writeJson(PANELS, all.slice(0, 200)); return send(res, 200, { ok: true, count: Math.min(all.length, 200) });
+        const p = await body(req); if (typeof p?.id !== 'string' || !p?.spec || typeof p?.question !== 'string') return send(res, 400, { error: 'panel required' });
+        // never trust a client-written spec: re-pick on the server and require the identical spec
+        const errs = await panelErrors(p.question, p.spec, undefined, store);
+        if (errs.length) return send(res, 422, { error: 'panel does not match the verified spec for its question', detail: errs });
+        const keep = { id: p.id, created_at: p.created_at, question: p.question, spec: p.spec, parse_path: p.parse_path, model_down: !!p.model_down, model_note: p.model_note ?? null };
+        const all = readJson<any[]>(PANELS, []).filter((x) => x.id !== p.id); all.unshift(keep); writeJson(PANELS, all.slice(0, 200)); return send(res, 200, { ok: true, count: Math.min(all.length, 200) });
       }
       if (url.pathname.startsWith('/api/panels/') && req.method === 'DELETE') {
         const id = decodeURIComponent(url.pathname.slice(12)); writeJson(PANELS, readJson<any[]>(PANELS, []).filter((x) => x.id !== id)); return send(res, 200, { ok: true });
@@ -56,9 +81,12 @@ export function createServer() {
         const all = readJson<DraftAction[]>(ACTIONS, []);
         const panel = readJson<any[]>(PANELS, []).find((x) => x.id === a.panel_id);
         if (!panel || panel.spec?.template !== 'recommendation_card') return send(res, 400, { error: 'a draft comes only from a saved recommendation panel' });
+        if ((await panelErrors(panel.question, panel.spec, undefined, store)).length) return send(res, 422, { error: 'saved panel no longer matches the verified spec' });
+        const id = draftId(panel.spec);
+        const existing = all.find((x) => x.id === id); if (existing) return send(res, 200, existing);
         const pr = panel.spec.props;
         const draft: DraftAction = {
-          id: `D-${String(all.length + 1).padStart(4, '0')}`, action_type: panel.spec.intent.split('.')[1] ?? 'recommendation', target: { label: pr.title },
+          id, action_type: panel.spec.intent.split('.')[1] ?? 'recommendation', target: { label: pr.title },
           question: panel.question, state: 'pending_approval', created_at: localIso(),
           draft_text: [pr.title, pr.summary, ...pr.reasoning].join('\n'),
           cites: pr.impacts.map((im: any, k: number) => ({ label: im.label, value: im.value.v, unit: im.unit === '$' ? '$' : im.unit === '%' ? '%' : 'count', source: { template_id: panel.id, template: 'recommendation_card', field: `props.impacts[${k}].value` } })),
@@ -69,7 +97,7 @@ export function createServer() {
         const drafts = readJson<DraftAction[]>(ACTIONS, []);
         return send(res, 200, { template: 'action_center', state: drafts.length ? 'ready' : 'empty', drafts, filter: 'all' });
       }
-      const m = url.pathname.match(/^\/api\/actions\/(D-\d{4})\/intent$/);
+      const m = url.pathname.match(/^\/api\/actions\/(D-[0-9a-f]{8})\/intent$/);
       if (m && req.method === 'POST') {
         const it = await body(req);
         const all = readJson<DraftAction[]>(ACTIONS, []); const d = all.find((x) => x.id === m[1]);
@@ -83,6 +111,7 @@ export function createServer() {
         const rel = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
         const f = path.resolve(UI, rel);
         if (!f.startsWith(UI + path.sep) || !fs.existsSync(f)) return send(res, 404, { error: 'not found' });
+        if (rel === 'index.html') return send(res, 200, Buffer.from(fs.readFileSync(f, 'utf8').replace('__GENUI_CSRF__', token)), TYPES['.html']);
         return send(res, 200, fs.readFileSync(f), TYPES[path.extname(f)] ?? 'application/octet-stream');
       }
       send(res, 405, { error: 'method' });

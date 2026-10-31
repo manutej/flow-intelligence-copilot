@@ -117,7 +117,7 @@ export const GOOD_DIRECTION: Record<string, 'up' | 'down'> = {
 };
 
 const clarify = (mode: 'clarify' | 'unknown' | 'refuse', t: CopilotTurnResult, intent: string, asked: string, state: PanelState = 'ready'): ChartSpec => ({
-  template: 'clarify_card', state, intent, source: 'guard', insight: mode === 'refuse' ? 'Fair-housing guard' : mode === 'clarify' ? 'Needs one choice before charting' : 'Outside the data',
+  template: 'clarify_card', state, intent, source: 'guard', insight: mode === 'refuse' ? 'Fair-housing guard' : mode === 'clarify' ? 'Needs a choice before charting' : 'Outside the data',
   title: mode === 'refuse' ? 'FlowIQ will not do this' : mode === 'clarify' ? 'Which did you mean?' : 'Not in the connected data',
   props: {
     mode, question: asked, restatement: t.clarifyingQuestion ?? t.envelope.answer,
@@ -171,9 +171,9 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
   }
   if ((m === 'dead_spend_pairs' || m === 'dead_spend_building') && typeof res.usd === 'number' && CHANGE.test(question)) {
     return done({ ...base, template: 'recommendation_card', title: 'Where we are losing money', props: {
-      title: 'Pause or reallocate paid spend that signed no leases', summary: 'Paid sources with spend and zero signed leases in the window.', impact_level: 'high',
+      title: 'Pause or reallocate paid spend that signed no leases', summary: 'Paid sources with spend and no signed leases in the window.', impact_level: 'high',
       impacts: [{ label: 'Spend with no leases', value: num(main, 'usd'), unit: '$', good_direction: 'down' }], confidence: null, citations: env.citations.slice(0, 12),
-      reasoning: ['Each pair is a paid source at a building with spend and zero signed leases.', 'Rollback: restore spend if leads drop in the next month.', 'Approve creates a draft record marked pending approval; nothing is sent.'],
+      reasoning: ['Each pair is a paid source at a building with spend and no signed leases.', 'Rollback: restore spend if leads drop in the next month.', 'Approve creates a draft record marked pending approval; nothing is sent.'],
       actions: ['approve', 'dismiss'] } });
   }
   // ranked_table: lists
@@ -289,4 +289,20 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   // a spec that fails fidelity is never rendered as a chart
   const shown: ChartSpec = errors.length ? { ...clarify('unknown', turn, spec.intent, question, 'error_data') } : spec;
   return { question: input, spec: shown, evidence, errors, parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
+}
+
+/**
+ * Full re-check of a panel: the structural and recompute rules in specErrors,
+ * then the picker is run again on the question (deterministic parse) and the
+ * whole spec and every evidence recipe must be identical. This binds each
+ * breakdown item to the item the picker would build for that question, so a
+ * consistent forgery (recipe, result, hash and spec swapped together) fails.
+ */
+export async function panelErrors(question: string, spec: unknown, evidence: Evidence | undefined, store: PortfolioStore): Promise<string[]> {
+  if (typeof question !== 'string' || !spec || typeof spec !== 'object') return ['panel needs a question and a spec'];
+  const fresh = await askPanel(question, store, null);
+  const errs = evidence ? specErrors(spec as ChartSpec, evidence, store) : [];
+  if (canon(spec) !== canon(fresh.spec)) errs.push('spec differs from the spec the picker builds for this question');
+  if (evidence && canon(evidence) !== canon(fresh.evidence)) errs.push('evidence differs from the evidence the picker builds for this question');
+  return errs;
 }

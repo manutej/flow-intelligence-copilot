@@ -61,15 +61,26 @@ export function resolveRef(ev: Evidence, ref: string): unknown {
 const isNum = (x: unknown): x is Num => !!x && typeof x === 'object' && 'v' in x && 'ref' in x && Object.keys(x).length === 2;
 const FIGURE_IN_TEXT = /[$%]|\d/;
 /** Labels that contain digits but are not figures: years, ISO dates, quarters, halves, property and draft ids. */
-const LABEL_TOKENS = /\b\d{4}-\d{2}(-\d{2})?\b|\b(19|20)\d{2}\b|\b[QH][1-4]\b|\bP\d{2}\b|\bD-\d{4}\b/g;
+const MONTHS = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+/**
+ * Labels that contain digits but are not figures. A year counts as a label only
+ * in a date or period context (after a month, quarter, half or FY, or as an ISO
+ * date), so "There are 2025 leads" is still a figure.
+ */
+const LABEL_TOKENS = new RegExp(`\\b\\d{4}-\\d{2}(-\\d{2})?\\b|\\b(?:${MONTHS}|[QH][1-4]|FY)\\.?\\s+(19|20)\\d{2}\\b|\\b[QH][1-4]\\b|\\bP\\d{2}\\b|\\bD-[0-9a-f]{8}\\b`, 'gi');
+/** Numbers written in words are figures too. */
+const NUMBER_WORD_SRC = '\\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen|half|quarter|double|triple|twice|thrice)\\b';
+const NUMBER_WORDS = new RegExp(NUMBER_WORD_SRC, 'i');
+export const UNITS: readonly Unit[] = ['count', '$', '%', 'sqft', 'leases'];
 /** Digits the user typed (e.g. "3-bedroom") may be echoed in a title or subtitle; nowhere else. */
 const ECHO_KEYS = new Set(['title', 'subtitle']);
 const carriesFigure = (t: string, echo: ReadonlySet<string> = new Set()) =>
-  FIGURE_IN_TEXT.test(t.replace(LABEL_TOKENS, '').replace(/\d+/g, (d) => (echo.has(d) ? '' : d)));
+  NUMBER_WORDS.test(t.replace(LABEL_TOKENS, '').replace(new RegExp(NUMBER_WORD_SRC, 'gi'), (w) => (echo.has(w.toLowerCase()) ? '' : w))) || FIGURE_IN_TEXT.test(t.replace(LABEL_TOKENS, '').replace(/\d+/g, (d) => (echo.has(d) ? '' : d)));
 /** Free-text fields that may carry figures because they are the verified answer bytes or reviewed option text. */
 /** Layout settings, not data: the only bare numbers allowed. */
 const LAYOUT_NUM = /\.props\.limit$/;
-const TEXT_EXEMPT = new Set(['answer', 'options', 'restatement', 'question', 'unit', 'citations']);
+// unit is checked against the closed UNITS list instead; the rest are bound by panelErrors' full re-pick
+const TEXT_EXEMPT = new Set(['answer', 'options', 'restatement', 'question', 'citations']);
 
 /** Why a spec fails the closed-template and number-fidelity rules; empty when it passes. */
 export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore): string[] {
@@ -85,10 +96,12 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
   if (!TEMPLATES.includes(spec.template)) errs.push(`template ${String(spec.template)} is not in the closed set`);
   for (const it of ev.items) if (hashOf(it.result) !== it.result_hash) errs.push(`evidence ${it.key}: result hash mismatch`);
   let nums = 0;
-  const echo = new Set(ev.items.find((i) => i.key === 'main')?.recipe?.question.match(/\d+/g) ?? []);
+  const mainQ = ev.items.find((i) => i.key === 'main')?.recipe?.question ?? '';
+  const echo = new Set([...(mainQ.match(/\d+/g) ?? []), ...(mainQ.match(new RegExp(NUMBER_WORD_SRC, 'gi')) ?? []).map((w) => w.toLowerCase())]);
   const walk = (x: unknown, path: string, exempt: boolean): void => {
     if (typeof x === 'number' && LAYOUT_NUM.test(path) && Number.isInteger(x)) return;
     if (typeof x === 'number') { errs.push(`${path}: bare number ${x} has no ref`); return; }
+    if (typeof x === 'string' && path.endsWith('.unit')) { if (!(UNITS as readonly string[]).includes(x)) errs.push(`${path}: unit ${JSON.stringify(x)} is not in the closed list`); return; }
     if (typeof x === 'string') { if (!exempt && carriesFigure(x, ECHO_KEYS.has(path.split('.').pop()!) ? echo : undefined)) errs.push(`${path}: text carries a figure: ${JSON.stringify(x)}`); return; }
     if (isNum(x)) {
       nums++;
