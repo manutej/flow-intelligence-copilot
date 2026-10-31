@@ -203,27 +203,26 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
       const sa = standalone?.(t.slice(a, b)) ?? false, turnBase = parse?.(t.slice(a, b));
       const leftover = own.filter((n) => !(parse && parse(t.slice(a, n.start) + t.slice(n.end, b)) !== turnBase));
       if (first >= 0 && i > first) { if (!sa || leftover.length) ambiguous = true; return; }
-      // the learner with no setting stated (Q77 governs): any number in an earlier non-standalone
-      // turn, durations included, may be a prior ("Use 4 instead", "use 4 months"), so it clarifies
-      // unless the turn is clearly non-editing; only then is a count ("3 properties") or the
-      // pronoun "one" exempt. When unsure, clarify.
+      // the learner with no setting stated (Q77 governs). The learner's settings declare what they
+      // can be stated in: a currency (beta0, the CAD rate), a duration, a percent, leases or
+      // pseudo-observations (alpha0), or a bare value. A number in an earlier non-standalone turn
+      // that is bare or carries one of those units may be a prior ("Use 4 instead", "4 months"),
+      // so it clarifies, whatever the wording. A number attached to a noun no setting can be
+      // stated in ("2 meetings", "3 properties") cannot be a prior value and is not read.
       if (first < 0 && learner(intent)) {
         const all = nums.filter((n) => n.start >= a && n.end <= b && !isRank(t, n));
         // a magnitude word with no numeral ("make it a thousand", "half a dozen months") is a value too
         for (const m of t.slice(a, b).matchAll(MAGNITUDE)) {
           const st = a + m.index!, en = st + m[0].length;
-          if (!all.some((n) => n.start < en && n.end > st)) all.push({ start: st, end: en, value: NaN, surface: m[0] } as Num);
+          if (!all.some((n) => n.start < en && n.end > st)) all.push({ start: st, end: en, value: NaN, surface: m[0], unit: 'none' } as Num);
         }
-        const pool = sa ? all.filter((n) => leftover.includes(n) || n.unit === 'duration' && !(parse && parse(t.slice(a, n.start) + t.slice(n.end, b)) !== turnBase)) : all;
-        // a request parse (Q77): with its numbers deleted, the turn still names something the parser
-        // or the property resolver reads, and no number carries a currency, time or percent unit.
-        // Its numbers belong to that parse and the cue check does not apply. A turn that only names
-        // a value and a unit ("1800 dollars instead") reads as nothing once the value is gone.
+        // a standalone or request parse may consume a number only for its own slot: a plain count
+        // the parse reads (deleting it changes the parse), never a currency, time or percent value
         let stripped = t.slice(a, b);
         for (const n of [...all].sort((x, y) => y.start - x.start)) stripped = stripped.slice(0, n.start - a) + ' ' + stripped.slice(n.end - a);
-        const request = !!subject?.(stripped) && all.every((n) => !Number.isNaN(n.value) && (n as Num).unit === 'none');
-        const used = (n: StatedNumber) => !!parse && parse(t.slice(a, n.start) + t.slice(n.end, b)) !== turnBase;
-        if (request ? all.some((n) => !used(n) && !entityCount(t, a, b, n, false)) : pool.some((n) => !entityCount(t, a, b, n))) ambiguous = true;
+        const parsed = sa || !!subject?.(stripped);
+        const slot = (n: Num) => parsed && !Number.isNaN(n.value) && n.unit === 'none' && !!parse && parse(t.slice(a, n.start) + t.slice(n.end, b)) !== turnBase;
+        if (all.some((n) => !slot(n as Num) && settingCandidate(t, a, b, n as Num))) ambiguous = true;
       }
     });
   }
@@ -233,18 +232,36 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
   return { bindings, ambiguous, mismatch: bindings.find((b) => !equal(b)) ?? null };
 }
 const MAGNITUDE = /(?<![\p{L}\p{N}])(?:half\s+)?(?:an?\s+)?(?:dozen|hundred|thousand|million|billion)s?(?![\p{L}\p{N}])/giu;
-// Data entities a count may name with no setting stated: the portfolio's record nouns the schema
-// and grammar know (properties, buildings) and what an answer is made of (charts, numbers, rows).
-// Units are an entity only inside a request parse, which the standalone path already reads.
-const ENTITY = /^\s+(?:properties|property|buildings|building|charts|chart|numbers|number|rows|row)(?![\p{L}\p{N}])/iu;
-// Backstop only: an edit cue anywhere in the turn (EN/ES/FR/DE) denies the count exemption. It can
-// only make a turn clarify, never chart.
-const EDIT_CUE = /(?<![\p{L}\p{N}])(?:use|using|make|set|try|go|change|switch|let'?s|instead|actually|rather|more|less|lower|higher|raise|reduce|increase|decrease|halve|double|should|meant?|say|usa|usar|pon|poner|mejor|cambia|vez|mets|mettons|utilise|plutôt|fait|nimm|setze|verwende|lieber|stattdessen|eigentlich)(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])(?:more|less|más|menos|plus|moins|mehr|weniger)(?!\s*\p{L})/iu;
-// a number passes only as the plain count of a data entity, in a turn with no edit cue; currency,
-// time, percent and magnitude words never pass, and anything uncertain clarifies
-function entityCount(t: string, a: number, b: number, n: StatedNumber, cue = true): boolean {
-  if (Number.isNaN(n.value) || (n as Num).unit !== undefined && (n as Num).unit !== 'none') return false;
-  return ENTITY.test(t.slice(n.end, b)) && !(cue && EDIT_CUE.test(t.slice(a, b)));
+// The units the learner settings declare (see PARAMETERS, SettingUnit), written in EN/ES/FR/DE:
+// any currency (with its inflections and slang), a duration, a percent, and alpha0's leases / pseudo-observations. "units" is
+// the generic word for a count of the setting itself.
+const SETTING_UNIT = new RegExp(String.raw`^[\s-]*(?:\p{Sc}|${CUR}|d[oó]l\p{L}*|usd\p{L}*|eur(?:os?)?|pesos?|pounds?|yen|francs?|cents?|centavos?|grand|bucks?|credits?|${PERIOD}|d[ií]as?|semanas?|meses|mes|a[nñ]os?|jours?|semaines?|mois|ans?|ann[ée]es?|tage?n?|wochen?|monate?n?|jahren?|%|percent|pct|por\s*ciento|pour\s*cent|prozent|(?:pseudo[\s-]*)?(?:leases?|observations?|obs|counts?|arrendamientos?|baux|bail|mietvertr[äa]ge?)|units?|unidades?|unit[ée]s?|einheiten?)(?![\p{L}\p{N}])`, 'iu');
+// Words that attach to a number without naming what it counts: grammar (auxiliaries, pronouns,
+// prepositions, particles, quantifiers, and the linking verbs a value takes: "1800 works"), EN/ES/FR/DE. A number followed by one of these, or by
+// nothing, is bare. This is closed-class grammar, not a list of harmless nouns.
+const FUNCTION_WORD = /^(?:a|an|the|is|are|was|were|be|been|am|'s|would|will|should|could|can|may|might|must|do|does|did|for|to|of|in|on|at|as|by|with|from|into|than|then|and|or|but|so|if|it|its|that|this|these|those|them|me|us|you|him|her|here|there|now|instead|please|pls|plz|more|less|fewer|again|too|also|only|just|rather|actually|maybe|perhaps|really|ok|okay|right|has|does|seems|sounds|looks|feels|works|fits|suits|makes|goes|gets|stays|remains|appears|becomes|funciona|parece|suena|sirve|marche|semble|convient|passt|klingt|scheint|geht|reicht|yes|thus|minus|plus|this|its|us|as|y|o|de|del|la|el|los|las|un|una|en|por|para|con|que|es|mejor|más|menos|aquí|allí|ahí|eso|esto|favor|et|ou|le|les|du|des|une|pour|avec|est|ça|cela|ici|là|plutôt|plus|moins|svp|und|oder|der|die|das|den|dem|ein|eine|für|mit|ist|bitte|hier|da|dort|lieber|mehr|weniger|statt|stattdessen)$/iu;
+// The pronoun "one" after a modifier ("a quick one") names no value; the backstop cue list may
+// still deny it. It can only make a turn clarify, never chart.
+const EDIT_CUE = /(?<![\p{L}\p{N}])(?:use|using|make|set|try|go|pick|take|choose|want|change|switch|let'?s|instead|actually|rather|more|less|lower|higher|raise|reduce|increase|decrease|halve|double|should|meant?|say|assume|suppose|prefer|pretend|treat|usa|usar|pon|poner|mejor|cambia|vez|mets|mettons|utilise|plutôt|fait|nimm|nehme|setze|verwende|lieber|stattdessen|eigentlich)(?![\p{L}\p{N}])/iu;
+// A word reads as the noun a count names only when it agrees with the count: a plural form
+// (3+ letters ending in -s/-x) after any count but one, a content word of 4+ letters after one.
+// "4 tho", "1800 imo", "4 people" do not agree, so they stay bare and clarify (fail closed).
+const noun = (w: string, v: number) => /^\p{L}+$/u.test(w) && !FUNCTION_WORD.test(w) && (v === 1 ? w.length >= 4 && !/(?:ly|s)$/iu.test(w) : /^\p{L}{3,}[sx]$/u.test(w));
+// can this number, in this turn, be the value of a learner setting? Fail closed: only a number
+// attached to a noun no setting can be stated in, or the modifier pronoun "one", is not one.
+function settingCandidate(t: string, a: number, b: number, n: Num): boolean {
+  if (Number.isNaN(n.value) || n.unit !== 'none') return true;
+  const after = t.slice(n.end, b);
+  if (SETTING_UNIT.test(after)) return true;
+  const words = after.split(/[\s,;:!?.()]+/u).filter(Boolean), clauseEnd = /^\s*(?:$|[,;:!?.])/u.test(after);
+  if (words.length && !/^[\s-]*[,;:!?.]/u.test(after) && noun(words[0], n.value)) return false; // "2 meetings"
+  // "one more question": a quantifier between the count and its noun
+  if (/^(?:more|other|extra|last|further)$/iu.test(words[0] ?? '') && words[1] && !SETTING_UNIT.test(' ' + words[1]) && noun(words[1], n.value)) return false;
+  if (/^one$/iu.test(n.surface) && clauseEnd) {
+    const prev = t.slice(a, n.start).match(/(\p{L}+)\s*$/u)?.[1];
+    if (prev && !FUNCTION_WORD.test(prev) && !EDIT_CUE.test(t.slice(a, b))) return false; // "quick one"
+  }
+  return true;
 }
 /** The setting values a computation used, as stated in the question and equal to policy: the only setting numbers a title may echo. */
 export function boundPolicyValues(input: string, intent: ParsedQueryIntent | null | undefined, store: PortfolioStore): Set<number> {
