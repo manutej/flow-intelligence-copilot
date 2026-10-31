@@ -1344,6 +1344,15 @@ const NUMERAL = String.raw`(?:\d+|one|two|three|four|five|six|seven|eight|nine|t
 const RANK_VERB = String.raw`(?:rank(?:ed|ing|s)?|sort(?:ed|s)?|order(?:ed)?|list|compare|comparison|leaderboard)`;
 
 /** The breakdowns a question asks for: [dimension, words, ranked?]. */
+/** The dimension a "which/what <noun>" question asks to be named ("which channel"), or null. */
+export function askedDimension(question: string): Dimension | null {
+  for (const m of question.matchAll(/\b(?:which|what)\b\s+([^?.!,;]*)/gi)) {
+    const h = firstHeadIn(m[1].split(/\s+/).slice(0, 3).join(' '));
+    if (h) return h.dim;
+  }
+  return null;
+}
+
 export function requestedBreakdowns(question: string): Array<{ dim: Dimension; words: string; ranked: boolean }> {
   const q = question.replace(/[()\[\],;:]/g, ' ').replace(/\s+/g, ' ');
   const out: Array<{ dim: Dimension; words: string; ranked: boolean }> = [];
@@ -1461,8 +1470,6 @@ export function droppedBreakdown(question: string, intent: ParsedQueryIntent): {
  */
 const SCALAR_LEFTOVERS: ReadonlyArray<readonly [string, RegExp]> = [
   ['an ordering', /\b(?:top|bottom|best|worst|highest|lowest|most|least|biggest|largest|greatest|smallest|cheapest|priciest|richest|leader(?:s|board)?|rank\w*|sort\w*|order(?:ed)?|number\s+one|winner|tops|topped)\b|#\s*1\b|-(?:best|worst|highest|lowest)\b/i],
-  // A second measure set against the first ("spend over leads", "spend ÷ tours", "spend and leases").
-  ['a second measure', /(?:\bover\s+|÷\s*|\b(?:against|and|to)\s+)(?:the\s+)?(?:number\s+of\s+|count\s+of\s+|total\s+)?(?:signed\s+)?(?:leads?|leases?|tours?|applications?|renewals?|move[-\s]?ins?)\b(?!\s+(?:where|that|which|who|with|ending|starting|signed\s+in)\b)/i],
   ['a comparison', /\b(?:compar\w*|versus|vs\.?|higher|lower|more|fewer|less|than|difference|differ\w*|relative)\b/i],
   // A ratio operator before a rate denominator; "concierge/doorman" is an
   // alternation and "for every lease where ..." is the set being summed.
@@ -1482,16 +1489,88 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
   for (const [what, re] of SCALAR_LEFTOVERS) {
     // A measure that is itself a comparison (H1 versus Q3) consumes the comparison words.
     if (what === 'a comparison' && /_vs_|comparison|delta|change/.test(intent.measure)) continue;
-    const m0 = re.exec(q);
-    // A measure that already joins two counts (tour_to_lease_rate) owns its second noun.
-    if (what === 'a second measure' && m0 && /_to_|_and_|cost_per/.test(intent.measure)) continue;
     const m = re.exec(q);
     if (m) return `${what} ("${m[0].trim()}")`;
   }
+  const noun = unconsumedMeasureNoun(question, intent);
+  if (noun) return `a second measure ("${noun}")`;
+  // A measure that compares two periods (H1 versus Q3) consumes both.
+  const period = /_vs_|comparison|delta|change/.test(intent.measure) ? null : unconsumedPeriod(question, intent);
+  if (period) return `a second period ("${period}")`;
   const named = namedProperties(question, store);
   // Two named properties are a comparison unless the question pools them outright.
   if (named.length > 1 && !/\b(?:across|combined|together|altogether|in\s+total|total|sum|all\s+of)\b/i.test(question)) return `more than one property (${named.join(', ')})`;
   return null;
+}
+
+/**
+ * Marketing measure nouns, by the quantity each names. A scalar consumes
+ * the nouns of its own measure and nothing else: the parse has no slot for
+ * a second quantity or for a lead stage (toured, applied, leased), so any
+ * other measure noun in the question, whatever word joins it, is left over.
+ */
+const MEASURE_NOUNS: ReadonlyArray<readonly [string, RegExp]> = [
+  ['spend', /\b(?:spend\w*|spent|costs?|budget|dollars)\b/gi],
+  ['lead', /\b(?:leads?|prospects?|inquir(?:y|ies)|enquir(?:y|ies))\b/gi],
+  ['tour', /\b(?:tour(?:s|ed|ing)?)\b/gi],
+  ['lease', /\b(?:leases?|leased|leasing|signings?|signed|signups?)\b/gi],
+  ['application', /\b(?:applications?|applied|applying|apps?)\b/gi],
+];
+/** The nouns each marketing scalar names; a measure not listed is not checked. */
+const MEASURE_CONSUMES: Readonly<Partial<Record<IntentMeasure, readonly string[]>>> = {
+  spend_total: ['spend'],
+  lead_count: ['lead'],
+  cost_per_lead: ['spend', 'lead'],
+  cost_per_tour: ['spend', 'tour'],
+  cost_per_lead_and_tour: ['spend', 'lead', 'tour'],
+  cost_per_signed_lease: ['spend', 'lease'],
+  tour_to_lease_rate: ['tour', 'lease'],
+  apply_rate: ['application', 'lead'],
+};
+
+function unconsumedMeasureNoun(question: string, intent: ParsedQueryIntent): string | null {
+  if (intent.domain !== 'marketing') return null;
+  const own = MEASURE_CONSUMES[intent.measure];
+  if (!own) return null;
+  // Source and property names are not quantities ("Apartments.com", "Logan Lofts").
+  let q = question;
+  // A lead-cohort measure counts leads, so "Zillow leads" names its population.
+  const cohort = own.some((k) => k === 'tour' || k === 'lease' || k === 'application');
+  for (const s of intent.mentionedSources) {
+    if (cohort) q = q.split(new RegExp(`${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:-(?:sourced|driven|origin(?:ated)?))?\\s+leads?\\b`, 'gi')).join(' ');
+    q = q.split(s).join(' ');
+  }
+  for (const [kind, re] of MEASURE_NOUNS) {
+    if (own.includes(kind)) continue;
+    const m = q.match(re);
+    if (m) return m[0];
+  }
+  return null;
+}
+
+const PERIOD_WORD_RE = /\b(?:q[1-4]|h[12]|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may(?=\s+(?:20\d{2}|\d{1,2}\b))|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/gi;
+const PERIOD_RANGE_RE = /\b(?:between\s+\S+(?:\s+20\d{2})?\s+and|from\s+\S+(?:\s+20\d{2})?\s+(?:to|through|thru|until)|[a-z]\w*(?:\s+20\d{2})?\s*(?:[-\u2013\u2014]|\s(?:to|through|thru|until)\s))\s*(?=[a-z]\w*\b)/gi;
+
+/**
+ * Two or more named periods must together be the window the parse used:
+ * "July and August" is July-August, but "Q2 and Q3" read as Q2 alone or
+ * "April and July" read as April-July drops or adds months.
+ */
+function unconsumedPeriod(question: string, intent: ParsedQueryIntent): string | null {
+  // "between April and June" and "from April to June" are one range.
+  const q = question.replace(PERIOD_RANGE_RE, ' ');
+  const words = [...q.matchAll(PERIOD_WORD_RE)].map((m) => m[0]);
+  if (words.length < 2) return null;
+  const year = question.match(/\b20\d{2}\b/)?.[0] ?? '2026';
+  const months = new Set<string>();
+  for (const w of words) {
+    const win = parseExplicitDateWindow(`in ${w} ${year}`);
+    if (!win) return w;
+    for (const m of win.months) months.add(m);
+  }
+  const used = [intent.dateWindow, intent.leaseStartWindow, intent.leaseEndWindow].filter((w): w is DateWindowSpec => w !== undefined);
+  const same = (w: DateWindowSpec) => w.months.length === months.size && w.months.every((m) => months.has(m));
+  return used.some(same) ? null : words.slice(1).join(', ');
 }
 
 /** Building-type words that name no one property on their own. */
