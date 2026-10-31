@@ -87,6 +87,13 @@ const UNMODELED_DATA_RULES: ReadonlyArray<{
   readonly pattern: RegExp;
   readonly missingDetail: string;
 }> = [
+  // A fiscal period has no month mapping in the exports (calendar months
+  // only), so it is never read as the default window or a calendar year.
+  {
+    category: 'Fiscal-year period',
+    pattern: /\b(?:fy\s*'?\d{2}(?:\d{2})?|fy\s*td|fytd|fiscal(?:\s+|-)(?:year|yr|quarter|q[1-4]|half|h[12]|period|month|ytd|20\d{2})s?)\b/i,
+    missingDetail: 'The exports carry calendar months only and define no fiscal-year calendar, so a fiscal period cannot be mapped to months. Ask for a calendar year or a month range instead, for example "in 2025" or "April to September 2026".',
+  },
   {
     category: 'Property Operating Expenses & Utilities (OpEx / Facilities / Landscaping)',
     pattern:
