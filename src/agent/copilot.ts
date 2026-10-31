@@ -25,7 +25,7 @@ import {
   runUniversalModelHarness,
 } from './model-harness.ts';
 import { classifyFrame, composeFrame, frameModelConfig, PROTECTED_GROUPS, type FrameAnswers, type ProtectedGroup } from './frame-model.ts';
-import { executeCompositionalPlan } from './planner.ts';
+import { executeCompositionalPlan, LEFTOVER_REASON_HEAD } from './planner.ts';
 import { coverage, modelParse, parseConfigFromEnv, toIntent, type ModelParse, type ParseConfig } from './model-parse.ts';
 import type { RunStore } from './run-store.ts';
 import { canonicalQuestion } from './clarify.ts';
@@ -511,7 +511,10 @@ function closedVocabulary(
   store: PortfolioStore,
 ): ReturnType<typeof executeCompositionalPlan> {
   const r = out.envelope.result as Record<string, unknown>;
-  if (r.unknown === true || r.refused === true || r.clarification_needed === true) return out;
+  // A leftover-word refusal still lets an unknown word clarify first: a typo
+  // ("Cmopare") is offered its readings rather than a dead end.
+  const leftover = r.unknown === true && typeof r.reason === 'string' && r.reason.startsWith(LEFTOVER_REASON_HEAD);
+  if (!leftover && (r.unknown === true || r.refused === true || r.clarification_needed === true)) return out;
   const asked = withoutMetaInstructions(qRecord.question);
   const unparsed = [...unknownWords(asked, store), ...(out.envelope.query && (out.envelope.query.intent as { domain?: string }).domain === 'units' ? unboundNegators(asked) : [])];
   const why =
@@ -520,6 +523,7 @@ function closedVocabulary(
       : /\bhow\s+many\b/i.test(qRecord.question) && !hasCount(r)
         ? 'the question asks "how many" but the plan computed no count'
         : null;
+  if (leftover && unparsed.length === 0) return out;
   if (why === null) return namedAlias(out, qRecord.question, store);
   if (unparsed.length > 0) {
     // Clarify, not a dead end: offer typed readings (result keys unchanged).

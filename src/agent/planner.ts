@@ -30,6 +30,9 @@ import {
 } from './recognition.ts';
 import { executeAgentTool, type ToolCallTrace } from './tools.ts';
 
+/** How a leftover-word refusal starts, so the vocabulary check can still clarify a typo first. */
+export const LEFTOVER_REASON_HEAD = 'FlowIQ would answer this with one overall figure';
+
 export interface PlannerTurnOutput {
   readonly envelope: AnswerEnvelope;
   readonly toolCalls: readonly ToolCallTrace[];
@@ -187,7 +190,7 @@ export function executeCompositionalPlan(
     const leftover = scalarLeftoverOf(intent);
     if (leftover) {
       return unknown(
-        `FlowIQ would answer this with one overall figure, but the question also asks for ${leftover}, which one figure cannot carry, so it will not answer a different question in its place.`,
+        `${LEFTOVER_REASON_HEAD}, but the question also asks for ${leftover}, which one figure cannot carry, so it will not answer a different question in its place.`,
       );
     }
     return unknown(

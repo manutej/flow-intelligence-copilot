@@ -153,8 +153,8 @@ export function clarifyEnvelope(id: string, question: string, unbound: readonly 
   const options = clarifyOptions(question, unbound, store);
   const envelope: AnswerEnvelope = {
     id,
-    answer: `I don't know — FlowIQ has no meaning for ${unbound.map((w) => `"${w}"`).join(', ')} in this question, so it will not answer a different question in its place. Did you mean: ${options.map((o, k) => `(${k + 1}) ${o.label}`).join('; ')}?`,
-    result: { unknown: true, clarification_needed: true },
+    answer: `I don't know — FlowIQ has no meaning for ${unbound.map((w) => `"${w}"`).join(', ')} in this question, so it will not answer a different question in its place.${options.length > 0 ? ` Did you mean: ${options.map((o, k) => `(${k + 1}) ${o.label}`).join('; ')}?` : ''}`,
+    result: options.length > 0 ? { unknown: true, clarification_needed: true } : { unknown: true },
     citations: ['properties:P01'],
   };
   return { envelope, options };
