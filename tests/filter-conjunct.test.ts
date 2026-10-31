@@ -32,3 +32,15 @@ test('filter conjuncts: two measure nouns still need two figures', async () => {
   const e = await turn('Unit count and vacancy at Kedzie Works?');
   assert.ok(!answered(e));
 });
+
+test('two measures: any link between two measures asks for two figures (S3 F1)', async () => {
+  for (const q of [
+    'Renewal rate along with vacancy at Kedzie Works?',
+    'Give me vacancy, and also renewal rate, for Kedzie Works',
+    'Kedzie Works vacancy rate, renewal rate',
+  ]) assert.ok(!answered(await turn(q)), q);
+});
+
+test('two measures: one measure phrase with a state or verb is still answered', async () => {
+  for (const q of ['How many vacant units at Kedzie Works?', 'How many leases renewed at Kedzie Works?']) assert.ok(answered(await turn(q)), q);
+});
