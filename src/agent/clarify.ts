@@ -151,15 +151,20 @@ const isDisplayLabel = (l: string) => /^[\p{L}\p{N}'’& .-]+$/u.test(l.trim()) 
  * readings of the corrected question, each still naming the building.
  */
 function didYouMean(question: string, typo: NearMiss, unbound: readonly string[], store: PortfolioStore): ClarifyOption[] {
-  const corrected = `${question.slice(0, typo.start)}${typo.name}${question.slice(typo.end)}`;
+  // "the Clarendn" becomes "The Clarendon", not "the The Clarendon".
+  const head = /^the\s/i.test(typo.name) ? question.slice(0, typo.start).replace(/\bthe\s+$/i, '') : question.slice(0, typo.start);
+  const corrected = `${head}${typo.name}${question.slice(typo.end)}`;
   const typoWords = new Set(typo.written.toLowerCase().split(/[^\p{L}\p{N}'’&]+/u));
-  const rest = unbound.filter((w) => !typoWords.has(w.toLowerCase()));
+  // A word left unbound only because the name did not resolve ("rate" in
+  // "vacancy rate at Kedzie Wroks") binds once the name is fixed: when the
+  // corrected question parses on its own, it is the one option, worded as asked.
+  const own = parseQueryIntent(corrected, store);
+  const rest = own.measure !== 'unsupported' ? [] : unbound.filter((w) => !typoWords.has(w.toLowerCase()));
   if (rest.length > 0) {
     return clarifyOptions(corrected, rest, store).map((o) => ({ ...o, label: `"${typo.written}" as ${typo.name}, ${o.label}` }));
   }
-  const query = parseQueryIntent(corrected, store);
-  if (query.measure === 'unsupported') return [];
-  return [{ label: `"${typo.written}" as ${typo.name}: ${restate(query, corrected, store).replace(/^I computed: /, '').replace(/\.$/, '')}`, question: corrected, query }];
+  if (own.measure === 'unsupported') return [];
+  return [{ label: `"${typo.written}" as ${typo.name}: ${restate(own, corrected, store).replace(/^I computed: /, '').replace(/\.$/, '')}`, question: corrected, query: own }];
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
