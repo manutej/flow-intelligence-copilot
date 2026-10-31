@@ -57,3 +57,29 @@ test('two measures: a building or prepositional phrase between the measures stil
 test('two measures: one measure with a building is still answered (S3 39f1288 F1 negatives)', async () => {
   for (const q of ['Vacancy rate at Kedzie Works?', 'Renewal rate at Kedzie Works?', 'Occupancy at Fulton Yards?']) assert.ok(answered(await turn(q)), q);
 });
+
+test('status counts: a coordinated "<status> units" is a second count (S3 53ca424 F1)', async () => {
+  for (const q of [
+    'vacancy rate at Kedzie Works and occupied units',
+    'vacancy rate and occupied units at Kedzie Works',
+  ]) {
+    const e = await turn(q);
+    // Either both figures are reported, or the turn does not answer.
+    assert.ok(!answered(e) || (/12\.7%/.test(e.answer) && /\b(?:90|96)\b/.test(e.answer)), q);
+  }
+});
+
+test('status counts: a status word that modifies the measure is still answered', async () => {
+  for (const q of ['What is the average rent of vacant units at Kedzie Works?', 'How many occupied units at Kedzie Works?', 'Vacancy rate at Kedzie Works?']) assert.ok(answered(await turn(q)), q);
+});
+
+test('count answers name the bedroom filter (S3 53ca424 F5)', async () => {
+  for (const [q, bed] of [
+    ['How many occupied 2-bed units at Fulton Yards?', /2[- ]?bed/i],
+    ['How many 1-bed units at Halsted & Lake are vacant?', /1[- ]?bed/i],
+  ] as const) {
+    const e = await turn(q);
+    assert.ok(answered(e), q);
+    assert.match(e.answer, bed, q);
+  }
+});
