@@ -167,9 +167,7 @@ test('turn-leading numbers, standalone turns with tails, counts and the pronoun 
     'beta0 = 3250 → ' + P + ' use 1800 instead → ' + Q, 'beta0 = 3250 → What was spend in 2025? 4 instead → ' + Q,
     P + ' use 4 instead → ' + Q, 'What was spend in 2025? 4 instead → ' + Q, 'beta0 = 3250 → ' + P + ' also 1800 → ' + Q])
     assert.equal((await askPanel(q, store)).spec.title, 'Could you restate the question?', q);
-  // small talk with no entity noun now clarifies (fail-closed, TENACITY 06921c8 ruling)
-  assert.equal((await askPanel('Hello there, quick one → ' + Q, store)).spec.template, 'clarify_card');
-  for (const q of ['Show me 3 properties with highest vacancy and use that list → ' + Q,
+  for (const q of ['Hello there, quick one → ' + Q, 'Show me 3 properties with highest vacancy and use that list → ' + Q,
     'How many units at P01 have 2 bedrooms, actually? → ' + Q, P + ' → ' + Q, 'beta0 = 3250 → ' + P + ' → ' + Q])
     assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
 });
@@ -178,11 +176,11 @@ test('learner with no setting: numbers clarify unless the turn is clearly non-ed
   const noset = ['1800 dollars','4 leases','3250 units per month','use 4 months','1800 bucks instead','make it 4 percent','use 1800 euros','1800 pesos please','make it 1800 dollares','use 4 weeks','4 months instead','try 1800 credits','use 4 units instead','1800 units','go with 4 observations','prior of 4 leads','1800 dólares','mejor 4 meses','mettons 1800 euros','4 cents','1800 people','4 children','4 data','use 1800 USDs','1800 grand','use 4 pseudo-leases','4 pseudoleases','4 pseudo leases','4 leases instead','alpha0 4 leads','4 pseudo-observations','half a dozen months','1800 yen'];
   const oneNoset = ['make it one', 'use one instead', 'one more', 'go with one', 'make it a thousand'];
   for (const c of [...noset, ...oneNoset]) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
-  for (const c of ['Hello there, quick one', 'We had 2 meetings today', 'one question', 'I have one more question']) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
-  for (const c of ['Show me 3 properties with highest vacancy', 'Thanks for the 12 numbers.', 'I manage 4 buildings'])
+  for (const c of ['Show me 3 properties with highest vacancy', 'Thanks for the 12 numbers.', 'I manage 4 buildings',
+    'Hello there, quick one', 'We had 2 meetings today', 'one question', 'I have one more question'])
     assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
 });
-test('no-setting numbers pass only as entity counts or request parses (TENACITY 06921c8)', async () => {
+test('no-setting numbers: corrections clarify, small talk charts (TENACITY 06921c8)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
   // rows copied verbatim from genui-exempt-06921c8.ts
 const C: [string,string][] = [
@@ -203,9 +201,55 @@ const B: [string,string][] = [
  ['ok','Show me 3 properties with highest vacancy'],['ok','Thanks for the 12 numbers.'],['ok','I manage 4 buildings'],['ok','We had 2 meetings today'],['ok','one question'],['ok','I have one more question'],['ok','Hello there, quick one'],
  ['ok','Thanks!'],['ok','Thanks for the 3 charts'],['ok','Great, I looked at 5 reports today'],['ok','We have 12 properties in Chicago'],['ok','I read 3 papers on this'],['ok','Show me 3 properties'],['ok','3 properties please'],['ok','Hi, I run 4 buildings'],['ok','I had 2 questions earlier'],['ok','Thanks, those 12 numbers help'],['ok','That was helpful for my 2 teams'],
 ];
-  // accepted over-clarifies: small talk with no data-entity noun fails closed (no harmless-noun list)
-  const SMALL_TALK = new Set(['We had 2 meetings today', 'one question', 'I have one more question', 'Hello there, quick one',
-    'Great, I looked at 5 reports today', 'I read 3 papers on this', 'I had 2 questions earlier', 'That was helpful for my 2 teams']);
-  for (const [, c] of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
-  for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, SMALL_TALK.has(c) ? 'clarify_card' : 'sorted_bar', c);
+  // the settings' declared units decide: a bedroom is no setting's unit, so this row charts
+  const BY_UNIT = new Set(['assume one bedroom for it']);
+  for (const [, c] of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, BY_UNIT.has(c) ? 'sorted_bar' : 'clarify_card', c);
+  for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+});
+test('no-setting numbers are read by the learner settings\' declared units (TENACITY ebd7e8c)', async () => {
+  const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
+  // rows copied verbatim from genui-entity-ebd7e8c.ts
+const C: [string,string][] = [
+ ['entity-set','4 units instead'],['entity-set','assume 3 properties'],['entity-set','use 2 buildings as the prior'],['entity-set','assume 4 buildings for the prior'],
+ ['entity-set','the prior is 4 properties'],['entity-set','prior of 3 properties'],['entity-set','assume 12 rows'],['entity-set','assume 4 charts'],
+ ['entity-set','I think 4 properties is right'],['entity-set','what if it were 4 properties'],['entity-set','what if it were 4 buildings'],['entity-set','suppose 4 buildings'],
+ ['entity-set','treat it as 4 properties'],['entity-set','pretend there are 4 buildings'],['entity-set','4 properties would be better'],['entity-set','I would prefer 4 buildings'],
+ ['what-if','what if it were 4 units'],['what-if','what if it were 1800'],['what-if','what if it were 4'],
+ ['req+edit','show me 3 properties and use 1800'],['req+edit','show me 3 properties and use 4'],['req+edit','show me 3 properties, prior 1800'],
+ ['req+edit','show me 3 properties with highest vacancy, assume 1800'],['req+edit','show me 3 properties with highest vacancy and 4 instead'],
+ ['req+edit','show me 3 properties with highest vacancy, I think 4 properties'],['req+edit','show me 4 properties as the prior'],['req+edit','show me 4 buildings, use that as prior'],
+ ['req+edit','How many units at P01 have 2 bedrooms? assume 4'],['req+edit','How many units at P01 have 4 bedrooms, assume that'],['req+edit','How many vacant units at Kedzie Works? I think 4 is right'],
+ ['req+edit','Show me 3 properties, I would prefer 1800 dollars'],['req+edit','How many units at P01 have 1800 bedrooms?'],
+ ['slipped-06921c8','I think 1800 dollars instead'],['slipped-06921c8','I think 1800 dollars would be better'],['slipped-06921c8','I think maybe 1800 dollars is right'],
+ ['slipped-06921c8','I would prefer 1800 dollars here'],['slipped-06921c8','how about 1800 dollars for that'],['slipped-06921c8','please put 1800 dollars there'],
+ ['slipped-06921c8','I would like 1800 dollars there'],['slipped-06921c8','I would pick 4 months for it'],['slipped-06921c8','we want 4 units instead of that'],
+ ['slipped-06921c8','I think maybe 4 units is right'],['slipped-06921c8','assume one bedroom for it'],['slipped-06921c8','assume one lease here'],['slipped-06921c8','one pseudo lease please'],
+ ['i18n','prefiero 4 meses para eso'],['i18n','je préfère 1800 euros pour ça'],['i18n','ich möchte 4 Monate bitte'],['i18n','supongamos 4 propiedades'],['i18n','prefiero 4 edificios'],
+ ['i18n','disons 4 immeubles'],['i18n','nehmen wir 4 Gebäude an'],['i18n','mejor 3 properties'],['i18n','je préfère 4 properties'],['i18n','ich nehme 4 buildings'],
+ ['i18n','muéstrame 3 properties y usa 1800'],['i18n','prefiero 1800'],['i18n','je préfère 1800'],['i18n','lieber 1800'],
+];
+const B: [string,string][] = [
+ ['ok','Show me 3 properties with highest vacancy'],['ok','I manage 4 buildings'],['ok','We have 12 properties in Chicago'],['ok','Thanks for the 3 charts'],['ok','Thanks!'],
+ ['ok','Hi'],['ok','Hello there'],['ok','Thanks for the help'],
+];
+  // a count of a noun no setting is stated in (properties, buildings, rows, charts, bedrooms) is not a
+  // prior value and charts; a request parse reads its own count (ebd7e8c finding 4, LOW)
+  const BY_UNIT = new Set(['assume 3 properties', 'assume 12 rows', 'assume 4 charts', 'I think 4 properties is right',
+    'what if it were 4 properties', 'what if it were 4 buildings', 'suppose 4 buildings', 'treat it as 4 properties',
+    'pretend there are 4 buildings', '4 properties would be better', 'I would prefer 4 buildings',
+    'show me 3 properties with highest vacancy, I think 4 properties', 'How many units at P01 have 4 bedrooms, assume that',
+    'How many units at P01 have 1800 bedrooms?', 'assume one bedroom for it', 'supongamos 4 propiedades', 'prefiero 4 edificios',
+    'disons 4 immeubles', 'mejor 3 properties', 'je préfère 4 properties', 'ich nehme 4 buildings']);
+  for (const [, c] of C) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, BY_UNIT.has(c) ? 'sorted_bar' : 'clarify_card', c);
+  for (const [, c] of B) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+  // held-out rewordings: bare values, setting units, linking verbs and counts that do not agree clarify
+  for (const c of ['make it four', 'maybe 1800 then', 'go 4 months', 'how about 3 percent', 'say 1800 USD', '4 pseudo-observations would be better',
+    'honestly 1800', '1,800 dollars feels right', '3k', 'two leases please', 'what about 1800?', 'prefiero 1800 dólares', 'disons 4 mois',
+    'nehmen wir 4 Monate', '1800 works', 'I think 1800 works', '4 seems right', '1800 sounds good', 'one works', '4 tho', '1800 imo', 'one tho',
+    '1800 people', 'just one', '1800 passt', '4 funciona'])
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'clarify_card', c);
+  // held-out small talk: counts of nouns that no setting takes
+  for (const c of ['We met 3 clients today', 'I read 2 articles', 'Thanks for the 4 slides', 'My 2 colleagues say hi', 'We visited 5 sites',
+    'hola, tengo 2 preguntas', "j'ai 3 questions", 'Just a quick one', 'one small question'])
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
 });
