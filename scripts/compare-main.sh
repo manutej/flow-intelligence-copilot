@@ -28,6 +28,8 @@ print(f'| npm run eval exit | {em} | {eh} |')
 # reason and the commit that made the change; it is still listed, not hidden.
 INTENDED = {
     ('operadic-interview-bank', 'OI-40'): 'figures removed from the NOI non-answer note; non-answers may not add figures (fix 3, 62a2405, VERDICT-S2-c082279.md finding 3)',
+    ('heldout', 'H08'): 'renewal label now prints its denominator (renewed, pending, notice, not due); every main number kept in order, rate unchanged (2a1aea5, VERDICT-S2-5738aef.md finding 3)',
+    ('operadic-interview-bank', 'OI-37'): 'renewal label now prints its denominator (renewed, pending, notice, not due); every main number kept in order, rate unchanged (2a1aea5, VERDICT-S2-5738aef.md finding 3)',
 }
 reg = 0; rows = []
 for s in ['dev', 'test', 'heldout', 'operadic-interview-bank']:
