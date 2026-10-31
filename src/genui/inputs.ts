@@ -261,8 +261,6 @@ const NW_UNIT_ONLY = /^(?:un|une|una|uno|ein|eine|eins|once|mil|cents?|sept|six|
 const ONE = /^(?:one|un|une|una|uno|ein|eine|eins)$/iu;
 // Closed-class grammar words (articles, auxiliaries, pronouns, prepositions, particles), EN/ES/FR/DE.
 const FUNCTION_WORD = /^(?:a|an|the|is|are|was|were|be|been|am|'s|would|will|should|could|can|may|might|must|do|does|did|has|have|had|for|to|of|in|on|at|as|by|with|from|into|than|then|and|or|but|so|if|it|its|that|this|these|those|them|me|us|you|him|her|here|there|now|instead|please|pls|plz|more|less|fewer|again|too|also|only|just|rather|actually|maybe|perhaps|really|ok|okay|yes|no|y|o|de|del|la|el|los|las|un|una|en|por|para|con|que|es|aquí|allí|ahí|eso|esto|favor|más|menos|et|ou|le|les|du|des|une|pour|avec|est|ça|cela|ici|là|svp|plus|moins|und|oder|der|die|das|den|dem|ein|eine|für|mit|ist|bitte|hier|da|dort|statt|mehr|weniger)$/iu;
-// closed-class quantifiers that sit between "one" and its noun ("one more thing")
-const QUANTIFIER = /^(?:more|other|más|otra|otro|autre|weitere|noch)$/iu;
 // Record nouns the parser and the schema know (UNIT_NOUN_RE and the schema's record kinds), with
 // their ES/FR/DE schema equivalents. A record kind a setting can be stated in is a setting unit,
 // not a record noun: spend (a currency measure), and the learner's observations (leases, units,
@@ -277,19 +275,15 @@ const knownNoun = (surface: string, v: number, w: string) => SCHEMA_NOUNS_I18N.t
 const content = (w: string | undefined) => !!w && /^\p{L}+$/u.test(w) && !FUNCTION_WORD.test(w);
 // can this number, in this turn, be the value of a learner setting? Fail closed. The only
 // evidence that frees it is the word right after it: a record noun the parser or schema knows
-// ("4 buildings"), or, for the pronoun "one", a singular content word that is not a setting unit
-// ("one question", "one more thing"), or the article form "a quick one". Anything else is bare.
+// ("4 buildings", "one building"), or, for the pronoun "one", the article form "a quick one".
+// "one" is a number like any other: "one exactly", "one question" and "one each" are bare.
 function settingCandidate(t: string, a: number, b: number, n: Num): boolean {
   if (Number.isNaN(n.value) && !ONE.test(n.surface) || n.unit !== 'none') return true;
   const after = t.slice(n.end, b);
   if (settingUnit(after)) return true;
   const words = /^[\s-]*[,;:!?.]/u.test(after) ? [] : after.split(/[\s,;:!?.()]+/u).filter(Boolean);
   if (content(words[0]) && knownNoun(n.surface, n.value, words[0])) return false;
-  if (ONE.test(n.surface)) {
-    const head = QUANTIFIER.test(words[0] ?? '') ? words[1] : words[0];
-    if (content(head) && !/s$/iu.test(head!) && !settingUnit(' ' + head)) return false;
-    if (!words.length && /(?:^|[\s,;])(?:a|an)\s+\p{L}+\s*$/iu.test(t.slice(a, n.start))) return false; // "a quick one"
-  }
+  if (ONE.test(n.surface) && !words.length && /(?:^|[\s,;])(?:a|an)\s+\p{L}+\s*$/iu.test(t.slice(a, n.start))) return false; // "a quick one"
   return true;
 }
 /** The setting values a computation used, as stated in the question and equal to policy: the only setting numbers a title may echo. */
