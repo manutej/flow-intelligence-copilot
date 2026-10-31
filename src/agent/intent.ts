@@ -1559,7 +1559,7 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
   const currency = unsupportedCurrency(question);
   if (currency) return currency;
   // A to-date period is relative to a "today" the exports do not carry.
-  const toDate = /\b(?:ytd|qtd|mtd|(?:year|quarter|month)[\s-]+to[\s-]+date)\b/i.exec(question);
+  const toDate = /(?<![\p{L}\p{N}])(?:[ymq]\.?-?t\.?-?d\.?(?![\p{L}\p{N}])|(?:(?:year|quarter|month|week)[\s-]+)?to[\s-]+date\b|so\s+far(?:\s+this\s+(?:year|quarter|month))?\b)/iu.exec(question);
   if (toDate) return `a to-date period ("${toDate[0].trim()}"), but FlowIQ has no "today" to count to`;
   const unitFilter = unappliedUnitFilter(question, intent);
   if (unitFilter) return unitFilter;
@@ -1690,10 +1690,11 @@ function unsplittableFilter(question: string, intent: ParsedQueryIntent, store: 
 }
 
 /** A lease term the ledger does not record (it holds only new or renewal). */
-const LEASE_TERM_RE = /\b(?:month[\s-]+to[\s-]+month|m2m|mtm|fixed[\s-]+term|short[\s-]+term|long[\s-]+term|\d+[\s-]*(?:month|mo|year|yr)[\s-]+(?:leases?|terms?))\b/i;
+const TERM_COUNT = String.raw`(?:\d+|a|an|one|two|three|four|six|nine|ten|twelve|fifteen|eighteen|twenty[\s-]?four|half)`;
+const LEASE_TERM_RE = new RegExp(String.raw`\b(?:month[\s-]+to[\s-]+month|m2m|mtm|fixed[\s-]+term|short[\s-]+term|long[\s-]+term|annual|yearly|${TERM_COUNT}[\s-]*(?:months?|mos?|years?|yrs?)(?:[\s-]+long)?[\s-]+(?:leases?|terms?|contracts?))\b`, 'i');
 
 /** A point in time at the end of a period ("at year end", "end of quarter"). */
-const PERIOD_END_RE = /\b(?:(?:fiscal[\s-]+)?(?:year|quarter|month|week|period|fy)[\s-]*end(?:ing)?|end\s+of\s+(?:the\s+)?(?:fiscal\s+)?(?:year|quarter|month|week|period|fy)|eo[ymqw])\b/i;
+const PERIOD_END_RE = /\b(?:(?:fiscal[\s-]+)?(?:year|quarter|month|week|period|fy)(?:['’]s)?[\s-]*end(?:ing)?|end\s+of\s+(?:the\s+)?(?:fiscal\s+)?(?:year|quarter|month|week|period|fy)|eo[ymqw])\b/i;
 
 /**
  * Every figure FlowIQ reports is in USD (CAD invoices are converted). A
@@ -1701,8 +1702,18 @@ const PERIOD_END_RE = /\b(?:(?:fiscal[\s-]+)?(?:year|quarter|month|week|period|f
  * currency is left over rather than ignored.
  */
 function unsupportedCurrency(question: string): string | null {
-  const m = /(?:\b(?:in|into|to|as|using)\s+(?:the\s+)?)((?:CAD|EUR|GBP|MXN|JPY|AUD|CHF|CNY|INR|BRL)\b|C\$|€|£|¥|(?:canadian|australian|aussie)\s+dollars?\b|loonies\b|euros?\b|pounds?(?:\s+sterling)?\b|pesos?\b|yen\b)/iu.exec(question.normalize('NFKC'));
-  return m ? `a currency ("${m[1]}"), but FlowIQ reports figures in USD only` : null;
+  // A currency named anywhere ("in CAD", ", CAD?", "(CAD)", "CAD spend") is a
+  // requested unit; only the source currency of invoices ("CAD invoices",
+  // "converted from CAD") describes the data rather than the answer.
+  const re = /(?<![\p{L}\p{N}])(CAD|EUR|GBP|MXN|JPY|AUD|NZD|CHF|CNY|INR|BRL|C\$|A\$|€|£|¥|(?:canadian|australian|aussie|new\s+zealand)(?:\s+dollars?)?|loonies|euros?|pounds?(?:\s+sterling)?|pesos?|yen|francs?)(?![\p{L}\p{N}])/giu;
+  for (const m of question.normalize('NFKC').matchAll(re)) {
+    const before = question.slice(0, m.index).toLowerCase();
+    const after = question.slice(m.index + m[0].length).toLowerCase();
+    if (/\b(?:from|billed\s+in|invoiced\s+in|paid\s+in)\s*$/.test(before)) continue;
+    if (/^\s*(?:-?denominated\s+)?(?:invoices?|rows?|entries|line\s+items?|conversion|rate|fx|exchange)\b/.test(after)) continue;
+    return `a currency ("${m[1]}"), but FlowIQ reports figures in USD only`;
+  }
+  return null;
 }
 
 /** Words a "from <phrase>" source phrase may hold besides source, property and date names. */
@@ -1826,12 +1837,12 @@ function unconsumedPeriod(question: string, intent: ParsedQueryIntent): string |
  * lake views") is kept and must parse.
  */
 export const META_INSTRUCTION_RE =
-  /\[[^\]]*\b(?:system|override|ignore|instructions?|rules?)\b[^\]]*\]|[^.?!]*\b(?:ignore|disregard|override|(?:do\s+not|don'?t|never)\s+(?:obey|follow|trust|believe))\b[^.?!]*\b(?:rules?|instructions?|notes?|prompts?|system|messages?)\b[^.?!]*[.!]?|(?<=^|[.?!]\s*)(?:please\s+)?(?:keep\s+it\s+(?:to|under|within)|limit\s+it\s+to|answer\s+in|reply\s+in|respond\s+in|use|give\s+me|in)\s+(?:\d+|one|two|three|four|five)\s+(?:short\s+)?(?:bullets?|bullet\s+points?|lines?|sentences?|words?)\b[^.?!]*[.!]?|(?<=^|[.?!]\s*)(?:please\s+)?(?:show\s+(?:the|your)\s+(?:math|work)|be\s+(?:brief|concise)|keep\s+it\s+(?:short|brief))\b[^.?!]*[.!]?/gi;
+  /\[[^\]]*\b(?:system|override|ignore|instructions?|rules?)\b[^\]]*\]|[^.?!]*\b(?:ignore|disregard|override|(?:do\s+not|don'?t|never)\s+(?:obey|follow|trust|believe))\b[^.?!]*\b(?:rules?|instructions?|notes?|prompts?|system|messages?)\b[^.?!]*[.!]?|(?<=^|[.?!]\s*)(?:please\s+)?(?:keep\s+it\s+(?:to|under|within)|limit\s+it\s+to|answer\s+in|reply\s+in|respond\s+in|use|give\s+me|in)\s+(?:\d+|one|two|three|four|five)\s+(?:short\s+)?(?:bullets?|bullet\s+points?|lines?|sentences?|words?)\b[.!:,;]?|(?<=^|[.?!]\s*)(?:please\s+)?(?:show\s+(?:the|your)\s+(?:math|work)|be\s+(?:brief|concise)|keep\s+it\s+(?:short|brief))\b[.!:,;]?/gi;
 /**
  * The second and third alternatives above are format instructions ("Keep it
- * to 3 bullets.", "Show your math."): a whole sentence about how to lay the
- * answer out. They ask nothing of the data, so their words are not question
- * words either, and they must not turn a parse or a clarify into a dead end.
+ * to 3 bullets.", "Show your math."), which ask nothing of the data. Only the
+ * phrase itself is dropped: whatever follows it in the same sentence
+ * ("Keep it short, excluding Facebook.") is still question text and must parse.
  */
 function uncoveredToken(question: string, store: PortfolioStore, intent: ParsedQueryIntent): string | null {
   let q = ` ${spellIsoMonths(spellCalendarYear(question.normalize('NFKC')))} `;
