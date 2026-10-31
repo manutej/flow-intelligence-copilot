@@ -65,7 +65,63 @@ export function envelopeErrors(envelope: AnswerEnvelope, store: PortfolioStore):
   if (p.template_id !== rp.template_id) errors.push(`template_id ${p.template_id} is not ${rp.template_id}`);
   if (p.result_hash !== rp.result_hash) errors.push('The result is not the re-executed result');
   if (canonical([...p.row_ids].sort()) !== canonical([...rp.row_ids].sort())) errors.push('row_ids are not the re-executed rows');
-  if (canonical([...(envelope.citations ?? [])].sort()) !== canonical([...ref.citations].sort())) errors.push('The citations are not the re-executed rows');
+  if (canonical([...(Array.isArray(envelope.citations) ? envelope.citations : [])].sort()) !== canonical([...ref.citations].sort())) errors.push('The citations are not the re-executed rows');
   if (envelope.answer !== ref.answer) errors.push('The answer text is not byte-equal to the template re-render');
+  return errors;
+}
+
+/**
+ * TENACITY S2 finding 3: an "I don't know" or a refusal is bound to its
+ * question too. The seal hashes the question, the outcome, the reason and
+ * the text, so none can be moved or edited; the verifier then checks the
+ * outcome is real for that question (its plain reading must not answer, and
+ * a refusal must be one the fair-housing guard makes) and that the text adds
+ * no figure the question did not state.
+ */
+export type NonAnswerKind = 'unknown' | 'refused';
+export const nonAnswerKind = (r: Readonly<Record<string, unknown>> | undefined): NonAnswerKind | null =>
+  r?.refused === true ? 'refused' : r?.unknown === true ? 'unknown' : null;
+
+export function sealNonAnswer(question: string, envelope: Pick<AnswerEnvelope, 'answer' | 'result'>): { query: TypedQuery; proof: AnswerProof } {
+  const kind = nonAnswerKind(envelope.result);
+  return {
+    query: { question, intent: { non_answer: kind } },
+    proof: { template_id: `non_answer.${kind}`, query_hash: hashOf({ question, kind, reason: envelope.result.reason ?? null, answer: envelope.answer }), result_hash: hashOf(envelope.result), row_ids: [] },
+  };
+}
+
+// A figure is money, a percent, or a number of 2+ digits outside an id.
+const FIGURE_RE = /\$\s?\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s?%|(?<![A-Za-z#§:])\d{2,}(?:,\d{3})*(?:\.\d+)?(?![A-Za-z])/g;
+// Legal citations ("42 U.S.C. § 3604(f)", "§ 5-8-030", "775 ILCS 5/3-102") and years are not figures.
+const STATUTE_RE = /\b\d{4}-\d{2}(?:-\d{2})?\b|\d+\s+U\.S\.C\.?|§+\s*[\w.\-()/]+|\d+\s+ILCS\s+[\w./\-()]+|\b(?:19|20)\d\d\b/g;
+const figures = (s: string) => (s.replace(STATUTE_RE, ' ').match(FIGURE_RE) ?? []).map((f) => f.replace(/[\s$,%]/g, ''));
+
+export function nonAnswerErrors(
+  envelope: AnswerEnvelope,
+  store: PortfolioStore,
+  confirm: { refusedBy: (question: string) => boolean; closedWorldGap: (question: string) => boolean },
+): string[] {
+  const kind = nonAnswerKind(envelope.result);
+  if (!kind) return [];
+  const q = envelope.query;
+  if (!q || typeof q.question !== 'string' || !envelope.proof) return [`The ${kind === 'refused' ? 'refusal' : '"I don\'t know"'} is not sealed to a question`];
+  const errors: string[] = [];
+  const sealed = sealNonAnswer(q.question, envelope);
+  if (envelope.proof.query_hash !== sealed.proof.query_hash || envelope.proof.result_hash !== sealed.proof.result_hash || envelope.proof.template_id !== sealed.proof.template_id) {
+    errors.push('The non-answer is not the sealed one for its question');
+  }
+  const asked = new Set(figures(q.question));
+  const added = figures(envelope.answer).filter((f) => !asked.has(f));
+  if (added.length > 0) errors.push(`A non-answer must not state figures (${[...new Set(added)].join(', ')})`);
+  if (kind === 'refused' && !confirm.refusedBy(q.question)) errors.push('The refusal is not one the fair-housing guard makes for its question');
+  if (kind === 'unknown' && !confirm.closedWorldGap(q.question) && !confirm.refusedBy(q.question)) {
+    // Re-parse and re-execute: an answerable plain reading is not unknown.
+    const intent = parseQueryIntent(q.question, store);
+    if (intent.measure !== 'unsupported') {
+      const plan = executeCompositionalPlan({ id: envelope.id, type: 'adhoc', question: q.question }, store, { intent, verify: false });
+      const r = plan.envelope.result as Record<string, unknown>;
+      if (!nonAnswerKind(r) && r.clarification_needed !== true && envelopeErrors(plan.envelope, store).length === 0) errors.push('The question has an answer, so "I don\'t know" is not its outcome');
+    }
+  }
   return errors;
 }

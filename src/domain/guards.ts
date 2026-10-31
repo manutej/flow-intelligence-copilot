@@ -1,4 +1,6 @@
-import { envelopeErrors } from '../agent/envelope.ts';
+import { envelopeErrors, nonAnswerErrors } from '../agent/envelope.ts';
+import { unboundNegators } from '../agent/closed-world.ts';
+import { unknownWords } from './vocabulary.ts';
 import type {
   AnswerEnvelope,
   CitationId,
@@ -157,20 +159,10 @@ export function checkUnknownDataGuard(
 
       let rentRollSuffix = "";
       if (/\b(profit\w*|revenue|grossing|noi\b|net\s+operating\s+income|net\s+income)\b/i.test(question)) {
-        const rentByProp = new Map<string, number>();
-        for (const l of store.leases) {
-          rentByProp.set(l.propertyId, (rentByProp.get(l.propertyId) ?? 0) + l.monthlyRent);
-        }
-        const topRentProps = [...store.operatingProperties]
-          .map((p) => ({
-            propertyId: p.propertyId,
-            name: p.name,
-            monthlyRent: Math.round(rentByProp.get(p.propertyId) ?? 0),
-          }))
-          .sort((a, b) => b.monthlyRent - a.monthlyRent)
-          .slice(0, 3);
-        if (topRentProps.length > 0) {
-          rentRollSuffix = ` (Note: while profit/NOI/OpEx ledgers are not in the exports, the top 3 operating buildings by active monthly contract lease rent roll in data/pms/leases.csv are: ${topRentProps.map((p, i) => `#${i + 1} ${p.name} [${p.propertyId}] at ${p.monthlyRent.toLocaleString("en-US")}/mo`).join(", ")}.)`;
+        if (store.leases.length > 0) {
+          // A non-answer states no figures (TENACITY c082279 finding 3); it
+          // points at the computable rent roll instead of quoting it.
+          rentRollSuffix = ` (Note: profit/NOI/OpEx ledgers are not in the exports; monthly contract lease rent by building is, in data/pms/leases.csv, if you want the rent roll instead.)`;
         }
       }
       return {
@@ -275,7 +267,7 @@ export function verifyAnswerEnvelope(
     // nothing. Neither does a sealed zero over an empty row set: the proof
     // re-executes the typed query, so the empty set is checked, not trusted.
     const provenEmptyZero =
-      !!envelope.query && Array.isArray(envelope.proof?.row_ids) && envelope.proof.row_ids.length === 0 &&
+      Array.isArray(envelope.citations) && !!envelope.query && Array.isArray(envelope.proof?.row_ids) && envelope.proof.row_ids.length === 0 &&
       Object.values(envelope.result ?? {}).every((v) => typeof v !== 'number' || v === 0);
     if (!isNonAnswer && !provenEmptyZero) {
       errors.push('Answer must include at least one row citation');
@@ -300,9 +292,16 @@ export function verifyAnswerEnvelope(
     }
   }
 
-  if (!isNonAnswer && Array.isArray(envelope.citations)) {
+  // TENACITY c082279 finding 1: every answer is re-executed, whatever the
+  // shape of its citations; a non-array citations field is itself an error.
+  if (!isNonAnswer) {
+    if (!Array.isArray(envelope.citations)) errors.push('Citations must be an array of row ids');
     errors.push(...figureErrors(envelope, store));
   }
+  errors.push(...nonAnswerErrors(envelope, store, {
+    refusedBy: (q) => checkFairHousingGuard(q, store).refused === true,
+    closedWorldGap: (q) => checkUnknownDataGuard(q, store).unknown === true || unknownWords(q, store).length > 0 || unboundNegators(q).length > 0,
+  }));
 
   if (resultSchema) {
     for (const [key, expectedType] of Object.entries(resultSchema)) {

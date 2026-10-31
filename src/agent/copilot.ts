@@ -1,3 +1,4 @@
+import { nonAnswerKind, sealNonAnswer } from './envelope.ts';
 import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
 import type { ParsedQueryIntent } from './intent.ts';
 import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
@@ -77,6 +78,20 @@ export interface CopilotTurnResult {
  * 4. Post-check (`FLOW-103`): verifies every `<table>:<id>` citation against the CSV primary keys.
  */
 export async function askFlowIqCopilot(
+  input: string | QuestionRecord,
+  options: CopilotRunOptions = {},
+): Promise<CopilotTurnResult> {
+  const t = await askUnsealed(input, options);
+  const kind = nonAnswerKind(t.envelope.result as Record<string, unknown>);
+  if (!kind) return t;
+  // Seal every "I don't know" and refusal to the question it answers.
+  const store = options.store && !options.policy ? options.store : loadPortfolioStore(undefined, options.policy);
+  const question = typeof input === 'string' ? input : input.question;
+  const envelope = { ...t.envelope, ...sealNonAnswer(question, t.envelope) };
+  return { ...t, envelope, verification: verifyAnswerEnvelope(envelope, store) };
+}
+
+async function askUnsealed(
   input: string | QuestionRecord,
   options: CopilotRunOptions = {},
 ): Promise<CopilotTurnResult> {

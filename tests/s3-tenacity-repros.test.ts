@@ -127,3 +127,36 @@ test('F6: two statuses with a negation stay unanswered', async () => {
   const t = await askFlowIqCopilot('How many units at Marlowe Residences are not vacant or occupied?', { store, parse: null });
   assert.notEqual(typeof (t.envelope.result as Record<string, unknown>).count, 'number');
 });
+
+// TENACITY c082279 finding 1: the zero exception must not skip re-execution.
+const Q2 = 'What was total marketing spend in Q2 2026?';
+for (const citations of [undefined, null, 'units:U0001', {}]) {
+  test(`c082279 F1: a forged $0 with citations ${JSON.stringify(citations) ?? 'undefined'} is rejected`, async () => {
+    const e = (await askFlowIqCopilot(Q2, { store, parse: null })).envelope;
+    const forged = { ...e, citations, result: { usd: 0 }, answer: 'Total marketing spend in Q2 2026 was $0.', proof: { ...e.proof!, row_ids: [] } };
+    assert.equal(verifyAnswerEnvelope(forged as never, store).valid, false);
+  });
+}
+
+// TENACITY c082279 finding 3: non-answers are bound to their question.
+import { sealNonAnswer } from '../src/agent/envelope.ts';
+test('c082279 F3: a true "I don\'t know" moved onto an answerable question is rejected', async () => {
+  const idk = (await askFlowIqCopilot('What was total marketing spend in Q1 2025?', { store, parse: null }));
+  assert.equal((idk.envelope.result as Record<string, unknown>).unknown, true);
+  assert.equal(idk.verification.valid, true);
+  const moved = { ...idk.envelope, ...sealNonAnswer(Q2, idk.envelope) };
+  assert.equal(verifyAnswerEnvelope(moved, store).valid, false);
+});
+test('c082279 F3: an unsealed "I don\'t know" is rejected', () => {
+  assert.equal(verifyAnswerEnvelope({ id: 'Q2', answer: "I don't know.", result: { unknown: true }, citations: [] }, store).valid, false);
+});
+test('c082279 F3: a figure added to a non-answer is rejected, sealed or not', async () => {
+  const idk = (await askFlowIqCopilot('What was total marketing spend in Q1 2025?', { store, parse: null })).envelope;
+  const answer = `${idk.answer} Halsted & Lake spent $40,000.`;
+  assert.equal(verifyAnswerEnvelope({ ...idk, answer }, store).valid, false);
+  assert.equal(verifyAnswerEnvelope({ ...idk, answer, ...sealNonAnswer(idk.query!.question, { answer, result: idk.result }) }, store).valid, false);
+});
+test('c082279 F3: a refusal the fair-housing guard does not make is rejected', () => {
+  const answer = 'Refused under the Fair Housing Act.';
+  assert.equal(verifyAnswerEnvelope({ id: 'Q2', answer, result: { refused: true }, citations: [], ...sealNonAnswer(Q2, { answer, result: { refused: true } }) }, store).valid, false);
+});
