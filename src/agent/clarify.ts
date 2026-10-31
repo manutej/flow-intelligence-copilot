@@ -1,7 +1,7 @@
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import { resolvePropertiesFromText } from '../domain/resolver.ts';
 import { findUnknownBuildingReference, findUnresolvedPlace } from './recognition.ts';
-import { isMeasureNoun } from './intent.ts';
+import { isMeasureNoun, onlyInFilterClause } from './intent.ts';
 import { unboundNegators } from './closed-world.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 
@@ -76,8 +76,6 @@ const ASK_WORD = /^(?:highest|lowest|most|least|top|bottom|best|worst|slowest|fa
 function dropsPlaceOrAsk(question: string, unbound: readonly string[], store: PortfolioStore): boolean {
   if (findUnresolvedPlace(question, store)) return true;
   if (unbound.some((w) => ASK_WORD.test(w))) return true;
-  // A reading without a measure noun the question states ("units, vacancy, leads") answers less than was asked.
-  if (unbound.some((w) => isMeasureNoun(w))) return true;
   // A dropped locative ("vacancy around X") turns a place-relative ask into one about X itself.
   if (unbound.some((w) => /^(?:at|near|in|around|within|by)$/i.test(w))) return true;
   const labels = store.properties.flatMap((p) => [p.name, ...p.aka]).map((l) => l.toLowerCase());
@@ -168,6 +166,13 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** 2-4 typed readings of a question whose words `unbound` no field carries. */
 export function clarifyOptions(question: string, unbound: readonly string[], store: PortfolioStore): ClarifyOption[] {
+  // A reading without a measure noun the question states ("units, vacancy, leads") answers less than was asked.
+  const nouns = unbound.filter((w) => isMeasureNoun(w) && !onlyInFilterClause(question, w));
+  const states = (q: string, w: string) => new RegExp(`(?<![\\p{L}\\p{N}])${escape(w)}(?![\\p{L}\\p{N}])`, 'iu').test(q);
+  return readings(question, unbound, store).filter((o) => nouns.every((w) => states(o.question, w)));
+}
+
+function readings(question: string, unbound: readonly string[], store: PortfolioStore): ClarifyOption[] {
   const options: ClarifyOption[] = [];
   // Dropping a negator inverts the question ("not vacant" -> "vacant"), so
   // no reading is offered; the turn is an honest "I don't know".
