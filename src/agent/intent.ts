@@ -676,7 +676,9 @@ export function parseExplicitDateWindow(
   );
   if (bareYear) {
     const yNum = Number.parseInt(bareYear[1], 10);
-    if (yNum === 2026 && DATE_WINDOWS.YEAR_2026) return DATE_WINDOWS.YEAR_2026;
+    // The data year keeps its named window; any other year is built.
+    const named = yNum === defaultYear ? (DATE_WINDOWS as Record<string, DateWindowSpec | undefined>)[`YEAR_${yNum}`] : undefined;
+    if (named) return named;
     return buildDynamicDateWindow(`YEAR_${yNum}`, `${yNum}`, yNum, 1, yNum, 12);
   }
 
