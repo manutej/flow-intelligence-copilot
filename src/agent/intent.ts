@@ -1826,7 +1826,13 @@ function unconsumedPeriod(question: string, intent: ParsedQueryIntent): string |
  * lake views") is kept and must parse.
  */
 export const META_INSTRUCTION_RE =
-  /\[[^\]]*\b(?:system|override|ignore|instructions?|rules?)\b[^\]]*\]|[^.?!]*\b(?:ignore|disregard|override|(?:do\s+not|don'?t|never)\s+(?:obey|follow|trust|believe))\b[^.?!]*\b(?:rules?|instructions?|notes?|prompts?|system|messages?)\b[^.?!]*[.!]?/gi;
+  /\[[^\]]*\b(?:system|override|ignore|instructions?|rules?)\b[^\]]*\]|[^.?!]*\b(?:ignore|disregard|override|(?:do\s+not|don'?t|never)\s+(?:obey|follow|trust|believe))\b[^.?!]*\b(?:rules?|instructions?|notes?|prompts?|system|messages?)\b[^.?!]*[.!]?|(?<=^|[.?!]\s*)(?:please\s+)?(?:keep\s+it\s+(?:to|under|within)|limit\s+it\s+to|answer\s+in|reply\s+in|respond\s+in|use|give\s+me|in)\s+(?:\d+|one|two|three|four|five)\s+(?:short\s+)?(?:bullets?|bullet\s+points?|lines?|sentences?|words?)\b[^.?!]*[.!]?|(?<=^|[.?!]\s*)(?:please\s+)?(?:show\s+(?:the|your)\s+(?:math|work)|be\s+(?:brief|concise)|keep\s+it\s+(?:short|brief))\b[^.?!]*[.!]?/gi;
+/**
+ * The second and third alternatives above are format instructions ("Keep it
+ * to 3 bullets.", "Show your math."): a whole sentence about how to lay the
+ * answer out. They ask nothing of the data, so their words are not question
+ * words either, and they must not turn a parse or a clarify into a dead end.
+ */
 function uncoveredToken(question: string, store: PortfolioStore, intent: ParsedQueryIntent): string | null {
   let q = ` ${spellIsoMonths(spellCalendarYear(question.normalize('NFKC')))} `;
   const blank = (re: RegExp) => { q = q.replace(re, (m) => ' '.repeat(m.length)); };
