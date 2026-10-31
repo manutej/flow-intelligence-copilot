@@ -24,7 +24,7 @@ export const FIXED = new Set(
   'decimal decision decisions declined delta deltas did distinct divided do',
   'does dog dollars doorman down duplicate duplicates each earlier earliest',
   'end ending entries entry equivalent ev evaluating every exclude facebook',
-  'false find first floor for from fulton gave get give given google h had',
+  'false fiscal fiscally find first floor for from fulton gave get give given google h had',
   'halcyon halsted harbor has have higher highest how i id ids ils in include',
   'is it its january jul july june kedzie keeping kensington lake lakefront',
   'later lead leads learning lease leased leases list listing lofts loop',

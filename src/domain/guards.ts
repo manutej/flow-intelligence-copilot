@@ -6,7 +6,7 @@ import type {
 } from '../data/schema.ts';
 import { classifyFairHousingRequest } from './fair-housing.ts';
 import { resolvePropertiesFromText } from './resolver.ts';
-import { FISCAL_TOKEN_RE } from './fiscal.ts';
+import { BARE_FISCAL_RE, CALENDAR_PERIOD_RE, FISCAL_TOKEN_RE, maskFiscalTokens } from './fiscal.ts';
 
 export interface FairHousingCheckResult {
   readonly refused: boolean;
@@ -149,7 +149,10 @@ export function checkUnknownDataGuard(
   }
 
   for (const rule of UNMODELED_DATA_RULES) {
-    if (rule.pattern.test(question)) {
+    const fiscal = rule.pattern === FISCAL_TOKEN_RE;
+    if (rule.pattern.test(question) || (fiscal && BARE_FISCAL_RE.test(question))) {
+      // A fiscal word beside an explicit calendar period: answer the calendar period.
+      if (fiscal && CALENDAR_PERIOD_RE.test(maskFiscalTokens(question))) continue;
       const mentionedProps = resolvePropertiesFromText(store, question, {
         includeOnboarding: true,
       });
