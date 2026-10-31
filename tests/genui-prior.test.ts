@@ -113,7 +113,7 @@ test('accounting: with a setting present every other number must be placed (TENA
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
   const X = 'Then, was decision X001 in decisions.csv accepted, who decided it, and what was the monthly delta?';
   for (const q of ['beta0 = 3250 → no, 1800 → ' + Q, 'beta0 = 3250 → make it 1800 → ' + Q, 'beta0 = 3250 → 1800 → ' + Q, 'beta0 = 3250, sorry 1800 → ' + Q,
-    'beta0 = 3250 and 1800 → ' + Q, 'beta0 = $3250 → change it to $1800 → ' + Q, 'alpha0 = 1 → actually 2 → ' + Q, 'Use 1800 instead → ' + Q,
+    'beta0 = 3250 and 1800 → ' + Q, 'beta0 = $3250 → change it to $1800 → ' + Q, 'alpha0 = 1 → actually 2 → ' + Q,
     'CAD rate 0.73 → actually 0.8 → ' + X, 'beta0 = 3250 USD per CAD → ' + Q, 'Is beta0 3250?']) {
     const a = await askPanel(q, store);
     assert.equal(a.spec.template, 'clarify_card', q);
@@ -124,7 +124,7 @@ test('accounting: with a setting present every other number must be placed (TENA
 test('accounting by mention, scoped to setting and referring turns (TENACITY beded12)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
   // a correction equal to a used value (4 from P04, 1 from #1) is a different mention: neutral
-  for (const q of ['alpha0 = 1 → actually 4 → ' + Q, 'alpha0 = 1, no wait, 4 → ' + Q, 'beta0 = 3250 → no, 4 → ' + Q, 'Use 4 instead → ' + Q,
+  for (const q of ['alpha0 = 1 → actually 4 → ' + Q, 'alpha0 = 1, no wait, 4 → ' + Q, 'beta0 = 3250 → no, 4 → ' + Q,
     'At The Clarendon (P04) with alpha0 = 1, actually 4, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?',
     // a value change with no numeral in a referring turn: neutral
     'beta0 = 3250 → halve it → ' + Q, 'beta0 = 3250 → double it → ' + Q, 'beta0 = 3250 → 1e3 → ' + Q]) {
@@ -133,5 +133,20 @@ test('accounting by mention, scoped to setting and referring turns (TENACITY bed
   }
   // earlier turns that do not refer back do not block (Q77 rule)
   for (const q of ['Show me 3 properties with highest vacancy → ' + Q, 'Thanks for the 12 numbers. → ' + Q, 'beta0 = 3250 → How many units at P01 have 2 bedrooms? → ' + Q])
+    assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
+});
+test('after a setting, only standalone questions may follow it; with no setting, earlier turns are not read (TENACITY cfd6ff3)', async () => {
+  const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
+  // any later turn that is not a standalone question, in any language, with or without a number
+  for (const c of ['hmm, should be 1800 i think', 'should have said 1800 there', 'mejor que sea 1800 por favor', 'en fait mettons 1800 svp',
+    "let's go with 4 please", 'go lower please', 'hmm, lower please', 'halve it']) {
+    const a = await askPanel('beta0 = 3250 → ' + c + ' → ' + Q, store);
+    assert.equal(a.spec.template, 'clarify_card', c); assert.equal(a.spec.title, 'Could you restate the question?', c);
+  }
+  // no setting stated: earlier turns are not read (Q77)
+  for (const c of ['What is it like at P01?', 'Use the marketing data', 'Which channels double as referrals?', 'Thanks!', 'Hi'])
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
+  // a standalone question after the setting, and a policy setting in parentheses, chart
+  for (const q of ['beta0 = 3250 → How many units at P01 have 2 bedrooms? → ' + Q, 'beta0 = 3250 → ' + Q.replace('ranks #1', 'ranks #1 (beta0 = 3250)')])
     assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
 });
