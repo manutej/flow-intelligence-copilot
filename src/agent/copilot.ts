@@ -3,7 +3,7 @@ import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
 import { LOCATIVE_FY_RE, maskFiscalTokens } from '../domain/fiscal.ts';
 import type { ParsedQueryIntent } from './intent.ts';
 import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
-import { META_INSTRUCTION_RE, parseQueryIntent } from './intent.ts';
+import { META_INSTRUCTION_RE, coordinatedMeasureLeftOut, parseQueryIntent } from './intent.ts';
 import { continuesPreviousTurn, refersBackToPeople, type FairHousingSession } from '../domain/fair-housing.ts';
 import { unknownWords } from '../domain/vocabulary.ts';
 import type { PortfolioPolicyConfig } from '../config/rules.ts';
@@ -528,7 +528,7 @@ function closedVocabulary(
         ? 'the question asks "how many" but the plan computed no count'
         : TWO_QUESTIONS_RE.test(asked) && figureCount(r) < 2
           ? 'the question asks two "how many" questions but the plan computed one figure'
-          : null;
+          : leftOutMeasure(asked, out, store);
   if (leftover && unparsed.length === 0) return out;
   if (why === null) return namedAlias(out, qRecord.question, store);
   if (unparsed.length > 0) {
@@ -557,6 +557,14 @@ function closedVocabulary(
 
 function withoutMetaInstructions(question: string): string {
   return question.normalize('NFKC').replace(/[\p{Cf}]/gu, '').replace(META_INSTRUCTION_RE, ' ');
+}
+
+/** A measure joined to another by "and" that the plan's measure does not name. */
+function leftOutMeasure(asked: string, out: ReturnType<typeof executeCompositionalPlan>, store: PortfolioStore): string | null {
+  const measure = (out.envelope.query?.intent as { measure?: string } | undefined)?.measure;
+  if (!measure) return null;
+  const missing = coordinatedMeasureLeftOut(asked, measure, store);
+  return missing ? `the question asks for two measures but the plan computed only one; "${missing}" has no figure` : null;
 }
 
 /** Two "how many" (or "how much") clauses joined in one question ask for two figures. */

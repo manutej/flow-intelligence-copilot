@@ -1603,6 +1603,40 @@ const MEASURE_NOUNS: ReadonlyArray<readonly [string, RegExp]> = [
   ['concession', /\b(?:concessions?)\b/gi],
   ['area', /\b(?:sq\.?\s*ft|sqft|square\s+(?:foot|feet))\b/gi],
 ];
+/**
+ * Two measures joined by a coordinator ("vacancy and renewal rate", "unit
+ * count & vacancy", "leads plus tours") ask for two figures. Returns the
+ * kind the plan's measure does not name, if any: a plan that computed one
+ * measure has answered only half of such a question.
+ */
+export function coordinatedMeasureLeftOut(question: string, measure: string, store: PortfolioStore): string | null {
+  // A composite measure ("void_and_duplicate_counts", "new_vs_renewal_and_concession") computes several figures.
+  if (/_and_|_vs_/.test(measure)) return null;
+  // Source and property names are not quantities ("Zillow and Rent.", "Marlowe Residences").
+  const labels = [...store.paidSources, ...store.organicSources, ...store.properties.flatMap((p) => [p.name, ...p.aka])].filter((l) => l.trim().length >= 2).sort((a, b) => b.length - a.length);
+  for (const l of labels) question = question.replace(new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeRegExp(l)}(?![\p{L}\p{N}])`, 'giu'), (m) => '_'.repeat(m.length));
+  const kinds: ReadonlyArray<readonly [string, RegExp]> = [...MEASURE_NOUNS, ['unit', /\b(?:units?|doors?)\b/gi]];
+  const hits: { kind: string; start: number; end: number; text: string }[] = [];
+  for (const [kind, re] of kinds) for (const m of question.matchAll(new RegExp(re.source, 'gi'))) hits.push({ kind, start: m.index!, end: m.index! + m[0].length, text: m[0] });
+  hits.sort((a, b) => a.start - b.start);
+  const named = measure.replace(/_/g, ' ');
+  const covers = (kind: string) => kinds.some(([k, re]) => k === kind && new RegExp(re.source, 'i').test(named)) || (MEASURE_CONSUMES[measure as IntentMeasure] ?? []).includes(kind);
+  for (let i = 0; i < hits.length; i++) {
+    for (let j = i + 1; j < hits.length; j++) {
+      const a = hits[i], b = hits[j];
+      if (b.start < a.end) continue;
+      // Only adjacent mentions coordinate: "occupied and vacant units" joins two states of one noun.
+      if (hits.some((h, k) => k !== i && k !== j && h.start >= a.end && h.end <= b.start)) break;
+      if (a.kind === b.kind) continue;
+      const between = question.slice(a.end, b.start);
+      if (!/^\s*(?:[\p{L}-]+\s+){0,2}?(?:and|&|plus|as\s+well\s+as)\s+(?:[\p{L}-]+\s+){0,2}?$/iu.test(between)) continue;
+      // "move-ins and leases" of one funnel stage pair are still two figures; only a measure that names both covers them.
+      for (const h of [a, b]) if (!covers(h.kind)) return h.text;
+    }
+  }
+  return null;
+}
+
 /** The nouns each marketing scalar names; a measure not listed is not checked. */
 const MEASURE_CONSUMES: Readonly<Partial<Record<IntentMeasure, readonly string[]>>> = {
   spend_total: ['spend'],
