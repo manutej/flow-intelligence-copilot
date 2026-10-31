@@ -56,6 +56,7 @@ declare module "node:fs" {
   export function cpSync(src: string, dest: string, options?: { recursive?: boolean }): void;
   export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
   export function appendFileSync(path: string, data: string): void;
+  export function renameSync(oldPath: string, newPath: string): void;
   const fsDefault: {
     readFileSync: typeof readFileSync;
     writeFileSync: typeof writeFileSync;
@@ -69,6 +70,7 @@ declare module "node:fs" {
     cpSync: typeof cpSync;
     rmSync: typeof rmSync;
     appendFileSync: typeof appendFileSync;
+    renameSync: typeof renameSync;
   };
   export default fsDefault;
 }
@@ -91,6 +93,7 @@ declare module "node:path" {
   export function extname(p: string): string;
   export function normalize(p: string): string;
   export function relative(from: string, to: string): string;
+  export const sep: string;
   const pathDefault: {
     resolve: typeof resolve;
     join: typeof join;
@@ -99,6 +102,7 @@ declare module "node:path" {
     extname: typeof extname;
     normalize: typeof normalize;
     relative: typeof relative;
+    sep: string;
   };
   export default pathDefault;
 }
@@ -109,6 +113,7 @@ declare module "node:crypto" {
   };
   export function randomBytes(size: number): Buffer;
   export function randomUUID(): string;
+  export function timingSafeEqual(a: Buffer, b: Buffer): boolean;
   export function scryptSync(password: string | Buffer, salt: string | Buffer, keylen: number): Buffer;
   export function createCipheriv(algorithm: string, key: Buffer, iv: Buffer): {
     update(data: string | Buffer, inputEncoding?: string): Buffer;
@@ -172,6 +177,7 @@ declare module "node:http" {
     [Symbol.asyncIterator](): AsyncIterator<Buffer | string>;
     on(event: "data", listener: (chunk: Buffer) => void): this;
     on(event: "end", listener: () => void): this;
+    destroy(error?: Error): void;
   }
   export interface ServerResponse {
     statusCode: number;
@@ -184,6 +190,7 @@ declare module "node:http" {
     listen(port: number, host: string, cb?: () => void): this;
     address(): import("node:net").AddressInfo | string | null;
     close(cb?: () => void): this;
+    once(event: "listening", listener: () => void): this;
   }
   export function createServer(
     handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>,

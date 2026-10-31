@@ -50,7 +50,7 @@ test('N3: numbers in words, year-shaped counts and figures in unit are rejected;
 async function boot() {
   const { createServer } = await import('../src/genui/server.ts');
   const srv = createServer().listen(0, '127.0.0.1');
-  await new Promise((r) => srv.once('listening', r));
+  await new Promise<void>((r) => srv.once('listening', () => r()));
   const port = (srv.address() as { port: number }).port; const base = `http://127.0.0.1:${port}`;
   const html = await (await fetch(base + '/')).text();
   const token = html.match(/name="genui-csrf" content="([^"]+)"/)?.[1] ?? '';

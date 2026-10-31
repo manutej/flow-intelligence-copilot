@@ -141,7 +141,7 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
   const items: EvidenceItem[] = [main];
   const m = intent.measure; const ag = intent.aggregation;
   const numKeys = Object.keys(res).filter((x) => typeof res[x] === 'number');
-  let k = primaryKey(res) ?? numKeys[0];
+  let k: string | undefined = primaryKey(res) ?? numKeys[0];
   let pre: EvidenceItem[] | null = null;
   if (!k && (ag === 'argmax' || ag === 'argmin')) {
     // the winner-only result: the breakdown supplies the measured key

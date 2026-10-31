@@ -5,7 +5,7 @@
  * fails, S2 falls back to the deterministic parser.
  * Run: node --no-warnings src/genui/server.ts  (PORT, default 4317)
  */
-import http from 'node:http';
+import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,8 +27,8 @@ type DraftState = 'draft' | 'pending_approval' | 'approved' | 'rejected';
 interface DraftAction { id: string; action_type: string; target: { label: string; entity_id?: string }; question: string; state: DraftState; created_at: string; updated_at?: string; draft_text: string; cites: Array<{ label: string; value: number; unit: string; source: { template_id: string; template: string; field: string } }>; prev_state?: DraftState }
 /** ISO 8601 with the box's own offset (UTC-6 for Manu). */
 const localIso = (d = new Date()) => { const o = -d.getTimezoneOffset(), a = Math.abs(o); return new Date(d.getTime() + o * 6e4).toISOString().slice(0, 19) + (o >= 0 ? '+' : '-') + String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0'); };
-const body = (req: http.IncomingMessage) => new Promise<any>((ok) => { let b = ''; req.on('data', (c) => { b += c; if (b.length > 1e5) req.destroy(); }); req.on('end', () => { try { ok(JSON.parse(b || '{}')); } catch { ok({}); } }); });
-const send = (res: http.ServerResponse, code: number, v: unknown, type = 'application/json') => { res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store' }); res.end(type === 'application/json' ? JSON.stringify(v) : v as Buffer); };
+const body = (req: IncomingMessage) => new Promise<any>((ok) => { let b = ''; req.on('data', (c: Buffer) => { b += c; if (b.length > 1e5) req.destroy(); }); req.on('end', () => { try { ok(JSON.parse(b || '{}')); } catch { ok({}); } }); });
+const send = (res: ServerResponse, code: number, v: unknown, type = 'application/json') => { res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store' }); res.end(type === 'application/json' ? JSON.stringify(v) : v as Buffer); };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.woff2': 'font/woff2', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain' };
 
 const canon = (x: unknown): string => JSON.stringify(x, (_k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v);
@@ -41,7 +41,7 @@ const LOCAL_HOST = /^(127\.0\.0\.1|localhost):\d+$/;
  * request any page could send), a loopback Host (blocks DNS rebinding), an Origin
  * equal to that host, and the per-process CSRF token served inside index.html.
  */
-function writeGuard(req: http.IncomingMessage, token: string): [number, string] | null {
+function writeGuard(req: IncomingMessage, token: string): [number, string] | null {
   if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return [415, 'application/json required'];
   const host = String(req.headers.host ?? '');
   if (!LOCAL_HOST.test(host) || req.headers.origin !== `http://${host}`) return [403, 'origin not allowed'];

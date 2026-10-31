@@ -77,7 +77,7 @@ test('genui: an ambiguous question gets a clarify card, never a chart', async ()
 test('genui action center: approve only marks a draft, undo restores it, and nothing is sent', async () => {
   const { createServer } = await import('../src/genui/server.ts');
   const srv = createServer().listen(0, '127.0.0.1');
-  await new Promise((r) => srv.once('listening', r));
+  await new Promise<void>((r) => srv.once('listening', () => r()));
   const base = `http://127.0.0.1:${(srv.address() as { port: number }).port}`;
   const token = (await (await fetch(base + '/')).text()).match(/name="genui-csrf" content="([^"]+)"/)![1];
   const j = async (u: string, body?: unknown) => (await fetch(base + u, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json', origin: base, 'x-genui-csrf': token }, body: JSON.stringify(body) })).json();
