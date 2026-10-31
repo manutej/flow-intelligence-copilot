@@ -101,6 +101,8 @@ export interface NonAnswerInput {
   readonly model_intent?: unknown;
   /** frame: the classifier's sealed {group, treatment} answers. */
   readonly frame?: { readonly group: string; readonly treatment: boolean };
+  /** session: the earlier question the Fair Housing guard refused. */
+  readonly refused_question?: string;
 }
 /** Closed: every origin has a re-render, and anything else is rejected. */
 export const NON_ANSWER_ORIGINS = ['deterministic', 'model', 'session', 'frame'] as const;
@@ -139,7 +141,7 @@ export function setNonAnswerRenderer(fn: Renderer): void {
 export function sealNonAnswer(input: NonAnswerInput, envelope: Rendered): { query: TypedQuery; proof: AnswerProof } {
   const kind = nonAnswerKind(envelope.result);
   return {
-    query: { question: input.question, intent: { non_answer: kind, origin: input.origin, ...(input.model_intent !== undefined ? { model_intent: input.model_intent } : {}), ...(input.frame !== undefined ? { frame: input.frame } : {}) } },
+    query: { question: input.question, intent: { non_answer: kind, origin: input.origin, ...(input.model_intent !== undefined ? { model_intent: input.model_intent } : {}), ...(input.frame !== undefined ? { frame: input.frame } : {}), ...(input.refused_question !== undefined ? { refused_question: input.refused_question } : {}) } },
     proof: { template_id: `non_answer.${kind}`, query_hash: seal(input, envelope), result_hash: hashOf(envelope.result), row_ids: [] },
   };
 }
@@ -163,6 +165,7 @@ export function nonAnswerErrors(envelope: AnswerEnvelope, store: PortfolioStore)
     origin: intent.origin as NonAnswerOrigin,
     ...('model_intent' in intent ? { model_intent: intent.model_intent } : {}),
     ...('frame' in intent ? { frame: intent.frame as NonAnswerInput['frame'] } : {}),
+    ...('refused_question' in intent ? { refused_question: intent.refused_question as string } : {}),
   };
   if (intent.non_answer !== kind || envelope.proof.template_id !== `non_answer.${kind}` || !sameHex(envelope.proof.query_hash, seal(input, envelope))) return [`The ${label} is not the one this process sealed for its question`];
   if (!renderer) return ['No renderer is registered to re-render the non-answer'];

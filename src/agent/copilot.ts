@@ -86,6 +86,7 @@ export async function askFlowIqCopilot(
   const question = typeof input === 'string' ? input : input.question;
   // A session refusal depends on earlier turns; note it before this turn sets state.
   const sessionRefused = !!sessionRefusal(options.session, question);
+  const refusedQuestion = options.session?.refusedQuestion;
   const t = await askUnsealed(input, options);
   const kind = nonAnswerKind(t.envelope.result as Record<string, unknown>);
   if (!kind) return t;
@@ -97,7 +98,7 @@ export async function askFlowIqCopilot(
     : t.parse && t.parsePath && t.parsePath !== 'deterministic' ? 'model'
     : t.frameAnswers && kind === 'refused' ? 'frame'
     : 'deterministic';
-  const sealInput: NonAnswerInput = { question, origin, ...(origin === 'model' ? { model_intent: t.parse!.intent } : {}), ...(origin === 'frame' ? { frame: t.frameAnswers! } : {}) };
+  const sealInput: NonAnswerInput = { question, origin, ...(origin === 'model' ? { model_intent: t.parse!.intent } : {}), ...(origin === 'frame' ? { frame: t.frameAnswers! } : {}), ...(origin === 'session' ? { refused_question: refusedQuestion ?? '' } : {}) };
   const envelope = { ...t.envelope, ...sealNonAnswer(sealInput, t.envelope) };
   return { ...t, envelope, verification: verifyAnswerEnvelope(envelope, store) };
 }
@@ -125,7 +126,12 @@ setNonAnswerRenderer((input, store) => {
   if (input.origin === 'session') {
     // Re-run the session predicate: it holds only for a turn that refers
     // back to the refused people or carries on from the refused turn.
-    const r = sessionRefusal({ refusedEarlier: true } as FairHousingSession, input.question);
+    // The sealed earlier question must itself be refused by the guard, and
+    // this question must refer back to it or carry on from it.
+    if (typeof input.refused_question !== 'string' || !checkFairHousingGuard(input.refused_question, store).refused) {
+      throw new Error('the sealed earlier question is not one the Fair Housing guard refuses');
+    }
+    const r = sessionRefusal({ refusedEarlier: true }, input.question);
     if (!r) throw new Error('the question does not carry on from a refused turn');
     return { answer: r.reason, result: { refused: true }, citations: r.citations };
   }
@@ -174,8 +180,12 @@ async function askUnsealed(
   const question = qRecord.question;
   const toolCalls: ToolCallTrace[] = [];
 
-  const fhCheck = sessionRefusal(options.session, question) ?? checkFairHousingGuard(question, store);
-  if (fhCheck.refused && options.session) options.session.refusedEarlier = true;
+  const inherited = sessionRefusal(options.session, question);
+  const fhCheck = inherited ?? checkFairHousingGuard(question, store);
+  if (fhCheck.refused && options.session) {
+    options.session.refusedEarlier = true;
+    if (!inherited) options.session.refusedQuestion = question;
+  }
   if (fhCheck.refused) {
     const envelope: AnswerEnvelope = {
       id: qRecord.id,

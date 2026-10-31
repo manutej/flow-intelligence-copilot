@@ -398,6 +398,8 @@ export function classifyFairHousingRequest(rawQuestion: string): FairHousingClas
  */
 export interface FairHousingSession {
   refusedEarlier: boolean;
+  /** The question the Fair Housing guard refused, which later turns inherit. */
+  refusedQuestion?: string;
 }
 
 /**
