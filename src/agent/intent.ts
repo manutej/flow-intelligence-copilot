@@ -1633,6 +1633,17 @@ const MEASURE_NOUNS: ReadonlyArray<readonly [string, RegExp]> = [
  * kind the plan's measure does not name, if any: a plan that computed one
  * measure has answered only half of such a question.
  */
+/** Words that open a restrictive clause: what follows filters, it is not a figure. */
+const FILTER_CLAUSE_RE = /\b(?:with|that|which|who|whose|where|excluding|without|not|except)\b/iu;
+
+/** True when every mention of `word` sits in a restrictive clause, so it filters rather than asks for a figure. */
+export function onlyInFilterClause(question: string, word: string): boolean {
+  const re = new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeRegExp(word)}(?![\p{L}\p{N}])`, 'giu');
+  const at = [...question.matchAll(re)];
+  const opener = new RegExp(`${FILTER_CLAUSE_RE.source}(?:\\s+[\\p{L}\\p{N}$.,-]+){0,3}\\s*$`, 'iu');
+  return at.length > 0 && at.every((m) => opener.test(question.slice(Math.max(0, m.index! - 24), m.index!)));
+}
+
 export function coordinatedMeasureLeftOut(question: string, measure: string, store: PortfolioStore): string | null {
   // A composite measure ("void_and_duplicate_counts", "new_vs_renewal_and_concession") computes several figures.
   if (/_and_|_vs_/.test(measure)) return null;
@@ -1654,6 +1665,10 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
       if (a.kind === b.kind) continue;
       const between = question.slice(a.end, b.start);
       if (!/^\s*(?:[\p{L}-]+\s+){0,2}?(?:and|&|plus|as\s+well\s+as)\s+(?:[\p{L}-]+\s+){0,2}?$/iu.test(between)) continue;
+      // A conjunct opened by a restrictive word ("with rent under $X", "that are
+      // occupied") is a filter on the one measure, not a second figure.
+      const before = question.slice(Math.max(0, a.start - 24), a.start);
+      if (FILTER_CLAUSE_RE.test(between.replace(/^.*?(?:and|&|plus|as\s+well\s+as)/i, '')) || new RegExp(`${FILTER_CLAUSE_RE.source}(?:\\s+[\\p{L}\\p{N}$.,-]+){0,3}\\s*$`, 'iu').test(before)) continue;
       // "move-ins and leases" of one funnel stage pair are still two figures; only a measure that names both covers them.
       for (const h of [a, b]) if (!covers(h.kind)) return h.text;
     }
