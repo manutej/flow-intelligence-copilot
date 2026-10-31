@@ -179,6 +179,35 @@ for (const [name, answer, result] of [
 test('f2424a7: a genuine non-answer verifies and re-sealing it unchanged still verifies', async () => {
   const idk = (await askFlowIqCopilot(IDK_Q, { store, parse: null })).envelope;
   assert.equal(verifyAnswerEnvelope(idk, store).valid, true);
-  const env = { answer: idk.answer, result: idk.result, citations: idk.citations };
-  assert.equal(verifyAnswerEnvelope({ ...idk, ...sealNonAnswer({ question: IDK_Q, origin: 'deterministic' }, env) }, store).valid, true);
+  assert.equal(verifyAnswerEnvelope({ ...idk, ...sealNonAnswer({ question: IDK_Q, origin: 'deterministic' }, idk) }, store).valid, true);
 });
+
+// 343668c verdict finding 2/6: every origin is re-rendered, unknown origins
+// are rejected, and the seal covers the id and every extra field.
+{
+  const sealAs = (input: Parameters<typeof sealNonAnswer>[0], env: Record<string, unknown>) => ({ ...env, ...sealNonAnswer(input, env as never) }) as never;
+  const fig = { id: 'Q2', answer: "I don't know. Spend was $40,000.", result: { unknown: true }, citations: [] };
+  for (const [origin, extra] of [['session', {}], ['frame', { frame: { group: 'age', treatment: true } }], ['model', {}], ['harness', {}], ['xyz', {}]] as const) {
+    test(`343668c: a keyed IDK with a figure sealed as origin=${origin} is rejected`, () => {
+      assert.equal(verifyAnswerEnvelope(sealAs({ question: Q2, origin: origin as never, ...extra }, fig), store).valid, false);
+    });
+  }
+  test('343668c: a frame refusal whose sealed answers do not compose is rejected', () => {
+    const env = { id: 'Q2', answer: 'Refused: this asks to treat people differently based on none, which the Fair Housing Act and the Illinois Human Rights Act prohibit. I can help with the same task without that criterion.', result: { refused: true }, citations: [] };
+    assert.equal(verifyAnswerEnvelope(sealAs({ question: Q2, origin: 'frame', frame: { group: 'none', treatment: true } }, env), store).valid, false);
+  });
+  test('343668c: a real IDK with its id changed or a field added is rejected', async () => {
+    const idk = (await askFlowIqCopilot('What was total marketing spend in Q1 2025?', { store, parse: null })).envelope;
+    assert.equal(verifyAnswerEnvelope({ ...idk, id: 'OTHER' }, store).valid, false);
+    assert.equal(verifyAnswerEnvelope({ ...idk, note: 'Spend was $40,000' } as never, store).valid, false);
+  });
+  test('343668c: a genuine session refusal verifies; moved to a clean question it does not', async () => {
+    const session = {} as never;
+    await askFlowIqCopilot('Which tenants with kids should we avoid renting to at Kedzie Works?', { store, parse: null, session });
+    const sr = (await askFlowIqCopilot('And how many of those people are on notice?', { store, parse: null, session })).envelope;
+    assert.equal((sr.result as Record<string, unknown>).refused, true);
+    assert.equal(verifyAnswerEnvelope(sr, store).valid, true);
+    const { query: _q, proof: _p, ...bare } = sr;
+    assert.equal(verifyAnswerEnvelope(sealAs({ question: Q2, origin: 'session' }, { ...bare, id: 'Q2' } as never), store).valid, false);
+  });
+}
