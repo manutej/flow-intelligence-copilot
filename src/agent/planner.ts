@@ -71,6 +71,16 @@ function buildExcludedOnboardingSuffix(store: PortfolioStore): string {
  * - Zero hardcoded prose numbers: every figure in `answer` is dynamically interpolated
  *   from the tool outputs and `store.policy`.
  */
+/** Every row tied with the first (already sorted) row on `key`. */
+function tiedAtTop<T>(sorted: readonly T[], key: (r: T) => number): T[] {
+  if (sorted.length === 0) return [];
+  const top = key(sorted[0]);
+  return sorted.filter((r) => Math.abs(key(r) - top) < 1e-9);
+}
+function listNames(names: readonly string[]): string {
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
 export function executeCompositionalPlan(
   qRecord: QuestionRecord,
   store: PortfolioStore,
@@ -595,7 +605,16 @@ export function executeCompositionalPlan(
             rows.flatMap((r) => r.citations).slice(0, 12),
           );
         }
-        const best = [...rows].sort((x, y) => (intent.aggregation === 'argmin' ? x.pct - y.pct : y.pct - x.pct) || x.source.localeCompare(y.source))[0];
+        const sortedT2l = [...rows].sort((x, y) => (intent.aggregation === 'argmin' ? x.pct - y.pct : y.pct - x.pct) || x.source.localeCompare(y.source));
+        const best = sortedT2l[0];
+        const tiedT2l = tiedAtTop(sortedT2l, (r) => r.pct);
+        if (tiedT2l.length > 1) {
+          return finalize(
+            `${scope} in ${mkt.windowLabel}, ${listNames(tiedT2l.map((r) => r.source))} tied for the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} tour-to-lease rate at ${best.pct.toFixed(1)}% (${tiedT2l.map((r) => `${r.source} ${r.leased} of ${r.toured}`).join(', ')} toured leads).`,
+            { source: best.source, tied_sources: tiedT2l.map((r) => r.source), percent: best.pct },
+            tiedT2l.flatMap((r) => r.citations).slice(0, 12),
+          );
+        }
         return finalize(
           `${scope} in ${mkt.windowLabel}, ${best.source} had the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} tour-to-lease rate at ${best.pct.toFixed(1)}% (${best.leased} of ${best.toured} toured leads).`,
           { source: best.source, percent: best.pct },
@@ -711,8 +730,17 @@ export function executeCompositionalPlan(
           );
         }
         const paid = rows.filter((r) => r.isPaidSource);
-        const best = [...paid].sort((x, y) => (intent.aggregation === 'argmin' ? x.costPerLeadUsd! - y.costPerLeadUsd! : y.costPerLeadUsd! - x.costPerLeadUsd!) || x.source.localeCompare(y.source))[0];
+        const sortedCpl = [...paid].sort((x, y) => (intent.aggregation === 'argmin' ? x.costPerLeadUsd! - y.costPerLeadUsd! : y.costPerLeadUsd! - x.costPerLeadUsd!) || x.source.localeCompare(y.source));
+        const best = sortedCpl[0];
         if (!best) return noOverall('cost per lead');
+        const tiedCpl = tiedAtTop(sortedCpl, (r) => r.costPerLeadUsd!);
+        if (tiedCpl.length > 1) {
+          return finalize(
+            `${scope} in ${mkt.windowLabel}, ${listNames(tiedCpl.map((r) => r.source))} tied for the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} cost per lead among paid sources at ${fmtUsd(best.costPerLeadUsd!)} (${tiedCpl.map((r) => `${r.source} ${fmtUsd(r.spendUsd)} spend / ${plural(r.leadsCreatedCount, 'deduplicated lead')}`).join(', ')}).`,
+            { source: best.source, tied_sources: tiedCpl.map((r) => r.source), usd: best.costPerLeadUsd },
+            tiedCpl.flatMap((r) => r.citations.slice(0, 4)).slice(0, 12),
+          );
+        }
         return finalize(
           `${scope} in ${mkt.windowLabel}, ${best.source} had the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} cost per lead among paid sources at ${fmtUsd(best.costPerLeadUsd!)} (${fmtUsd(best.spendUsd)} spend / ${plural(best.leadsCreatedCount, 'deduplicated lead')}).`,
           { source: best.source, usd: best.costPerLeadUsd },
@@ -763,7 +791,16 @@ export function executeCompositionalPlan(
         );
       }
       if (sourceMode === 'ranked') {
-        const best = [...eligible].sort((x, y) => (intent.aggregation === 'argmin' ? x.costPerTourUsd! - y.costPerTourUsd! : y.costPerTourUsd! - x.costPerTourUsd!) || x.source.localeCompare(y.source))[0];
+        const sortedCpt = [...eligible].sort((x, y) => (intent.aggregation === 'argmin' ? x.costPerTourUsd! - y.costPerTourUsd! : y.costPerTourUsd! - x.costPerTourUsd!) || x.source.localeCompare(y.source));
+        const best = sortedCpt[0];
+        const tiedCpt = tiedAtTop(sortedCpt, (r) => r.costPerTourUsd!);
+        if (tiedCpt.length > 1) {
+          return finalize(
+            `${scope} in ${mkt.windowLabel}, ${listNames(tiedCpt.map((r) => r.source))} tied for the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} cost per tour among paid sources at ${fmtUsd(best.costPerTourUsd!)} (${tiedCpt.map((r) => `${r.source} ${fmtUsd(r.spendUsd)} spend / ${plural(r.touredCount, 'tour')}`).join(', ')}).`,
+            { source: best.source, tied_sources: tiedCpt.map((r) => r.source), usd: best.costPerTourUsd },
+            tiedCpt.flatMap((r) => r.citations.slice(0, 4)).slice(0, 12),
+          );
+        }
         return finalize(
           `${scope} in ${mkt.windowLabel}, ${best.source} had the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} cost per tour among paid sources at ${fmtUsd(best.costPerTourUsd!)} (${fmtUsd(best.spendUsd)} spend / ${plural(best.touredCount, 'tour')}).`,
           { source: best.source, usd: best.costPerTourUsd },
@@ -913,6 +950,14 @@ export function executeCompositionalPlan(
           : `No paid source signed a lease across the matching buildings in ${mkt.windowLabel}, so no source has a defined cost per signed lease.`,
         { source: null, usd: null },
         isSingleBuilding ? propRes?.citations ?? [] : mkt.citations.slice(0, 8),
+      );
+    }
+    const tiedCpsl = tiedAtTop(eligible, (r) => r.exactCostPerSignedLeaseUsd ?? r.costPerSignedLeaseUsd!);
+    if (tiedCpsl.length > 1) {
+      return finalize(
+        `${isSingleBuilding ? `At ${buildingLabel(matchedPropIds)}` : scope} in ${mkt.windowLabel}, ${listNames(tiedCpsl.map((r) => r.source))} tied for the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${tiedCpsl.map((r) => `${r.source} ${fmtUsd(r.spendUsd)} spend / ${plural(r.signedLeasesInPeriod, 'signed lease')}`).join(', ')}).`,
+        { source: best.source, tied_sources: tiedCpsl.map((r) => r.source), usd: best.costPerSignedLeaseUsd! },
+        tiedCpsl.flatMap((r) => r.citations.slice(0, 4)).slice(0, 12),
       );
     }
     if (isSingleBuilding) {
