@@ -24,6 +24,11 @@ def score(log):
     return m[-1] if m else ('?', '?')
 print(f'| check | main {main} | HEAD |\n|---|---|---|')
 print(f'| npm run eval exit | {em} | {eh} |')
+# Intended diffs: answers whose numbers change on purpose. Each entry needs a
+# reason and the commit that made the change; it is still listed, not hidden.
+INTENDED = {
+    ('operadic-interview-bank', 'OI-40'): 'figures removed from the NOI non-answer note; non-answers may not add figures (fix 3, 62a2405, VERDICT-S2-c082279.md finding 3)',
+}
 reg = 0; rows = []
 for s in ['dev', 'test', 'heldout', 'operadic-interview-bank']:
     ks = [k for k in M if k[0] == s]
@@ -40,8 +45,10 @@ for s in ['dev', 'test', 'heldout', 'operadic-interview-bank']:
         elif m['answer'] != h['answer']:
             same = m['numbers'] == h['numbers']
             kept = h['numbers'][:len(m['numbers'])] == m['numbers']
-            if not kept and m['correct'] is not False: reg += 1
+            intended = INTENDED.get(k) if h['correct'] is True else None
+            if not kept and m['correct'] is not False and not intended: reg += 1
             how = 'same' if same else 'kept, more added' if kept else 'CHANGED'
+            if intended and not kept: how += f' (intended: {intended})'
             rows.append((k, f"wording changed, numbers {how}; main={m['correct']} head={h['correct']}"))
 print(f'\nregressions: {reg}')
 for k, why in rows: print(f'- {k[0]}/{k[1]}: {why}')
