@@ -35,7 +35,8 @@ people persons person lessee lessees leaseholder leaseholders folks prospect pro
 const PEOPLE = /\b(?:tenants?|residents?|renters?|applicants?|occupants?|households?|people|persons?|lessees?|leaseholders?|folks|prospects?)\b/;
 const LOOKUP_VERB = /\b(?:which|who|whom|whose|list|show|find|name|identify|flag|count|display|pull\s+up|look\s+up|how\s+many|what)\b/;
 /** Counting, summing or asking to be given people's rows by a trait is a lookup of them too. */
-const AGGREGATE = /\b(?:number\s+of|count|total|sum|average|avg|mean|share|percent(?:age)?|give|get|send|provide|export|tell|need|want)\b/;
+const REQUEST_VERBS = ['give', 'get', 'send', 'provide', 'export', 'tell', 'need', 'want', 'fetch', 'share'];
+const AGGREGATE = new RegExp(`\\b(?:number\\s+of|count|total|sum|average|avg|mean|percent(?:age)?|${REQUEST_VERBS.join('|')})\\b`);
 /** "who at Kedzie Works ...", "who here is ...": a person lookup with no people noun. */
 const WHO_LOOKUP = /^\s*(?:and\s+|so\s+|now\s+)?who\b/;
 /** "who covers ... for the leasing team": a bare who about the operator's own staff is not a resident lookup. */
@@ -93,6 +94,19 @@ const FILLER = 'hey hi hello um uh er hmm ok okay so basically actually kindly p
 const isTrait = (w: string) => PROTECTED_CLASS_RULES.some((r) => r.pattern.test(w));
 
 const vocabularies = new WeakMap<PortfolioStore, Set<string>>();
+/** Resident-level records, from the schema: the tables keyed to a resident or a lease
+ * (leases, leads), the tables their own ids point at (units), and the columns of the first two. */
+const RECORD_NOUNS: ReadonlySet<string> = (() => {
+  const files = Object.entries(REQUIRED_COLUMNS);
+  const base = (f: string) => f.replace(/^.*\//, '').replace(/\.csv$/, '');
+  const person = files.filter(([, cols]) => cols.some((c) => c === 'resident_id' || c === 'lease_id'));
+  const linked = person.flatMap(([, cols]) => cols.filter((c) => /_id$/.test(c) && c !== 'property_id').map((c) => c.replace(/_id$/, '')));
+  const out = new Set<string>();
+  const add = (w: string) => { for (const t of tokens(w.replace(/_/g, ' '))) { if (t === 'id') continue; out.add(t); out.add(stem(t)); } };
+  for (const [f, cols] of person) { add(base(f)); for (const c of cols) if (!/_id$/.test(c)) add(c); }
+  for (const t of linked) { add(t); add(`${t}s`); }
+  return out;
+})();
 /** Column names and data values only (not grammar or filler): the things a measure can be. */
 const schemaNouns = new WeakMap<PortfolioStore, Set<string>>();
 /** Every column name and every categorical value in the store, as stems. */
@@ -111,7 +125,7 @@ export function schemaVocabulary(store: PortfolioStore): Set<string> {
   schemaNouns.set(store, new Set(words));
   // the words the question parser itself reads (its closed vocabulary and structure words),
   // dates, and filler: none is an attribute of a person
-  for (const w of [...FIXED, ...STRUCTURE_WORDS, ...MONTHS, ...FILLER]) if (!isTrait(w)) { words.add(w); words.add(stem(w)); }
+  for (const w of [...FIXED, ...STRUCTURE_WORDS, ...MONTHS, ...FILLER, ...REQUEST_VERBS]) if (!isTrait(w)) { words.add(w); words.add(stem(w)); }
   for (const w of [...words]) if (isTrait(w)) words.delete(w);
   vocabularies.set(store, words);
   return words;
@@ -132,6 +146,12 @@ const known = (w: string, vocab: Set<string>) => w.length < 2 || GRAMMAR.has(w) 
  * ("family-size units"), not people, and names no category.
  */
 export function personAttributeLookup(question: string, store: PortfolioStore): PersonAttributeLookup | null {
+  return analyzePersonLookup(question, store).lookup;
+}
+
+/** The lookup, and the class words used only as modifiers of staff or data nouns when there is no
+ * lookup: returned together so concurrent requests share no state. */
+export function analyzePersonLookup(question: string, store: PortfolioStore): { lookup: PersonAttributeLookup | null; ambiguous: string[] } {
   // the words are read from the question as typed (lowercased, NFKC), not from the leet-folded
   // fair-housing text, so "Q3" stays a period token instead of becoming "qe"
   const text = correctCategoryTypos(question.normalize('NFKC').toLowerCase().replace(/[\u2018\u2019]/g, "'"));
@@ -145,6 +165,7 @@ export function personAttributeLookup(question: string, store: PortfolioStore): 
     // a protected-class match anywhere in the sentence (not one describing a thing, "family-size
     // units") switches the scope rules off: staff "who" and "X from residents" still refuse
     const hits = new Map<ProtectedClassRule, string[]>();
+    let onRecord = false;
     for (const r of PROTECTED_CLASS_RULES) {
       const re = new RegExp(r.pattern.source, 'gi');
       for (const m of [...s.matchAll(re), ...normalizeForFairHousing(s).matchAll(re)]) {
@@ -157,12 +178,14 @@ export function personAttributeLookup(question: string, store: PortfolioStore): 
         // a one-word match that modifies a staff noun or a data noun ("senior property manager",
         // "polish vendor"), or is the head of a measure ("rent recovery"), describes a thing: it is
         // ambiguous, so it asks which was meant instead of refusing
-        if (span.length < 2 && modifiesThing(s, m.index ?? 0, m[0].length, store)) { ambiguous.add(span[0]); continue; }
+        const sits = span.length < 2 ? modifiesThing(s, m.index ?? 0, m[0].length, store) : null;
+        if (sits === 'thing') { ambiguous.add(span[0]); continue; }
+        if (sits === 'record') onRecord = true;
         hits.set(r, [...(hits.get(r) ?? []), ...span]);
       }
     }
     const scopedLookup = asksAboutPeople(ws, vocab) || (WHO_LOOKUP.test(s) && !staffOf(s));
-    const traitLookup = hits.size > 0 && (asksAboutPeople(ws, vocab, false) || WHO_LOOKUP.test(s) || ((LOOKUP_VERB.test(s) || AGGREGATE.test(s)) && namesPeople(s)));
+    const traitLookup = hits.size > 0 && (onRecord || asksAboutPeople(ws, vocab, false) || WHO_LOOKUP.test(s) || ((LOOKUP_VERB.test(s) || AGGREGATE.test(s)) && namesPeople(s)));
     if (!scopedLookup && !traitLookup) continue;
     const miss = ws.filter((w) => !known(w, vocab));
     if (!miss.length && !hits.size) continue;
@@ -170,25 +193,28 @@ export function personAttributeLookup(question: string, store: PortfolioStore): 
     for (const [r, span] of hits) { classes.add(r); for (const w of span) if (!known(w, vocab)) unknown.add(w); }
     if (!unknown.size) for (const [, span] of hits) unknown.add(span.join(' '));
   }
-  lastAmbiguous = unknown.size ? [] : [...ambiguous];
-  return unknown.size ? { unknown: [...unknown], classes: [...classes] } : null;
+  return unknown.size ? { lookup: { unknown: [...unknown], classes: [...classes] }, ambiguous: [] } : { lookup: null, ambiguous: [...ambiguous] };
 }
-let lastAmbiguous: string[] = [];
 
 /** Class words the question uses only as a modifier of a staff or data noun, when nothing else
  * makes it a lookup of people: the panel asks which reading was meant. */
 export function ambiguousTraitWords(question: string, store: PortfolioStore): string[] {
-  return personAttributeLookup(question, store) ? [] : lastAmbiguous;
+  return analyzePersonLookup(question, store).ambiguous;
 }
 
-function modifiesThing(s: string, at: number, len: number, store: PortfolioStore): boolean {
+/** How a one-word class match sits: on a resident-level record (a lookup of people), on a staff
+ * or data noun (a thing), or neither. */
+function modifiesThing(s: string, at: number, len: number, store: PortfolioStore): 'record' | 'thing' | null {
   const nouns = schemaNouns.get(store) ?? new Set<string>();
   const isNoun = (w?: string) => !!w && (nouns.has(w) || nouns.has(stem(w))) && !PEOPLE.test(w) && !FUNCTION.has(w);
+  const isRecord = (w?: string) => !!w && (RECORD_NOUNS.has(w) || RECORD_NOUNS.has(stem(w)));
   const after = s.slice(at + len).replace(/^-/, ' ');
   const next = tokens(after);
   const prev = tokens(s.slice(0, at)).at(-1);
-  if (next[0] && PEOPLE.test(next[0])) return false;
-  if (staffOf(` ${next.slice(0, 2).join(' ')}`) && (staffOf(` ${next[0]}`) || isNoun(next[0]))) return true;
-  if (isNoun(next[0])) return true;
-  return isNoun(prev);
+  if (next[0] && PEOPLE.test(next[0])) return null;
+  if (staffOf(` ${next.slice(0, 2).join(' ')}`)) return 'thing';
+  // a data noun before it makes the word part of that thing's name ("two bedroom family units")
+  if (isNoun(prev)) return 'thing';
+  if (isRecord(next[0])) return 'record';
+  return isNoun(next[0]) ? 'thing' : null;
 }
