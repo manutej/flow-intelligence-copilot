@@ -491,10 +491,10 @@ function withClarify(
 function periodClarify(question: string, store: PortfolioStore): ClarifyOption[] | undefined {
   const m = UNSPECIFIED_PERIOD_RE.exec(question);
   if (!m || parseQueryIntent(question, store).dateExplicit) return undefined;
-  const lead = /^\s*(?:for|in|over|during|across)\b/i.test(m[0]) ? '' : 'in ';
   return Object.values(DATE_WINDOWS).map((w) => {
     const named = w.label.replace(/\s*\(.*\)$/, '');
-    const q = `${question.slice(0, m.index)}${m[0].match(/^\s*(?:for|in|over|during|across)\b/i)?.[0] ?? ''} ${lead}${named}${question.slice(m.index + m[0].length)}`.replace(/\s+/g, ' ').replace(/\s+([?.!,])/g, '$1');
+    // The phrase and its preposition become "in <window>", the form every window parses from.
+    const q = `${question.slice(0, m.index)} in ${named}${question.slice(m.index + m[0].length)}`.replace(/\s+/g, ' ').replace(/\s+([?.!,])/g, '$1').trim();
     const query = parseQueryIntent(q, store);
     return { label: `${named}: ${restate(query, q, store).replace(/^I computed: /, '').replace(/\.$/, '')}`, question: q, query };
   });
