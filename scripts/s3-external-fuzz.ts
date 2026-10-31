@@ -69,13 +69,16 @@ for (const q of qs) {
     // Non-answers sealed with this process's key onto this answerable
     // question: another question's genuine IDK, small and spelled-out
     // figures, a clarify with a figure; plus an unsealed IDK.
-    const sealed = (answer: string, result: Record<string, unknown>) => ({ id: e.id, answer, result, citations: [], ...sealNonAnswer({ question: q, origin: 'deterministic' }, { answer, result, citations: [] }) });
+    const sealed = (answer: string, result: Record<string, unknown>, origin: 'deterministic' | 'session' | 'model' = 'deterministic') => { const env = { id: e.id, answer, result, citations: [] }; return { ...env, ...sealNonAnswer({ question: q, origin }, env) }; };
     const forgeries = [
       ...(lastIdk ? [sealed(lastIdk.answer, lastIdk.result)] : []),
       { id: e.id, answer: "I don't know.", result: { unknown: true }, citations: [] },
       sealed("I don't know. Fulton Yards has 7 vacant units.", { unknown: true }),
       sealed("I don't know. Spend was forty thousand dollars.", { unknown: true }),
       sealed('Spend was $40,000 — did you mean Q2 or Q3?', { unknown: true, clarification_needed: true }),
+      // A session refusal with no refused earlier turn, and an unknown origin.
+      sealed('Refused: earlier in this conversation I refused a request to treat a group of people differently, and this refers back to those people. I can answer the same question without them, for example "How many studios are vacant at Kedzie Works?".', { refused: true }, 'session'),
+      { ...sealed("I don't know.", { unknown: true }), query: { question: q, intent: { non_answer: 'unknown', origin: 'harness' } } },
     ];
     for (const f of forgeries) { idkForged++; if (verifyAnswerEnvelope(f as AnswerEnvelope, store).valid) idkForgedAccepted++; }
   } else if (nonAnswerKind(e.result as Record<string, unknown>)) {
