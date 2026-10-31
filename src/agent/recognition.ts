@@ -62,7 +62,7 @@ export function findUnknownBuildingReference(
 }
 
 const LOCATIVE_RE =
-  /\b(?:[Aa]t|[Ff]or|[Dd]oes|[Ii]n|[Oo]f|[Ff]rom|[Tt]o|[Aa]bout)\s+(?:[Tt]he\s+)?((?:[A-Z][\w&'.-]*\s+)*[A-Z][\w&'.-]*)/g;
+  /\b(?:[Aa]t|[Ff]or|[Dd]oes|[Ii]n|[Oo]f|[Ff]rom|[Tt]o|[Aa]bout|[Nn]ear|[Bb]y)\s+(?:[Tt]he\s+)?((?:[A-Z][\w&'.-]*\s+)*[A-Z][\w&'.-]*)/g;
 
 /**
  * The planner's last check before it scopes a figure: a capitalised place
@@ -103,7 +103,7 @@ export function findUnresolvedPlace(question: string, store: PortfolioStore): st
 }
 
 const LOWER_LOCATIVE_RE =
-  /\b(?:at|for|in|of|from|about)\s+(?:the\s+)?([\p{L}&'’.-]+(?:\s+[\p{L}&'’.-]+){0,3})/giu;
+  /\b(?:at|for|in|of|from|about|near)\s+(?:the\s+)?([\p{L}&'’.-]+(?:\s+[\p{L}&'’.-]+){0,3})/giu;
 const GENERIC_PLACE_WORD = /^(?:the|and|&|buildings?|apartments?|units?|propert(?:y|ies)|communit(?:y|ies)|homes?)$/i;
 const PLACE_STOP_RE =
   /^(?:in|for|at|of|from|to|about|on|during|by|with|over|and|or|vs\.?|versus|than|per|across|this|last|next|since|between|before|after|as|when|vs)$/i;

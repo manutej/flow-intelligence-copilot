@@ -1,6 +1,6 @@
 import type { AnswerEnvelope, PortfolioStore } from '../data/schema.ts';
 import { resolvePropertiesFromText } from '../domain/resolver.ts';
-import { findUnknownBuildingReference } from './recognition.ts';
+import { findUnknownBuildingReference, findUnresolvedPlace } from './recognition.ts';
 import { unboundNegators } from './closed-world.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 
@@ -60,6 +60,39 @@ export function restate(intent: ParsedQueryIntent, question: string, store: Port
   return `I computed: ${what}${filters.length ? `, ${filters.join(', ')}` : ''}, at ${scope}.`;
 }
 
+/** Words that carry the ask itself: a ranking, a comparison, a cause or a "why". */
+const ASK_WORD = /^(?:highest|lowest|most|least|top|bottom|best|worst|slowest|fastest|largest|smallest|biggest|rank|ranks|ranking|ranked|vs|versus|compare|compared|comparison|move|moved|moving|change|changed|trend|trending|why|affect|affects|impact|impacts|cause|causes|drive|drives)$/i;
+
+/**
+ * A reading that removes the place or the ask answers a different question:
+ * "vacant units at Riverside" read for the portfolio, "which property has
+ * the highest vacancy" read as one count. No reading is offered when the
+ * question names a place that resolves to no building, when a dropped word
+ * stands where a place does (after at/near/for/in, or a capitalised word
+ * inside a sentence), when an unresolved capitalised name sits in the
+ * question, or when a dropped word is the ranking, comparison or cause.
+ */
+function dropsPlaceOrAsk(question: string, unbound: readonly string[], store: PortfolioStore): boolean {
+  if (findUnresolvedPlace(question, store)) return true;
+  if (unbound.some((w) => ASK_WORD.test(w))) return true;
+  const labels = store.properties.flatMap((p) => [p.name, ...p.aka]).map((l) => l.toLowerCase());
+  const labelWords = new Set(labels.flatMap((l) => l.split(/\s+/)));
+  for (const w of unbound) {
+    const at = new RegExp(`\\b(?:at|near|for|in|by|around)\\s+(?:the\\s+)?(?:[\\p{L}'’&-]+\\s+){0,2}${escape(w)}(?![\\p{L}\\p{N}])`, 'iu');
+    if (at.test(question)) return true;
+    const cap = new RegExp(`(?<=[\p{L}\p{N},;]\s+)(${escape(w)})(?![\p{L}\p{N}])`, 'giu');
+    for (const m of question.matchAll(cap)) if (/^\p{Lu}/u.test(m[1])) return true;
+  }
+  // A capitalised name of two or more words inside the sentence ("the
+  // Market Square retail vacancy") that is no building's name or alias.
+  for (const m of question.matchAll(/(?<=[\p{L}\p{N},;]\s+)(\p{Lu}[\p{L}'’]+(?:\s+\p{Lu}[\p{L}'’]+)+)/gu)) {
+    const phrase = m[1].toLowerCase();
+    if (labels.some((l) => l === phrase || l.endsWith(phrase) || l.replace(/^the\s+/, '') === phrase)) continue;
+    if (phrase.split(/\s+/).some((w) => !labelWords.has(w))) return true;
+  }
+  return false;
+}
+
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** 2-4 typed readings of a question whose words `unbound` no field carries. */
@@ -70,6 +103,7 @@ export function clarifyOptions(question: string, unbound: readonly string[], sto
   // An unknown building has no reading: guessing one by a shared word, or
   // widening to the portfolio, answers a different question.
   if (findUnknownBuildingReference(question, store)) return [];
+  if (dropsPlaceOrAsk(question, unbound, store)) return [];
   if (unboundNegators(question).length > 0) return negatedStatusOptions(question, store);
   const quoted = unbound.map((w) => `"${w}"`).join(', ');
   let stripped = question;
