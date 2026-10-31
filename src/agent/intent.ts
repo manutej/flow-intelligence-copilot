@@ -1666,6 +1666,11 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
     ['occupancy', /\boccupancy\b/gi],
     ['vacancy', /\bvacan(?:cy|cies)\b/gi],
     ['resident', /\boccupants?\b/gi],
+    // A unit noun headed or described by a status ("occupied units", "units
+    // that are vacant") counts units in that status: a count of its own, which
+    // a rate does not report. A status word that modifies another measure
+    // ("vacant ___ rent") is not matched here and stays a filter.
+    ['status_count', /\b(?:(?:vacant|occupied|notice)(?:\s+(?:or|and)\s+(?:vacant|occupied|notice))?\s+(?:units?|doors?)|(?:units?|doors?)\s+(?:that|which)\s+(?:are|were)\s+(?:currently\s+|still\s+|now\s+)?(?:vacant|occupied))\b/gi],
     ['unit', /\b(?:units?|doors?)\b/gi],
   ];
   // A bedroom or unit-type phrase, and a unit status set aside, filter the population.
@@ -1684,6 +1689,8 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
     // The tail of a hyphenated compound ("zero-lease spend") modifies the noun after it.
     if (/[\p{L}\p{N}]-$/u.test(before)) return true;
     if (/\b(?:along|together)\s+with\s+(?:the\s+)?$/iu.test(before)) return false;
+    // "number of ___", "count of ___" names the figure itself, not a filter.
+    if (/\b(?:number|count|total|tally)\s+of\s+(?:the\s+)?$/iu.test(before)) return false;
     // An indefinite or negated object of having or awaiting ("have no renewal
     // decision", "pending a renewal decision", "no leases") is an existence filter.
     if (/(?:\b(?:pending|awaiting|ha(?:ve|s|ving)|with(?:out)?)\s+(?:a|an|no|any)|\bno)\s+$/iu.test(before)) return true;
@@ -1759,7 +1766,7 @@ const MEASURE_REPORTS: Readonly<Partial<Record<IntentMeasure, readonly string[]>
   renewal_rate: ['renewal', 'lease'],
   ending_and_renewed: ['renewal', 'lease'],
   lease_count: ['lease'],
-  unit_count: ['unit', 'resident'],
+  unit_count: ['unit', 'resident', 'status_count'],
   vacancy_rate: ['vacancy', 'unit'],
   occupied_share: ['occupancy', 'unit'],
 };

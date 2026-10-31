@@ -1544,7 +1544,7 @@ export function executeCompositionalPlan(
         : nonZeroProps[0];
     const statusLabel = intent.unitStatus ?? 'matching';
     return finalize(
-      `${propRow.propertyName} (${propRow.propertyId}) has ${propRow.filteredUnitCount} ${statusLabel} units (out of ${propRow.totalUnits} total units).`,
+      `${propRow.propertyName} (${propRow.propertyId}) has ${propRow.filteredUnitCount} ${statusLabel} units (${unitFilterLabel(intent).trim() ? `${unitFilterLabel(intent).trim()}; ` : ''}out of ${propRow.totalUnits} total units).`,
       'property_id' in schema || /\bwhich\s+building\b/i.test(question)
         ? {
             property_id: propRow.propertyId,
