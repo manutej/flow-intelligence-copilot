@@ -23,7 +23,7 @@ import {
   resolveModelHarnessConfig,
   runUniversalModelHarness,
 } from './model-harness.ts';
-import { classifyFrame, frameModelConfig } from './frame-model.ts';
+import { classifyFrame, composeFrame, frameModelConfig, PROTECTED_GROUPS, type FrameAnswers, type ProtectedGroup } from './frame-model.ts';
 import { executeCompositionalPlan } from './planner.ts';
 import { coverage, modelParse, parseConfigFromEnv, toIntent, type ModelParse, type ParseConfig } from './model-parse.ts';
 import type { RunStore } from './run-store.ts';
@@ -52,6 +52,8 @@ export interface CopilotTurnResult {
   readonly clarificationNeeded: boolean;
   readonly clarifyingQuestion: string | null;
   readonly clarifyOptions?: readonly ClarifyOption[];
+  /** The frame model's answers when it added a refusal (sealed for re-render). */
+  readonly frameAnswers?: { readonly group: string; readonly treatment: boolean };
   readonly restatement?: string;
   /** S2: which parser produced the executed query, and why the model was not used. */
   readonly parsePath?: ModelParse['path'];
@@ -89,11 +91,13 @@ export async function askFlowIqCopilot(
   if (!kind) return t;
   // Seal every refusal, "I don't know" and clarify to what it was rendered from.
   const store = options.store && !options.policy ? options.store : loadPortfolioStore(undefined, options.policy);
+  // A tool-calling harness non-answer has no re-render of its own: it is
+  // sealed as deterministic, so it verifies only if it is the model-off turn.
   const origin: NonAnswerInput['origin'] = sessionRefused && kind === 'refused' ? 'session'
     : t.parse && t.parsePath && t.parsePath !== 'deterministic' ? 'model'
-    : t.modeUsed === 'llm' && !t.parse ? (t.providerUsed === 'openrouter' && kind === 'refused' ? 'frame' : 'harness')
+    : t.frameAnswers && kind === 'refused' ? 'frame'
     : 'deterministic';
-  const sealInput: NonAnswerInput = { question, origin, ...(origin === 'model' ? { model_intent: t.parse!.intent } : {}) };
+  const sealInput: NonAnswerInput = { question, origin, ...(origin === 'model' ? { model_intent: t.parse!.intent } : {}), ...(origin === 'frame' ? { frame: t.frameAnswers! } : {}) };
   const envelope = { ...t.envelope, ...sealNonAnswer(sealInput, t.envelope) };
   return { ...t, envelope, verification: verifyAnswerEnvelope(envelope, store) };
 }
@@ -107,8 +111,31 @@ export function deterministicTurn(qRecord: QuestionRecord, store: PortfolioStore
   return runDeterministicToolRouter(qRecord, store).envelope;
 }
 
+/** The frame model's refusal, rendered from its sealed group answer. */
+function frameRefusal(group: string): Pick<AnswerEnvelope, 'answer' | 'result' | 'citations'> {
+  return {
+    answer: `Refused: this asks to treat people differently based on ${group.replace(/_/g, ' ')}, which the Fair Housing Act and the Illinois Human Rights Act prohibit. I can help with the same task without that criterion.`,
+    result: { refused: true },
+    citations: [],
+  };
+}
+
 setNonAnswerRenderer((input, store) => {
   const qRecord: QuestionRecord = { id: 'RENDER', type: 'adhoc', question: input.question };
+  if (input.origin === 'session') {
+    // Re-run the session predicate: it holds only for a turn that refers
+    // back to the refused people or carries on from the refused turn.
+    const r = sessionRefusal({ refusedEarlier: true } as FairHousingSession, input.question);
+    if (!r) throw new Error('the question does not carry on from a refused turn');
+    return { answer: r.reason, result: { refused: true }, citations: r.citations };
+  }
+  if (input.origin === 'frame') {
+    const f = input.frame;
+    if (!f || typeof f.group !== 'string' || typeof f.treatment !== 'boolean' || !PROTECTED_GROUPS.includes(f.group as ProtectedGroup) || !composeFrame({ group: f.group, treatment: f.treatment } as FrameAnswers)) {
+      throw new Error('the sealed frame answers do not compose to a refusal');
+    }
+    return frameRefusal(f.group);
+  }
   if (input.origin === 'model') {
     const fh = checkFairHousingGuard(input.question, store);
     if (fh.refused || checkUnknownDataGuard(input.question, store).unknown) return deterministicTurn(qRecord, store);
@@ -207,14 +234,10 @@ async function askUnsealed(
   if (frameCfg || process.env.FLOWIQ_FRAME_MODEL) {
     const frame = await classifyFrame(question);
     frameFallback = frame.fallbackReason;
-    if (frame.refuse) {
-      const envelope: AnswerEnvelope = {
-        id: qRecord.id,
-        answer: `Refused: this asks to treat people differently based on ${frame.answers?.group.replace(/_/g, ' ')}, which the Fair Housing Act and the Illinois Human Rights Act prohibit. I can help with the same task without that criterion.`,
-        result: { refused: true },
-        citations: [],
-      };
+    if (frame.refuse && frame.answers) {
+      const envelope: AnswerEnvelope = { id: qRecord.id, ...frameRefusal(frame.answers.group) };
       return {
+        frameAnswers: { group: frame.answers.group, treatment: frame.answers.treatment },
         envelope,
         toolCalls,
         clarificationNeeded: false,

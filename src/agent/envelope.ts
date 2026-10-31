@@ -2,8 +2,9 @@ import * as nodeCrypto from 'node:crypto';
 import { createHash, randomBytes } from 'node:crypto';
 
 // The pinned @types/node predates createHmac's export; it exists at runtime.
-const { createHmac } = nodeCrypto as unknown as {
+const { createHmac, timingSafeEqual } = nodeCrypto as unknown as {
   createHmac(alg: string, key: unknown): { update(data: string): { digest(enc: 'hex'): string } };
+  timingSafeEqual(a: unknown, b: unknown): boolean;
 };
 import type { AnswerEnvelope, AnswerProof, PortfolioStore, TypedQuery } from '../data/schema.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
@@ -96,17 +97,37 @@ export const nonAnswerKind = (r: Readonly<Record<string, unknown>> | undefined):
  */
 export interface NonAnswerInput {
   readonly question: string;
-  readonly origin: 'deterministic' | 'model' | 'session' | 'frame' | 'harness';
+  readonly origin: NonAnswerOrigin;
   readonly model_intent?: unknown;
+  /** frame: the classifier's sealed {group, treatment} answers. */
+  readonly frame?: { readonly group: string; readonly treatment: boolean };
 }
+/** Closed: every origin has a re-render, and anything else is rejected. */
+export const NON_ANSWER_ORIGINS = ['deterministic', 'model', 'session', 'frame'] as const;
+export type NonAnswerOrigin = (typeof NON_ANSWER_ORIGINS)[number];
 type Rendered = Pick<AnswerEnvelope, 'answer' | 'result' | 'citations'>;
 type Renderer = (input: NonAnswerInput, store: PortfolioStore) => Rendered;
 
 // Per-process key: a seal proves this process rendered the turn. A
 // FLOWIQ_SEAL_KEY lets separate processes (replays, audits) share it.
-const SEAL_KEY = process.env.FLOWIQ_SEAL_KEY ? Buffer.from(process.env.FLOWIQ_SEAL_KEY) : randomBytes(32);
+// A shared key must be hex and at least 32 bytes; a short one is refused.
+function sealKey(): Buffer {
+  const raw = process.env.FLOWIQ_SEAL_KEY;
+  if (!raw) return randomBytes(32);
+  if (!/^(?:[0-9a-f]{2}){32,}$/i.test(raw)) throw new Error('FLOWIQ_SEAL_KEY must be at least 32 bytes, hex-encoded (64+ hex characters)');
+  return Buffer.from(raw, 'hex');
+}
+const SEAL_KEY = sealKey();
+// The seal covers the whole envelope (id and any extra field) except the
+// proof and query it is carried in; those are bound through the input.
+const sealed = (env: Rendered & Record<string, unknown>) => {
+  const { proof: _p, query: _q, ...rest } = env as Record<string, unknown>;
+  return { ...rest, citations: env.citations ?? null };
+};
 const seal = (input: NonAnswerInput, env: Rendered) =>
-  createHmac('sha256', SEAL_KEY).update(hashOf({ input, answer: env.answer, result: env.result, citations: env.citations ?? null })).digest('hex');
+  createHmac('sha256', SEAL_KEY).update(hashOf({ input, envelope: sealed(env as Rendered & Record<string, unknown>) })).digest('hex');
+const sameHex = (a: unknown, b: string) =>
+  typeof a === 'string' && a.length === b.length && timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
 const rendered = (env: Rendered) => hashOf({ answer: env.answer, result: env.result, citations: env.citations ?? null });
 
 let renderer: Renderer | null = null;
@@ -118,7 +139,7 @@ export function setNonAnswerRenderer(fn: Renderer): void {
 export function sealNonAnswer(input: NonAnswerInput, envelope: Rendered): { query: TypedQuery; proof: AnswerProof } {
   const kind = nonAnswerKind(envelope.result);
   return {
-    query: { question: input.question, intent: { non_answer: kind, origin: input.origin, ...(input.model_intent !== undefined ? { model_intent: input.model_intent } : {}) } },
+    query: { question: input.question, intent: { non_answer: kind, origin: input.origin, ...(input.model_intent !== undefined ? { model_intent: input.model_intent } : {}), ...(input.frame !== undefined ? { frame: input.frame } : {}) } },
     proof: { template_id: `non_answer.${kind}`, query_hash: seal(input, envelope), result_hash: hashOf(envelope.result), row_ids: [] },
   };
 }
@@ -136,9 +157,14 @@ export function nonAnswerErrors(envelope: AnswerEnvelope, store: PortfolioStore)
   const q = envelope.query as (TypedQuery & { intent?: Record<string, unknown> }) | undefined;
   const intent = (q?.intent ?? {}) as Record<string, unknown>;
   if (!q || typeof q.question !== 'string' || !envelope.proof || typeof intent.origin !== 'string') return [`The ${label} is not sealed to a question`];
-  const input: NonAnswerInput = { question: q.question, origin: intent.origin as NonAnswerInput['origin'], ...('model_intent' in intent ? { model_intent: intent.model_intent } : {}) };
-  if (intent.non_answer !== kind || envelope.proof.template_id !== `non_answer.${kind}` || envelope.proof.query_hash !== seal(input, envelope)) return [`The ${label} is not the one this process sealed for its question`];
-  if (input.origin !== 'deterministic' && input.origin !== 'model') return [];
+  if (!(NON_ANSWER_ORIGINS as readonly string[]).includes(intent.origin)) return [`The ${label} has unknown origin ${JSON.stringify(intent.origin)}`];
+  const input: NonAnswerInput = {
+    question: q.question,
+    origin: intent.origin as NonAnswerOrigin,
+    ...('model_intent' in intent ? { model_intent: intent.model_intent } : {}),
+    ...('frame' in intent ? { frame: intent.frame as NonAnswerInput['frame'] } : {}),
+  };
+  if (intent.non_answer !== kind || envelope.proof.template_id !== `non_answer.${kind}` || !sameHex(envelope.proof.query_hash, seal(input, envelope))) return [`The ${label} is not the one this process sealed for its question`];
   if (!renderer) return ['No renderer is registered to re-render the non-answer'];
   let again: Rendered;
   try {
