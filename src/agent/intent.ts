@@ -1658,13 +1658,13 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
   const labels = [...store.paidSources, ...store.organicSources, ...store.properties.flatMap((p) => [p.name, ...p.aka])].filter((l) => l.trim().length >= 2).sort((a, b) => b.length - a.length);
   for (const l of labels) question = question.replace(new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeRegExp(l)}(?![\p{L}\p{N}])`, 'giu'), (m) => '_'.repeat(m.length));
   // A rate noun ("vacancy", "occupancy") is a figure; a unit status adjective
-  // ("vacant", "occupied") describes the units counted. A currency word
+  // ("vacant", "occupied", "notice or occupied") only describes the units, so
+  // it is not a measure phrase here; the unit noun it describes still is. A currency word
   // ("dollar total") names the unit of an amount, not a figure of its own.
   const kinds: ReadonlyArray<readonly [string, RegExp]> = [
     ...MEASURE_NOUNS.filter(([k]) => k !== 'occupancy').map(([k, re]) => [k, k === 'spend' ? /\b(?:spend\w*|spent|costs?|budgets?)\b/gi : re] as const),
     ['occupancy', /\boccupancy\b/gi],
     ['vacancy', /\bvacan(?:cy|cies)\b/gi],
-    ['status', /\b(?:vacant|occupied)\b/gi],
     ['resident', /\boccupants?\b/gi],
     ['unit', /\b(?:units?|doors?)\b/gi],
   ];
@@ -1679,7 +1679,7 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
   // comma, "along with", "and also"), is a figure, unless it is governed:
   // it sits in a restrictive clause ("with rent under $X", "that are
   // occupied") or is the object of a preposition ("rate for leases ending").
-  const governed = (h: { start: number; kinds: Set<string> }) => {
+  const governed = (h: { start: number }) => {
     const before = question.slice(Math.max(0, h.start - 32), h.start);
     // The tail of a hyphenated compound ("zero-lease spend") modifies the noun after it.
     if (/[\p{L}\p{N}]-$/u.test(before)) return true;
@@ -1687,10 +1687,10 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
     // An indefinite or negated object of having or awaiting ("have no renewal
     // decision", "pending a renewal decision", "no leases") is an existence filter.
     if (/(?:\b(?:pending|awaiting|ha(?:ve|s|ving)|with(?:out)?)\s+(?:a|an|no|any)|\bno)\s+$/iu.test(before)) return true;
-    // A status adjective in a predicate ("units are currently vacant") describes the units counted.
-    if (h.kinds.has('status') && /\b(?:is|are|was|were|be|been|being|sitting|stay(?:ing)?|remain(?:ing)?)\s+(?:[\p{L}]+ly\s+|still\s+|now\s+)?$/iu.test(before)) return true;
     // A sentence-initial prepositional phrase ("Among class B ___ courtyard-view units, ...") frames the population.
     if (/(?:^|[.?!:]\s*)(?:among|across|for|in|at|of)\s+(?:[\p{L}\p{N}_-]+\s+){0,5}$/iu.test(question.slice(0, h.start)) && !/\b(?:and|or|plus)\b|[,&/]/i.test(question.slice(0, h.start).split(/[.?!:]/).pop()!)) return true;
+    // A unit after a number ("950 sq ft", "2 leases") states a threshold or a value, not a figure asked for.
+    if (/\d\s*$/u.test(before)) return true;
     // A subordinate clause ("because the resident gave notice") describes the figure.
     if (/\b(?:because|since|unless|if|when|while|once)\b(?:\s+[\p{L}\p{N}_$.,-]+){0,3}\s*$/iu.test(before)) return true;
     // Building and source names are masked to "_": a preposition still governs past them ("for ______ leads").
@@ -1759,9 +1759,9 @@ const MEASURE_REPORTS: Readonly<Partial<Record<IntentMeasure, readonly string[]>
   renewal_rate: ['renewal', 'lease'],
   ending_and_renewed: ['renewal', 'lease'],
   lease_count: ['lease'],
-  unit_count: ['unit', 'status', 'resident'],
-  vacancy_rate: ['vacancy', 'unit', 'status'],
-  occupied_share: ['occupancy', 'unit', 'status'],
+  unit_count: ['unit', 'resident'],
+  vacancy_rate: ['vacancy', 'unit'],
+  occupied_share: ['occupancy', 'unit'],
 };
 
 const MEASURE_CONSUMES: Readonly<Partial<Record<IntentMeasure, readonly string[]>>> = {
