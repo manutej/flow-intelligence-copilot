@@ -24,7 +24,7 @@ import { loadPortfolioStore } from '../src/data/loader.ts';
 import type { AnswerEnvelope } from '../src/data/schema.ts';
 import { executeCompositionalPlan } from '../src/agent/planner.ts';
 import { parseQueryIntent } from '../src/agent/intent.ts';
-import { sealProof } from '../src/agent/envelope.ts';
+import { sealNonAnswer, sealProof } from '../src/agent/envelope.ts';
 import { verifyAnswerEnvelope } from '../src/domain/guards.ts';
 
 const SEED = Number(process.env.SEED ?? 7311);
@@ -159,6 +159,16 @@ const FORGE: Record<string, (e: AnswerEnvelope) => AnswerEnvelope | null> = {
     const query = { ...o.query, question: e.query.question };
     return { ...o, id: e.id, query, proof: sealProof(query, o.result, o.proof?.row_ids ?? o.citations) };
   },
+  // TENACITY c082279 findings 1-3: citations of the wrong shape on a zeroed
+  // answer, and the answer turned into a sealed or unsealed non-answer.
+  ...Object.fromEntries(([['undefined', undefined], ['null', null], ['string', 'units:U0001'], ['object', {}]] as const).map(([name, citations]) => [`citations_${name}_zero`, (e: AnswerEnvelope) => {
+    const result = Object.fromEntries(Object.entries(e.result).map(([k, v]) => [k, typeof v === 'number' ? 0 : v]));
+    return { ...e, citations, result, answer: e.answer.replace(/\$?\d[\d,.]*/g, '0'), proof: e.query ? { ...sealProof(e.query, result, []) } : e.proof } as unknown as AnswerEnvelope;
+  }])),
+  to_unknown_sealed: (e) => (e.query ? { ...e, result: { unknown: true }, answer: "I don't know.", citations: [], ...sealNonAnswer(e.query.question, { answer: "I don't know.", result: { unknown: true } }) } : null),
+  to_unknown_bare: (e) => ({ id: e.id, result: { unknown: true }, answer: "I don't know.", citations: [] }) as AnswerEnvelope,
+  to_refused_sealed: (e) => (e.query ? { ...e, result: { refused: true }, answer: 'Refused.', citations: [], ...sealNonAnswer(e.query.question, { answer: 'Refused.', result: { refused: true } }) } : null),
+  unknown_with_figure: (e) => (e.query ? (() => { const answer = `I don't know. ${e.answer}`; return { ...e, result: { unknown: true }, answer, citations: [], ...sealNonAnswer(e.query.question, { answer, result: { unknown: true } }) }; })() : null),
   intent: (e) => { const i = e.query?.intent as { unitStatus?: string } | undefined; return i ? { ...e, query: { ...e.query!, intent: { ...i, unitStatus: i.unitStatus === 'notice' ? 'vacant' : 'notice' } } } : null; },
 };
 
