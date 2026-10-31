@@ -795,6 +795,20 @@ export function resolveDateWindow(filter: MarketingQueryFilter): {
   return DATE_WINDOWS.APR_SEP_2026;
 }
 
+/**
+ * A window that runs past the first or last month of marketing data (H1 or
+ * H2 of a year the data only partly covers) says so, so the label does not
+ * claim months it has no rows for. No digits, so figures keep their order.
+ */
+function dataEdgeNote(store: PortfolioStore, months: readonly string[]): string {
+  const have = [...new Set(store.spend.map((s) => s.month))].sort();
+  if (have.length === 0 || months.length === 0) return '';
+  const before = months.some((m) => m < have[0]);
+  const after = months.some((m) => m > have[have.length - 1]);
+  if (!before && !after) return '';
+  return ` (${before && after ? 'months outside the data have' : before ? 'months before the data starts have' : 'months after the data ends have'} no rows)`;
+}
+
 export function queryMarketingSpendAndFunnel(
   store: PortfolioStore,
   filter: MarketingQueryFilter = {},
@@ -1268,7 +1282,7 @@ export function queryMarketingSpendAndFunnel(
   }
 
   return {
-    windowLabel: windowSpec.label,
+    windowLabel: windowSpec.label + dataEdgeNote(store, windowSpec.months),
     startDate: windowSpec.startDate,
     endDate: windowSpec.endDate,
     months: windowSpec.months,
