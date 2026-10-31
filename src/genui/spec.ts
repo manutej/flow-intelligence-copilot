@@ -105,9 +105,12 @@ const carriesFigure = (raw: string, echo: ReadonlySet<string> = new Set()) => {
 /** Free-text fields that may carry figures because they are the verified answer bytes or reviewed option text. */
 /** Layout settings, not data: the only bare numbers allowed. */
 const LAYOUT_NUM = /\.props\.limit$/;
-// intent is an id, not text: it must equal the main evidence item's intent (checked below) (TENACITY M2).
+// intent and source are ids, not text: id-shaped, intent equal to the main item's template id, and
+// source equal to intent or "guard" (checked below; TENACITY 59be53f MEDIUM).
 // unit is checked against the closed UNITS list instead; the rest are bound by panelErrors' full re-pick
-const TEXT_EXEMPT = new Set(['answer', 'options', 'restatement', 'question', 'citations', 'intent']);
+const TEXT_EXEMPT = new Set(['answer', 'options', 'restatement', 'question', 'citations']);
+/** Template ids such as "marketing.spend_h1_vs_q3.value", or "guard" for guard cards. */
+const ID_SHAPE = /^(?:guard|[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,3})$/;
 
 /** Why a spec fails the closed-template and number-fidelity rules; empty when it passes. */
 export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore): string[] {
@@ -129,8 +132,13 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
     if (typeof x === 'number' && LAYOUT_NUM.test(path) && Number.isInteger(x)) return;
     if (typeof x === 'number') { errs.push(`${path}: bare number ${x} has no ref`); return; }
     if (typeof x === 'string' && path.endsWith('.unit')) { if (!(UNITS as readonly string[]).includes(x)) errs.push(`${path}: unit ${JSON.stringify(x)} is not in the closed list`); return; }
-    // the panel's source is its intent id when built by the picker; an id, bound to the main item, not text
-    if (typeof x === 'string' && path === 'spec.source' && x === (spec as { intent?: unknown }).intent) return;
+    if (path === 'spec.intent' || path === 'spec.source') {
+      const main = ev.items.find((i) => i.key === 'main');
+      if (typeof x !== 'string' || !ID_SHAPE.test(x)) errs.push(`${path}: not an id: ${JSON.stringify(x)}`);
+      else if (path === 'spec.intent' && main && x !== main.template_id) errs.push(`${path}: ${x} is not the main item's id ${main.template_id}`);
+      else if (path === 'spec.source' && x !== spec.intent && x !== 'guard') errs.push(`${path}: source must be the intent id or guard`);
+      return;
+    }
     if (typeof x === 'string') { if (!exempt && carriesFigure(x, ECHO_KEYS.has(path.split('.').pop()!) ? echo : undefined)) errs.push(`${path}: text carries a figure: ${JSON.stringify(x)}`); return; }
     if (isNum(x)) {
       nums++;
@@ -166,6 +174,7 @@ export function recomputeErrors(ev: Evidence, store: PortfolioStore): string[] {
       errs.push('evidence main: recipe intent is not the lexicon reading of its question');
     const fresh = runRecipe(it, store);
     if (!fresh) { errs.push(`evidence ${it.key}: recipe does not recompute to a verified answer`); continue; }
+    if (fresh.proof?.template_id !== it.template_id) errs.push(`evidence ${it.key}: template id is not the recomputed id`);
     const h = hashOf(fresh.result);
     if (h !== it.result_hash || hashOf(it.result) !== h) errs.push(`evidence ${it.key}: stored result differs from recomputed result`);
   }

@@ -71,3 +71,17 @@ test('HIGH: a stated prior that differs from the policy beta0 gives a clarify, n
   const plain = await askPanel('At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?', store);
   assert.notEqual(plain.spec.template, 'clarify_card');
 });
+
+// TENACITY VERDICT-GENUI-59be53f MEDIUM: intent and source are ids, not a free-text channel.
+test('MEDIUM: intent and source must be id-shaped and intent must be the main item id', () => {
+  const bad = 'Vacancy is 12%, 9,000 leases';
+  const set = (f: (s: any) => void) => { const s = structuredClone(p.spec) as any; f(s); return specErrors(s, p.evidence, store); };
+  assert.ok(set((s) => { s.intent = bad; s.source = bad; }).length > 0);
+  assert.ok(set((s) => { s.source = bad; }).length > 0);
+  assert.ok(set((s) => { s.intent = 'marketing.spend_total.value'; s.source = 'marketing.spend_total.value'; }).length > 0, 'another id is not the main item id');
+  // forging the main item's id together with intent and source is caught by the recompute
+  const ev = structuredClone(p.evidence) as any; ev.items.find((i: any) => i.key === 'main').template_id = 'marketing.spend_total.value';
+  const s2 = structuredClone(p.spec) as any; s2.intent = s2.source = 'marketing.spend_total.value';
+  assert.ok(specErrors(s2, ev, store).some((e) => /template id/.test(e)));
+  assert.deepEqual(set(() => {}), []);
+});
