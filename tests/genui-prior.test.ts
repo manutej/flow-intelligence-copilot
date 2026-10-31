@@ -113,7 +113,7 @@ test('accounting: with a setting present every other number must be placed (TENA
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
   const X = 'Then, was decision X001 in decisions.csv accepted, who decided it, and what was the monthly delta?';
   for (const q of ['beta0 = 3250 → no, 1800 → ' + Q, 'beta0 = 3250 → make it 1800 → ' + Q, 'beta0 = 3250 → 1800 → ' + Q, 'beta0 = 3250, sorry 1800 → ' + Q,
-    'beta0 = 3250 and 1800 → ' + Q, 'beta0 = $3250 → change it to $1800 → ' + Q, 'alpha0 = 1 → actually 2 → ' + Q,
+    'beta0 = 3250 and 1800 → ' + Q, 'beta0 = $3250 → change it to $1800 → ' + Q, 'alpha0 = 1 → actually 2 → ' + Q, 'Use 1800 instead → ' + Q,
     'CAD rate 0.73 → actually 0.8 → ' + X, 'beta0 = 3250 USD per CAD → ' + Q, 'Is beta0 3250?']) {
     const a = await askPanel(q, store);
     assert.equal(a.spec.template, 'clarify_card', q);
@@ -124,7 +124,7 @@ test('accounting: with a setting present every other number must be placed (TENA
 test('accounting by mention, scoped to setting and referring turns (TENACITY beded12)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
   // a correction equal to a used value (4 from P04, 1 from #1) is a different mention: neutral
-  for (const q of ['alpha0 = 1 → actually 4 → ' + Q, 'alpha0 = 1, no wait, 4 → ' + Q, 'beta0 = 3250 → no, 4 → ' + Q,
+  for (const q of ['alpha0 = 1 → actually 4 → ' + Q, 'alpha0 = 1, no wait, 4 → ' + Q, 'beta0 = 3250 → no, 4 → ' + Q, 'Use 4 instead → ' + Q,
     'At The Clarendon (P04) with alpha0 = 1, actually 4, in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?',
     // a value change with no numeral in a referring turn: neutral
     'beta0 = 3250 → halve it → ' + Q, 'beta0 = 3250 → double it → ' + Q, 'beta0 = 3250 → 1e3 → ' + Q]) {
@@ -132,8 +132,11 @@ test('accounting by mention, scoped to setting and referring turns (TENACITY bed
     assert.equal(a.spec.template, 'clarify_card', q); assert.equal(a.spec.title, 'Could you restate the question?', q);
   }
   // earlier turns that do not refer back do not block (Q77 rule)
-  for (const q of ['Show me 3 properties with highest vacancy → ' + Q, 'Thanks for the 12 numbers. → ' + Q, 'beta0 = 3250 → How many units at P01 have 2 bedrooms? → ' + Q])
-    assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
+  assert.equal((await askPanel('beta0 = 3250 → How many units at P01 have 2 bedrooms? → ' + Q, store)).spec.template, 'sorted_bar');
+  // accepted trade-off (fail-closed decision on 7ce8377): before the learner, an earlier non-question
+  // turn holding a stray number cannot be told from "Use 4 instead", so these two now clarify
+  for (const q of ['Show me 3 properties with highest vacancy → ' + Q, 'Thanks for the 12 numbers. → ' + Q])
+    assert.equal((await askPanel(q, store)).spec.title, 'Could you restate the question?', q);
 });
 test('after a setting, only standalone questions may follow it; with no setting, earlier turns are not read (TENACITY cfd6ff3)', async () => {
   const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
@@ -149,4 +152,12 @@ test('after a setting, only standalone questions may follow it; with no setting,
   // a standalone question after the setting, and a policy setting in parentheses, chart
   for (const q of ['beta0 = 3250 → How many units at P01 have 2 bedrooms? → ' + Q, 'beta0 = 3250 → ' + Q.replace('ranks #1', 'ranks #1 (beta0 = 3250)')])
     assert.equal((await askPanel(q, store)).spec.template, 'sorted_bar', q);
+});
+test('learner with no setting: a non-question earlier turn with a stray number fails closed (fail-closed decision on 7ce8377)', async () => {
+  const Q = 'At The Clarendon (P04), in decisions.csv outcome learning, which channel ranks #1 with the lowest posterior CPSL, and what is its posterior CPSL in USD?';
+  for (const c of ['Use 4 instead', 'Use 1800 instead', 'go with 4 please'])
+    assert.equal((await askPanel(c + ' → ' + Q, store)).spec.title, 'Could you restate the question?', c);
+  // non-learner Q77 rows still chart; learner earlier turns with no number still chart
+  assert.equal((await askPanel('Thanks for the 12 numbers. → How many vacant units are at Halsted & Lake?', store)).spec.template, 'kpi');
+  for (const c of ['Thanks!', 'Use the marketing data', 'What was spend in 2025?']) assert.equal((await askPanel(c + ' → ' + Q, store)).spec.template, 'sorted_bar', c);
 });

@@ -199,6 +199,9 @@ export function readSettings(input: string, intent: ParsedQueryIntent | null | u
       if (i === last) { if (own.some((n) => !isConsumed(n) && !parserUsed(n))) ambiguous = true; return; }
       if (isSetting([a, b])) { if (own.some((n) => !isConsumed(n))) ambiguous = true; return; }
       if (first >= 0 && i > first && !(standalone?.(t.slice(a, b)) ?? false)) ambiguous = true;
+      // the learner with no setting stated: a stray number in a non-question turn may be a prior
+      // ("Use 4 instead"), so fail closed; self-contained questions are not read (Q77)
+      else if (first < 0 && learner(intent) && own.length && !(standalone?.(t.slice(a, b)) ?? false)) ambiguous = true;
     });
   }
   const equal = (b: Binding) => b.value === b.param.value(store) && UNITS_OK[b.param.id].includes(b.unit);
