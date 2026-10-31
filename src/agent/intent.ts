@@ -958,7 +958,7 @@ function parseQueryIntentRaw(
       measure = 'spend_total';
     } else if (isSignedLeasesFromLeadsRanking) {
       measure = 'signed_leases_ranking';
-    } else if (!/\b(cost|cpsl|cpa|cheap\w*|efficien\w*|per\s+(?:signed\s+)?lease|best|worst|lowest|highest)\b/i.test(question)) {
+    } else if (!/\b(cost|cpsl|cpa|cheap\w*|efficien\w*|per\s+(?:signed\s+)?lease|best|worst)\b/i.test(question)) {
       // Cost per lease is answered only when asked for; plain spend is spend.
       measure = /\b(spend|spent|spending)\b/i.test(question) ? 'spend_total' : 'unsupported';
     }
