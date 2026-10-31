@@ -26,7 +26,7 @@ for (const [q, want] of [
   ['Lead count for CY26 Q2?', /2026-04-01 to 2026-06-30/],
   ['Fiscally, lead count in Q2 2026?', /2026-04-01 to 2026-06-30/],
   ['Marketing spend across Marlowe and Kedzie Works combined in Q2 2026?', /\$/],
-  ['Lead count for FY in Q2 2026?', /Fulton Yards \(P03\)/],
+  ['Lead count at FY in Q2 2026?', /Fulton Yards \(P03\)/],
 ] as const) {
   test(`fully covered question still answers: ${q}`, async () => {
     const e = await ask(q);
