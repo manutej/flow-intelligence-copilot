@@ -44,14 +44,43 @@ describe('S2-L1: model parse under the grammar', () => {
     assert.ok(verifyAnswerEnvelope(r.envelope, store).valid);
     assert.match(r.restatement ?? '', /^I computed: /);
   });
-  it('a model that drops a stated filter is not answered: it clarifies or says unknown', async () => {
-    const r = await ask('How many vacant two-bedroom units are at Kedzie Works?', replay(({ bedrooms: _b, ...i }) => i));
-    assert.equal(r.parsePath, 'model-clarify');
+  it('a model that drops a stated filter is never answered on its reading: the turn is the model-off turn', async () => {
+    const q = 'How many vacant two-bedroom units are at Kedzie Works?';
+    const r = await ask(q, replay(({ bedrooms: _b, ...i }) => i));
+    const off = await askFlowIqCopilot(q, { store, parse: null });
+    assert.equal(r.parsePath, 'deterministic');
     assert.notEqual(r.envelope.result.count, 14);
-    assert.equal(r.envelope.result.unknown, true);
-    assert.ok(r.restatement);
+    assert.deepEqual(r.envelope, off.envelope);
+  });
+  it('a model reading that differs in a stated field still clarifies with typed options', async () => {
+    const r = await ask('How many vacant units are at Kedzie Works?', replay((i) => ({ ...i, unitStatus: 'occupied' })));
+    assert.equal(r.parsePath, 'model-clarify');
+    assert.equal(r.envelope.result.clarification_needed, true);
     for (const o of r.clarifyOptions ?? []) assert.ok(o.query, 'each option carries a typed query');
   });
+  it('a model that invents a filter no word states gets the model-off turn', async () => {
+    const q = 'How many vacant units are at Kedzie Works?';
+    const r = await ask(q, replay((i) => ({ ...i, buildingClass: 'A', topK: 10 })));
+    assert.deepEqual(r.envelope, (await askFlowIqCopilot(q, { store, parse: null })).envelope);
+  });
+  for (const [name, content] of [
+    ['garbage', '{"kind":"query","intent":{"domain":"nope"}}'],
+    ['not JSON', 'sorry, I cannot'],
+    ['kind=clarify', '<think>\n\n</think>\n\n{"kind":"clarify","options":["a?","b?"]}'],
+    ['kind=draft', '{"kind":"draft","request":"write a listing"}'],
+    ['unitStatus inside unitStatusIn', null],
+  ] as const) {
+    it(`model ${name} gives exactly the model-off result`, async () => {
+      for (const q of ['How many vacant units are at Kedzie Works?', 'Which building has the most vacant units?', 'What was total marketing spend in Q2 2026?', 'Write a listing that avoids families with kids.']) {
+        const fetch = content !== null
+          ? async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) })
+          : replay((i) => ({ ...i, unitStatus: 'occupied', unitStatusIn: ['occupied', 'vacant'] }));
+        const r = await ask(q, fetch);
+        const off = await askFlowIqCopilot(q, { store, parse: null });
+        assert.deepEqual(r.envelope, off.envelope, q);
+      }
+    });
+  }
   it('a model that adds a filter the question does not state is unbound', () => {
     const q = 'How many vacant units are at Kedzie Works?';
     const det = parseQueryIntent(q, store);
