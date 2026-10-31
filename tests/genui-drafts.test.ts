@@ -53,3 +53,28 @@ test('N5: approve and undo re-validate the source panel', async () => {
     assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'approved' })).status, 409);
   } finally { srv.close(); }
 });
+
+test('L4: a stale draft is flagged stale and can still be rejected (and that reject undone)', async () => {
+  const { srv, post } = await boot();
+  const base = `http://127.0.0.1:${(srv.address() as { port: number }).port}`;
+  try {
+    fs.writeFileSync(PANELS, '[]'); fs.writeFileSync(ACTIONS, '[]');
+    const p = await (await post('/api/ask', { question: REC })).json();
+    await post('/api/panels', p);
+    const d = await (await post('/api/actions', { panel_id: p.id })).json();
+    const ac = async () => (await (await fetch(base + '/api/action-center')).json()).drafts.find((x: any) => x.id === d.id);
+    assert.equal((await ac()).stale, false);
+    const panels = JSON.parse(fs.readFileSync(PANELS, 'utf8'));
+    panels[0].spec.props.impacts[0].value.v = 9999; fs.writeFileSync(PANELS, JSON.stringify(panels));
+    assert.equal((await ac()).stale, true);
+    assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'approved' })).status, 409);
+    const r = await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'rejected' });
+    assert.equal(r.status, 200); assert.equal((await r.json()).state, 'rejected');
+    const u = await post(`/api/actions/${d.id}/intent`, { kind: 'undo' });
+    assert.equal(u.status, 200); assert.equal((await u.json()).state, 'pending_approval');
+    assert.equal((await ac()).stale, true);
+    assert.equal((await post(`/api/actions/${d.id}/intent`, { kind: 'set_state', to: 'approved' })).status, 409);
+    const html = await (await fetch(base + '/')).text();
+    assert.match(html, /stale:'⚠ STALE/);
+  } finally { srv.close(); }
+});

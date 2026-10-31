@@ -34,6 +34,10 @@ const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.w
 const canon = (x: unknown): string => JSON.stringify(x, (_k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v);
 const specSha = (spec: unknown) => createHash('sha256').update(canon(spec)).digest('hex');
 /** Draft ids are keyed on the spec hash (48 bits), so the same panel always maps to the same draft. */
+const isStale = async (d: DraftAction, panels: any[]) => {
+  const src = panels.find((x) => x.id === d.panel_id);
+  return !src || specSha(src.spec) !== d.spec_sha256 || (await panelErrors(src.question, src.spec, store)).length > 0;
+};
 const draftId = (spec: unknown) => `D-${specSha(spec).slice(0, 12)}`;
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost):\d+$/;
 
@@ -99,7 +103,9 @@ export function createServer() {
         all.unshift(draft); writeJson(ACTIONS, all); return send(res, 200, draft);
       }
       if (url.pathname === '/api/action-center' && req.method === 'GET') {
-        const drafts = readJson<DraftAction[]>(ACTIONS, []);
+        // a draft is stale when its source panel is gone, edited, or no longer verifies against current data
+        const panels = readJson<any[]>(PANELS, []);
+        const drafts = await Promise.all(readJson<DraftAction[]>(ACTIONS, []).map(async (d) => ({ ...d, stale: await isStale(d, panels) })));
         return send(res, 200, { template: 'action_center', state: drafts.length ? 'ready' : 'empty', drafts, filter: 'all' });
       }
       const m = url.pathname.match(/^\/api\/actions\/(D-[0-9a-f]{12})\/intent$/);
@@ -107,9 +113,10 @@ export function createServer() {
         const it = await body(req);
         const all = readJson<DraftAction[]>(ACTIONS, []); const d = all.find((x) => x.id === m[1]);
         if (!d) return send(res, 404, { error: 'no such draft' });
-        // re-validate on every state change: the source panel must still exist and match a fresh re-pick
-        const src = readJson<any[]>(PANELS, []).find((x) => x.id === d.panel_id);
-        if (!src || specSha(src.spec) !== d.spec_sha256 || (await panelErrors(src.question, src.spec, store)).length)
+        // re-validate every state change except a reject and the undo of a reject: those can never
+        // enable an approval, so a stale draft can always be cleared (TENACITY L4)
+        const rejecting = (it.kind === 'set_state' && it.to === 'rejected') || (it.kind === 'undo' && d.state === 'rejected');
+        if (!rejecting && (await isStale(d, readJson<any[]>(PANELS, []))))
           return send(res, 409, { error: 'source panel no longer matches the verified spec; nothing changed', state: d.state });
         if (it.kind === 'set_state' && (it.to === 'approved' || it.to === 'rejected') && (d.state === 'draft' || d.state === 'pending_approval')) { d.prev_state = d.state; d.state = it.to; }
         else if (it.kind === 'undo' && d.prev_state) { d.state = d.prev_state; delete d.prev_state; }
