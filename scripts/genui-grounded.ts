@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setRateProvider, type RateProvider } from '../src/fx/provider.ts';
 import { askPanel } from '../src/genui/picker.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
 import type { ChartSpec } from '../src/genui/spec.ts';
@@ -111,7 +112,12 @@ export function grade(h: Headline, f: Fact): 'correct' | 'wrong' | 'idk' | 'no_h
   return variants.some((x) => typeof x === 'number' && Math.abs(h.v - x) <= tol) ? 'correct' : 'wrong';
 }
 
-export interface Probe { family: string; question: string; expect: 'idk' | Fact | Fact[]; by?: 'source' | 'building' }
+export interface Probe { family: string; question: string; expect: 'idk' | 'not_usd' | Fact | Fact[] | { convert: Fact }; by?: 'source' | 'building' }
+/** The rate the probes run under: a fixed fake provider (the gate never calls the network). */
+export const PROBE_RATE = 1.4;
+export const probeProvider: RateProvider = { name: 'Probe fake', rate: async (base, quote, now) => quote === 'CAD'
+  ? { ok: true, quote: { base, quote, rate: PROBE_RATE, source: 'Probe fake', asOf: now.toISOString().slice(0, 10), basis: 'daily' } }
+  : { ok: false, reason: 'lookup_failed', detail: 'probe fake has CAD only', source: 'Probe fake' } };
 const BY_NOUN: Record<string, (by: string, A: string, P: string) => string> = {
   spend_usd: (by, A, P) => `What was total marketing spend by ${by}${A}${P}?`,
   cost_per_lead: (by, A, P) => `What was the cost per lead by ${by}${A}${P}?`,
@@ -123,7 +129,10 @@ export function probesFor(facts: readonly Fact[]): Probe[] {
   const out: Probe[] = [];
   for (const f of facts) {
     if (f.measure !== 'spend_usd' || keyOf(f) !== '') continue;
-    out.push({ family: 'currency_cad', question: `What was total marketing spend billed in CAD${at(f)}${when(f.period)}?`, expect: 'idk' });
+    // "billed in CAD" filters the currency column (no fact holds the native sum): never the USD fact
+    out.push({ family: 'currency_cad_billed', question: `What was total marketing spend billed in CAD${at(f)}${when(f.period)}?`, expect: 'not_usd' });
+    // "in CAD" converts the USD fact at the probe rate
+    out.push({ family: 'currency_cad_convert', question: `What was total marketing spend in CAD${at(f)}${when(f.period)}?`, expect: { convert: f } });
     out.push({ family: 'currency_usd_control', question: `What was total marketing spend in USD${at(f)}${when(f.period)}?`, expect: f });
   }
   const plain = facts.filter((f) => keyOf(f) === '');
@@ -148,6 +157,14 @@ export function probesFor(facts: readonly Fact[]): Probe[] {
 /** A probe's grade: an IDK probe is correct only as a clarify card; a by-X probe needs every group's bar to equal its fact. */
 export function gradeProbe(spec: ChartSpec, p: Probe): 'correct' | 'wrong' | 'idk' | 'no_headline' {
   if (p.expect === 'idk') return spec.template === 'clarify_card' ? 'correct' : 'wrong';
+  if (p.expect === 'not_usd') return spec.template === 'clarify_card' || (spec.template === 'kpi' && spec.props.unit === 'CAD' && !!spec.props.fx) ? 'correct' : 'wrong';
+  if ('convert' in p.expect) {
+    if (spec.template === 'clarify_card') return 'idk';
+    if (spec.template !== 'kpi' || spec.props.unit !== 'CAD') return 'wrong';
+    const f = p.expect.convert;
+    const usds = [f.value, ...Object.values(f.value_variants ?? {})].filter((v): v is number => typeof v === 'number');
+    return usds.some((u) => Math.abs(Math.round(u * PROBE_RATE * 100) / 100 - spec.props.value.v) <= 0.011) ? 'correct' : 'wrong';
+  }
   if (!Array.isArray(p.expect)) return grade(headline(spec, p.expect), p.expect);
   if (spec.template === 'clarify_card') return 'idk';
   if (spec.template !== 'sorted_bar') return 'no_headline';
@@ -159,6 +176,7 @@ export function gradeProbe(spec: ChartSpec, p: Probe): 'correct' | 'wrong' | 'id
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  setRateProvider(probeProvider);
   const store = loadPortfolioStore();
   const facts: Fact[] = fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   const tally = { correct: 0, wrong: 0, idk: 0, no_headline: 0, not_asked: 0 };
@@ -179,7 +197,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     const panel = await askPanel(p.question, store);
     const g = gradeProbe(panel.spec, p);
     (probeTally[p.family] ??= { correct: 0, wrong: 0, idk: 0, no_headline: 0 })[g]++;
-    rows.push(['probe', p.family, p.question, panel.spec.template, '', Array.isArray(p.expect) ? p.expect.map((f) => f.fact_id).join(',') : p.expect === 'idk' ? 'idk' : p.expect.fact_id, g].join('\t'));
+    rows.push(['probe', p.family, p.question, panel.spec.template, '', Array.isArray(p.expect) ? p.expect.map((f) => f.fact_id).join(',') : typeof p.expect === 'string' ? p.expect : 'convert' in p.expect ? `convert:${p.expect.convert.fact_id}` : p.expect.fact_id, g].join('\t'));
   }
   if (tsvAt) fs.writeFileSync(tsvAt, rows.join('\n') + '\n');
   const asked = tally.correct + tally.wrong + tally.idk + tally.no_headline;

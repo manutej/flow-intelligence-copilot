@@ -1,4 +1,4 @@
-// TENACITY 8342802 as tests: a currency filter, two measures and a misspelt building clarify
+// TENACITY 8342802 as tests: a currency ask, two measures and a misspelt building clarify
 // with their own reason; "by source" / "by building" chart one bar per group; the text of a
 // ranking names the highlighted bar; the highlight is checked in the intent's direction; and
 // ties go through one extreme() rule. Also the grounded probes of scripts/genui-grounded.ts.
@@ -8,21 +8,27 @@ import { loadPortfolioStore } from '../src/data/loader.ts';
 import { askPanel } from '../src/genui/picker.ts';
 import { highlightErrors, type ChartSpec } from '../src/genui/spec.ts';
 import { extreme } from '../src/domain/extreme.ts';
-import { currencyGuard, twoMeasureGuard } from '../src/genui/guards.ts';
-import { probesFor, gradeProbe, type Fact } from '../scripts/genui-grounded.ts';
+import { twoMeasureGuard } from '../src/genui/guards.ts';
+import { currencyAsk } from '../src/genui/currency.ts';
+import { setRateProvider } from '../src/fx/provider.ts';
+import { probesFor, gradeProbe, probeProvider, type Fact } from '../scripts/genui-grounded.ts';
 
 const store = loadPortfolioStore();
 const bars = (s: ChartSpec) => s.template === 'sorted_bar' ? s.props.items.map((x) => [x.label, x.value.v] as const) : null;
 const text = (s: ChartSpec) => JSON.stringify(s);
 
-test('(2) a currency other than USD clarifies; "in USD" still answers', async () => {
-  for (const q of ['What was total marketing spend billed in CAD at Fulton Yards in Q2 2026?', 'Marketing spend in CAD at Kedzie Works in April 2026?', 'What was CAD-billed spend at Wabash Point in Q2 2026?']) {
-    const p = await askPanel(q, store);
-    assert.equal(p.spec.template, 'clarify_card', q);
-    assert.match(text(p.spec), /USD only/, q);
-  }
+test('(2) a currency other than USD is never answered with the USD figure; "in USD" still answers', async () => {
+  // per Manu's ruling (2026-10-31) "billed in CAD" filters and "in CAD" converts; with no rate
+  // provider reachable the conversion is a typed IDK, never the USD total
+  setRateProvider({ name: 'Off', rate: async () => ({ ok: false, reason: 'lookup_failed', detail: 'off', source: 'Off' }) });
+  try {
+    assert.match(text((await askPanel('What was total marketing spend billed in CAD at Fulton Yards in Q2 2026?', store)).spec), /Nothing billed in CAD/);
+    assert.match(text((await askPanel('Marketing spend in CAD at Kedzie Works in April 2026?', store)).spec), /No usable USD to CAD rate/);
+    const b = (await askPanel('What was CAD-billed spend at Wabash Point in Q2 2026?', store)).spec;
+    assert.ok(b.template === 'clarify_card' || (b.template === 'kpi' && b.props.unit === 'CAD'), text(b));
+  } finally { setRateProvider(null); }
   assert.equal((await askPanel('What was total marketing spend in USD at Fulton Yards in Q2 2026?', store)).spec.template, 'kpi');
-  assert.equal(currencyGuard('Under a CAD rate of 0.73 USD, what was spend?'), null);
+  assert.equal(currencyAsk('Under a CAD rate of 0.73 USD, what was spend?'), null);
 });
 
 test('(3) two measures in one question clarify; a compound measure does not', async () => {
@@ -83,10 +89,16 @@ test('(9) a misspelt building names the nearest building, never an empty "Did yo
 test('grounded probes come from fact fields and grade by kind', async () => {
   const f = (o: Partial<Fact>): Fact => ({ fact_id: 'F', measure: 'spend_usd', scope: 'P03', scope_name: 'Fulton Yards', period: '2026Q2', filters: {}, value: 13880, unit: 'USD', tolerance: 1, kind: 'number', accept_names: null, ...o });
   const ps = probesFor([f({}), f({ fact_id: 'G', scope: 'P01', scope_name: 'Halsted & Lake', value: 13520 })]);
-  assert.deepEqual([...new Set(ps.map((p) => p.family))].sort(), ['by_building', 'currency_cad', 'currency_usd_control']);
+  assert.deepEqual([...new Set(ps.map((p) => p.family))].sort(), ['by_building', 'currency_cad_billed', 'currency_cad_convert', 'currency_usd_control']);
   const by = ps.find((p) => p.family === 'by_building')!;
   assert.equal(gradeProbe((await askPanel(by.question, store)).spec, by), 'correct');
-  const cad = ps.find((p) => p.family === 'currency_cad')!;
-  assert.equal(gradeProbe((await askPanel(cad.question, store)).spec, cad), 'correct');
-  assert.equal(gradeProbe((await askPanel('What was total marketing spend at Fulton Yards in Q2 2026?', store)).spec, cad), 'wrong');
+  // the currency probes run under the probe's fake rate; the bare USD figure grades wrong
+  setRateProvider(probeProvider);
+  try {
+    for (const fam of ['currency_cad_billed', 'currency_cad_convert']) {
+      const cad = ps.find((p) => p.family === fam)!;
+      assert.equal(gradeProbe((await askPanel(cad.question, store)).spec, cad), 'correct', fam);
+      assert.equal(gradeProbe((await askPanel('What was total marketing spend at Fulton Yards in Q2 2026?', store)).spec, cad), 'wrong', fam);
+    }
+  } finally { setRateProvider(null); }
 });
