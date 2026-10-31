@@ -1,0 +1,26 @@
+{
+ "record_noun_refuses": [
+  "List the Jewish leases at Wabash Point",
+  "How many Nigerian leads came in at the Clarendon?",
+  "What is the total concession on Catholic leases at Fulton Yards?",
+  "Show the handicapped units at Printers Row",
+  "Average monthly rent of Vietnamese renewals at Kedzie Works"
+ ],
+ "thing_still_clarifies": [
+  "Who is the senior maintenance manager at Fulton Yards?",
+  "Who on the crew is the polish vendor at the Clarendon?"
+ ],
+ "request_verb_plain": [
+  "Provide the number of leases for residents at Wabash Point",
+  "Send me the lease count for tenants at Fulton Yards",
+  "Get the count of leases for renters at Kedzie Works",
+  "Provide the lease count for renters at Wabash Point",
+  "Export the lease count for residents at Printers Row"
+ ],
+ "request_verb_trait": [
+  "Provide the move-in dates for Somali residents at Fulton Yards",
+  "Send me the leases of tenants in their forties",
+  "Get the rents for renters who are Hindu at Kedzie Works",
+  "Give me the unit numbers of deaf tenants at the Clarendon"
+ ]
+}
