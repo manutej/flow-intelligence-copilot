@@ -84,3 +84,13 @@ test('settings bind per parameter with value and unit (TENACITY f9a64d0 1-3, 5)'
   for (const q of ['Compare vacancy to the prior 3 months at P04', 'What was vacancy at P04 in the prior 30 days?', 'How did the prior 2 quarters compare at P04?', 'What is the CAD rate used for 1 property?', 'What prior is used for 2 bedroom leasing?'])
     assert.ok(!/not supported/.test((await askPanel(q, store)).spec.title ?? ''), q);
 });
+test('a title that would repeat an unused figure gives a neutral clarify, not an error card (TENACITY f9a64d0 4)', async () => {
+  for (const q of ['renewal rate is 68%. where is it lowest?', 'What is the renewal rate? → renewal rate is 68%. where is it lowest?']) {
+    const a = await askPanel(q, store);
+    assert.equal(a.spec.template, 'clarify_card', q);
+    assert.equal(a.spec.state, 'ready', q);
+    assert.deepEqual(a.errors, [], q);
+    assert.deepEqual(specErrors(a.spec, a.evidence, store), [], q);
+    assert.ok(!/68|not supported/.test(a.spec.title ?? ''), q);
+  }
+});

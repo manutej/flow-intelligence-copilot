@@ -312,6 +312,10 @@ export async function askPanel(input: string, store: PortfolioStore, parse: Pars
   const { spec, evidence } = pick({ question, turn, store });
   const errors = specErrors(spec, evidence, store);
   // a spec that fails fidelity is never rendered as a chart
+  // a title that would repeat a figure the computation did not use (renewal rate is 68%): the
+  // numbers are not at fault, the restatement is, so ask for one instead of an error card
+  if (errors.length && errors.every((e) => /^spec\.(?:title|subtitle): text carries a figure/.test(e)))
+    return done(neutral(turn, spec.intent, question, 'The question states a figure this analysis did not compute, so it is not repeated as a chart title. Ask again without it.'));
   const shown: ChartSpec = errors.length ? { ...clarify('unknown', turn, spec.intent, question, 'error_data') } : spec;
   return { question: input, spec: shown, evidence, errors, parsePath: turn.parsePath, parseFallbackReason: turn.parseFallbackReason ?? null };
 }
