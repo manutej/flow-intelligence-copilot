@@ -3,7 +3,7 @@ import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
 import { LOCATIVE_FY_RE, maskFiscalTokens } from '../domain/fiscal.ts';
 import type { ParsedQueryIntent } from './intent.ts';
 import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
-import { parseQueryIntent } from './intent.ts';
+import { META_INSTRUCTION_RE, parseQueryIntent } from './intent.ts';
 import { continuesPreviousTurn, refersBackToPeople, type FairHousingSession } from '../domain/fair-housing.ts';
 import { unknownWords } from '../domain/vocabulary.ts';
 import type { PortfolioPolicyConfig } from '../config/rules.ts';
@@ -551,8 +551,7 @@ function closedVocabulary(
  * words are not question words. An instruction about the data ("only count
  * lake views") is kept and must parse.
  */
-const META_INSTRUCTION_RE =
-  /\[[^\]]*\b(?:system|override|ignore|instructions?|rules?)\b[^\]]*\]|[^.?!]*\b(?:ignore|disregard|override|(?:do\s+not|don'?t|never)\s+(?:obey|follow|trust|believe))\b[^.?!]*\b(?:rules?|instructions?|notes?|prompts?|system|messages?)\b[^.?!]*[.!]?/gi;
+// META_INSTRUCTION_RE lives in intent.ts so the coverage check can drop the same text.
 
 function withoutMetaInstructions(question: string): string {
   return question.normalize('NFKC').replace(/[\p{Cf}]/gu, '').replace(META_INSTRUCTION_RE, ' ');

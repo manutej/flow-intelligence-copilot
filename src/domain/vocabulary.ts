@@ -90,6 +90,12 @@ function wordsOf(store: PortfolioStore): Set<string> {
   return words;
 }
 
+/** A word the data itself names: a property, address, neighborhood, system, view, amenity or source. */
+export function isDataWord(store: PortfolioStore, word: string): boolean {
+  const w = word.toLowerCase();
+  return wordsOf(store).has(w) || store.properties.some((p) => amenityWords(p.amenities).has(w));
+}
+
 const amenityWords = (amenities: readonly string[]) =>
   new Set(amenities.join(' ').toLowerCase().match(/[a-z]+/g) ?? []);
 

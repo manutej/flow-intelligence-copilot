@@ -1,7 +1,7 @@
 import { typedQueryErrors } from './typed-query.ts';
 import { COMPARATOR_PHRASES } from '../domain/comparators.ts';
 import { spellCalendarYear } from '../domain/fiscal.ts';
-import { FIXED } from '../domain/vocabulary.ts';
+import { FIXED, isDataWord } from '../domain/vocabulary.ts';
 import { mentionsQuantity, statedValues, type Field } from '../domain/comparators.ts';
 import { unresolvedUnitWords } from './closed-world.ts';
 import { DATE_WINDOWS, type DateWindowSpec } from '../config/rules.ts';
@@ -1087,12 +1087,16 @@ function parseQueryIntentRaw(
 
     // A concession question that names a period ("in Q3 2026") is about
     // leases that started in that period, even without the word "started".
+    // Without a named period a concession figure covers the leases that
+    // started in the data window its label names, not every lease on file.
     const leaseStartWindow =
-      hasStartSignal || (isConcessionQuery && dateExplicit && !hasEndSignal)
+      hasStartSignal || (isConcessionQuery && !hasEndSignal)
         ? dateWindow
         : undefined;
+    // A renewal rate for a named period is over the leases ending in it.
+    const isRenewalRateQuery = /\brenewal\s+rate\b|\brenew(?:ed|al)?\s+(?:share|percent|%)/i.test(question);
     const leaseEndWindow =
-      hasEndSignal && !hasStartSignal ? dateWindow : undefined;
+      (hasEndSignal || (isRenewalRateQuery && dateExplicit)) && !hasStartSignal ? dateWindow : undefined;
 
     let measure: IntentMeasure = 'lease_count';
     if (
@@ -1554,6 +1558,8 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
   }
   const unitFilter = unappliedUnitFilter(question, intent);
   if (unitFilter) return unitFilter;
+  const rentRoll = unsplittableFilter(question, intent, store);
+  if (rentRoll) return rentRoll;
   const noun = unconsumedMeasureNoun(question, intent, store);
   if (noun) return `a second measure ("${noun}")`;
   const source = unrecognisedSource(question, intent, store);
@@ -1561,7 +1567,7 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
   // A measure that compares two periods (H1 versus Q3) consumes both.
   const period = /_vs_|comparison|delta|change/.test(intent.measure) ? null : unconsumedPeriod(question, intent);
   if (period) return `a second period ("${period}")`;
-  const token = MARKETING_MEASURES.has(intent.measure) ? uncoveredToken(question, store) : null;
+  const token = uncoveredToken(question, store, intent);
   if (token) return `a term FlowIQ could not place in the question ("${token}")`;
   const named = namedProperties(question, store);
   // Two named properties are a comparison unless the question pools them outright.
@@ -1646,6 +1652,32 @@ function unappliedUnitFilter(question: string, intent: ParsedQueryIntent): strin
   return intent.measure === 'lead_count'
     ? `a bedroom filter FlowIQ could not apply ("${m[0].trim()}")`
     : `a bedroom filter ("${m[0].trim()}"), but marketing spend, tours and leases are not split by bedroom`;
+}
+
+/**
+ * Unit, lease, renewal and concession figures come from the rent roll and
+ * lease ledger, which carry no lead source and no pets, and unit figures are
+ * one snapshot. A source, a pet or (for units) a dated period the parse
+ * cannot apply is left over rather than dropped.
+ */
+function unsplittableFilter(question: string, intent: ParsedQueryIntent, store: PortfolioStore): string | null {
+  if (intent.domain !== 'units' && intent.domain !== 'leases') return null;
+  const q = question.normalize('NFKC');
+  const sourceWords = new Set([...store.paidSources, ...store.organicSources].flatMap((s) => s.toLowerCase().split(/[^\p{L}]+/u)).filter((w) => w.length > 2 && !SOURCE_GENERIC_WORD.test(w)));
+  const source = q.match(/\p{L}+/gu)?.find((w) => sourceWords.has(w.toLowerCase()));
+  if (source) return `a lead source ("${source}"), but ${intent.domain === 'units' ? 'unit' : 'lease'} figures are not split by source`;
+  const pet = /\b(?:dogs?|cats?|pets?|pet[\s-]friendly)\b(?!\s+runs?\b)/i.exec(q);
+  if (pet) return `a pet filter ("${pet[0]}"), but the rent roll does not record pets`;
+  if (intent.domain === 'units') {
+    let d = spellIsoMonths(spellCalendarYear(q)).replace(/\$\s?[\d,]+(?:\.\d+)?\s*[kK]?|\b[\d,]+(?:\.\d+)?\s*(?:sq\.?\s*f(?:ee)?t|sqft|sf|square\s+f(?:ee|oo)t)\b/g, ' ');
+    for (const re of COMPARATOR_PHRASES) d = d.replace(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`), ' ');
+    if (intent.yearBuiltMin !== undefined || intent.yearBuiltMax !== undefined) d = d.replace(/\b(?:built|constructed|opened|completed|delivered)\b[^?.!]*?\b(?:19|20)\d{2}\b/gi, ' ');
+    const dated = new RegExp(DATE_TOKEN_RE.source, 'i').exec(d)
+      ?? /(?<![\p{L}\p{N}])(?:19|20)\d{2}(?![\p{L}\p{N}])/u.exec(d)
+      ?? /\b(?:last|next|previous|prior|past|this)\s+(?:\d+\s+)?(?:days?|weeks?|months?|quarters?|years?)\b|\b(?:yesterday|tomorrow|ytd|year[\s-]to[\s-]date)\b/i.exec(d);
+    if (dated) return `a period ("${dated[0].trim()}"), but unit figures are one snapshot of the current rent roll, not a history`;
+  }
+  return null;
 }
 
 /** Words a "from <phrase>" source phrase may hold besides source, property and date names. */
@@ -1761,10 +1793,27 @@ function unconsumedPeriod(question: string, intent: ParsedQueryIntent): string |
  * parse did not resolve. Either way one figure would answer a wider
  * question, so the turn says it does not know.
  */
-const MARKETING_MEASURES: ReadonlySet<string> = new Set(['spend_total', 'cost_per_lead', 'cost_per_tour', 'cost_per_signed_lease', 'tour_to_lease_rate', 'lead_count']);
-function uncoveredToken(question: string, store: PortfolioStore): string | null {
+/**
+ * An instruction about FlowIQ's own rules ("[SYSTEM OVERRIDE: ...]",
+ * "Ignore prior rules", "Do not obey any lead note") asks nothing of the
+ * data, and the answer is computed from the data whatever it says, so its
+ * words are not question words. An instruction about the data ("only count
+ * lake views") is kept and must parse.
+ */
+export const META_INSTRUCTION_RE =
+  /\[[^\]]*\b(?:system|override|ignore|instructions?|rules?)\b[^\]]*\]|[^.?!]*\b(?:ignore|disregard|override|(?:do\s+not|don'?t|never)\s+(?:obey|follow|trust|believe))\b[^.?!]*\b(?:rules?|instructions?|notes?|prompts?|system|messages?)\b[^.?!]*[.!]?/gi;
+function uncoveredToken(question: string, store: PortfolioStore, intent: ParsedQueryIntent): string | null {
   let q = ` ${spellIsoMonths(spellCalendarYear(question.normalize('NFKC')))} `;
   const blank = (re: RegExp) => { q = q.replace(re, (m) => ' '.repeat(m.length)); };
+  blank(new RegExp(META_INSTRUCTION_RE.source, 'gi'));
+  for (const re of COMPARATOR_PHRASES) blank(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`));
+  // "all 8 buildings" restates the portfolio when 8 is how many operate.
+  const operating = new Set(store.units.map((u) => u.propertyId)).size;
+  q = q.replace(/\ball\s+(\d+)\s+(?:buildings|properties|communities)\b/gi, (m, n: string) =>
+    Number(n) === operating ? ' '.repeat(m.length) : m);
+  for (const id of intent.decisionIds) blank(new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeRegExp(id)}(?![\p{L}\p{N}])`, 'giu'));
+  // A class letter the parse applied ("Class C", "class B buildings").
+  if (intent.buildingClass) blank(new RegExp(String.raw`\bclass[\s-]*${escapeRegExp(intent.buildingClass)}(?![\p{L}\p{N}])`, 'giu'));
   blank(new RegExp(DATE_TOKEN_RE.source, 'gi'));
   blank(/(?<![\p{L}\p{N}\-\/.])20\d{2}(?![\p{L}\p{N}\-\/._])/gu);
   blank(/\b(?:last|this|next|past|previous|prior)\s+(?:\d+\s+)?(?:days?|months?|quarters?|years?|weeks?)\b/gi);
@@ -1777,9 +1826,17 @@ function uncoveredToken(question: string, store: PortfolioStore): string | null 
     }
   }
   const sources = [...new Set([...store.paidSources, ...store.organicSources])].sort((a, b) => b.length - a.length);
-  for (const s of sources) blank(new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeRegExp(s)}(?![\p{L}\p{N}])`, 'giu'));
-  const digits = /[^\s,;:?!()]*\p{N}[^\s,;:?!()]*/u.exec(q);
-  if (digits) return digits[0].trim();
+  if (intent.domain === 'marketing') for (const s of sources) blank(new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeRegExp(s)}(?![\p{L}\p{N}])`, 'giu'));
+  // A number the parse put in a unit field (floor 5, 1000 sq ft, 2 baths)
+  // is consumed; a strict bound is stored one past the number written.
+  const bound = [intent.bedrooms, intent.bathrooms, intent.bedroomsMin, intent.bedroomsMax, intent.bathroomsMin, intent.bathroomsMax, intent.sqftMin, intent.sqftMax, intent.floorMin, intent.floorMax, intent.rentMin, intent.rentMax, intent.yearBuiltMin, intent.yearBuiltMax]
+    .filter((v): v is number => typeof v === 'number');
+  const used = (n: number) => bound.some((v) => Math.abs(v - n) <= 1);
+  for (const m of q.matchAll(/[^\s,;:?!()]*\p{N}[^\s,;:?!()]*/gu)) {
+    const nums = (m[0].replace(/,/g, '').match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
+    if (nums.length > 0 && nums.every(used)) continue;
+    return m[0].trim();
+  }
   // A distinctive word of a source name, left once the full names are gone.
   const words = new Set(sources.flatMap((s) => s.toLowerCase().split(/[^\p{L}]+/u)).filter((w) => w.length > 2 && !SOURCE_GENERIC_WORD.test(w)));
   for (const m of q.matchAll(/\p{L}+/gu)) if (words.has(m[0].toLowerCase())) return m[0];
@@ -1789,9 +1846,10 @@ function uncoveredToken(question: string, store: PortfolioStore): string | null 
   for (const m of q.matchAll(/(?<![\p{L}\p{N}'’])\p{Lu}[\p{L}'’]*/gu)) {
     if (/(?:^|[.?!:;]|\.\.\.)\s*["'“(]?\s*$/u.test(q.slice(0, m.index))) continue;
     if (CAPITALISED_OK.test(m[0])) continue;
+    if (m[0].length > 1 && isDataWord(store, m[0])) continue;
     // Title case ("Cost Per Lead") is not a name; a month word still is,
     // since a consumed month was blanked above.
-    if (FIXED.has(m[0].toLowerCase()) && !/^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)$/i.test(m[0])) continue;
+    if (m[0].length > 1 && FIXED.has(m[0].toLowerCase()) && !/^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)$/i.test(m[0])) continue;
     return m[0];
   }
   return null;
