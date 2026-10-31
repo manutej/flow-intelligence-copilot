@@ -1628,20 +1628,11 @@ const MEASURE_NOUNS: ReadonlyArray<readonly [string, RegExp]> = [
   ['concession', /\b(?:concessions?)\b/gi],
   ['area', /\b(?:sq\.?\s*ft|sqft|square\s+(?:foot|feet))\b/gi],
 ];
-/**
- * Two neighbouring measure phrases with only a short link between them ask
- * for two figures, whatever the link ("and", "&", a comma, "along with",
- * "and also"). Returns the phrase the plan's measure does not name, if any:
- * a plan that computed one measure has answered only half of such a question.
- */
 /** Words that open a restrictive clause: what follows filters, it is not a figure. */
 const FILTER_CLAUSE_RE = /\b(?:with|that|which|who|whose|where|excluding|without|not|except)\b/iu;
 
-/** Closed-class words that make the text between two measure words a predicate or clause, not a link. */
-const NON_LINK_WORD_RE = /^(?:is|are|was|were|be|been|being|am|has|have|had|do|does|did|will|would|can|could|should|that|which|who|whose|where|when|while|because|if|than|for|of|per|by|among|from|on|in|at|across|over|during|to|into|between|under|above|below|within|without|how|what)$/iu;
-
 /** A noun phrase opened by a preposition modifies the measure; it is not a second figure. */
-const PREPOSITION_OBJECT_RE = /\b(?:for|of|per|by|among|from|on|in|across|over|during|to|into|between|than|under|over|above|below|within|exclud\w*|without|except|minus)\s+(?:(?:the|all|each|every|any|our|its|their|those|these)\s+)?(?:[\p{L}\p{N}-]+\s+){0,2}$/iu;
+const PREPOSITION_OBJECT_RE = /\b(?:pending|for|of|per|by|among|from|on|in|across|over|during|to|into|between|than|under|over|above|below|within|exclud\w*|without|except|minus)\s+(?:(?:the|all|each|every|any|our|its|their|those|these)\s+)?(?:[\p{L}\p{N}-]+\s+){0,2}$/iu;
 
 /** True when every mention of `word` sits in a restrictive clause, so it filters rather than asks for a figure. */
 export function onlyInFilterClause(question: string, word: string): boolean {
@@ -1651,30 +1642,59 @@ export function onlyInFilterClause(question: string, word: string): boolean {
   return at.length > 0 && at.every((m) => opener.test(question.slice(Math.max(0, m.index! - 24), m.index!)));
 }
 
+/**
+ * Fail safe for multi-measure questions: returns the first measure phrase the
+ * question asks for (not governed by a filter clause, preposition, predicate
+ * or subordinate clause) that the plan's measure does not cover, if any. A
+ * plan that computed one measure has answered only part of such a question,
+ * whatever words or names sit between the measures.
+ */
 export function coordinatedMeasureLeftOut(question: string, measure: string, store: PortfolioStore): string | null {
   // A composite measure ("void_and_duplicate_counts", "new_vs_renewal_and_concession") computes several figures.
   if (/_and_|_vs_/.test(measure)) return null;
   // Source and property names are not quantities ("Zillow and Rent.", "Marlowe Residences").
   const labels = [...store.paidSources, ...store.organicSources, ...store.properties.flatMap((p) => [p.name, ...p.aka])].filter((l) => l.trim().length >= 2).sort((a, b) => b.length - a.length);
   for (const l of labels) question = question.replace(new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeRegExp(l)}(?![\p{L}\p{N}])`, 'giu'), (m) => '_'.repeat(m.length));
-  const kinds: ReadonlyArray<readonly [string, RegExp]> = [...MEASURE_NOUNS, ['unit', /\b(?:units?|doors?)\b/gi]];
+  // A rate noun ("vacancy", "occupancy") is a figure; a unit status adjective
+  // ("vacant", "occupied") describes the units counted. A currency word
+  // ("dollar total") names the unit of an amount, not a figure of its own.
+  const kinds: ReadonlyArray<readonly [string, RegExp]> = [
+    ...MEASURE_NOUNS.filter(([k]) => k !== 'occupancy').map(([k, re]) => [k, k === 'spend' ? /\b(?:spend\w*|spent|costs?|budgets?)\b/gi : re] as const),
+    ['occupancy', /\boccupancy\b/gi],
+    ['vacancy', /\bvacan(?:cy|cies)\b/gi],
+    ['status', /\b(?:vacant|occupied)\b/gi],
+    ['resident', /\boccupants?\b/gi],
+    ['unit', /\b(?:units?|doors?)\b/gi],
+  ];
   // A bedroom or unit-type phrase, and a unit status set aside, filter the population.
   question = question.replace(BEDROOM_PHRASE_RE, (m) => '_'.repeat(m.length)).replace(UNIT_STATUS_EXCLUSION_RE, (m) => '_'.repeat(m.length));
   const hits: { kind: string; start: number; end: number; text: string }[] = [];
   for (const [kind, re] of kinds) for (const m of question.matchAll(new RegExp(re.source, 'gi'))) hits.push({ kind, start: m.index!, end: m.index! + m[0].length, text: m[0] });
   hits.sort((a, b) => a.start - b.start);
   const named = measure.replace(/_/g, ' ');
-  const covers = (kind: string) => kinds.some(([k, re]) => k === kind && new RegExp(re.source, 'i').test(named)) || (MEASURE_CONSUMES[measure as IntentMeasure] ?? []).includes(kind);
+  const covers = (kind: string) => kinds.some(([k, re]) => k === kind && new RegExp(re.source, 'i').test(named)) || [...(MEASURE_CONSUMES[measure as IntentMeasure] ?? []), ...(MEASURE_REPORTS[measure as IntentMeasure] ?? [])].includes(kind) || (kind === 'vacancy' && measure === 'unit_count' && !unitAsked);
   // Any measure noun the question asks for, whatever joins it ("and", a
   // comma, "along with", "and also"), is a figure, unless it is governed:
   // it sits in a restrictive clause ("with rent under $X", "that are
   // occupied") or is the object of a preposition ("rate for leases ending").
-  const governed = (h: { start: number }) => {
+  const governed = (h: { start: number; kinds: Set<string> }) => {
     const before = question.slice(Math.max(0, h.start - 32), h.start);
     // The tail of a hyphenated compound ("zero-lease spend") modifies the noun after it.
     if (/[\p{L}\p{N}]-$/u.test(before)) return true;
     if (/\b(?:along|together)\s+with\s+(?:the\s+)?$/iu.test(before)) return false;
-    return new RegExp(`${FILTER_CLAUSE_RE.source}(?:\\s+[\\p{L}\\p{N}$.,-]+){0,3}\\s*$`, 'iu').test(before) || PREPOSITION_OBJECT_RE.test(before);
+    // An indefinite or negated object of having or awaiting ("have no renewal
+    // decision", "pending a renewal decision", "no leases") is an existence filter.
+    if (/(?:\b(?:pending|awaiting|ha(?:ve|s|ving)|with(?:out)?)\s+(?:a|an|no|any)|\bno)\s+$/iu.test(before)) return true;
+    // A status adjective in a predicate ("units are currently vacant") describes the units counted.
+    if (h.kinds.has('status') && /\b(?:is|are|was|were|be|been|being|sitting|stay(?:ing)?|remain(?:ing)?)\s+(?:[\p{L}]+ly\s+|still\s+|now\s+)?$/iu.test(before)) return true;
+    // A sentence-initial prepositional phrase ("Among class B ___ courtyard-view units, ...") frames the population.
+    if (/(?:^|[.?!:]\s*)(?:among|across|for|in|at|of)\s+(?:[\p{L}\p{N}_-]+\s+){0,5}$/iu.test(question.slice(0, h.start)) && !/\b(?:and|or|plus)\b|[,&/]/i.test(question.slice(0, h.start).split(/[.?!:]/).pop()!)) return true;
+    // A subordinate clause ("because the resident gave notice") describes the figure.
+    if (/\b(?:because|since|unless|if|when|while|once)\b(?:\s+[\p{L}\p{N}_$.,-]+){0,3}\s*$/iu.test(before)) return true;
+    // Building and source names are masked to "_": a preposition still governs past them ("for ______ leads").
+    // A coordinator ends a filter or a preposition's object: "for ___ and vacancy rate" starts a new figure.
+    const head = before.replace(/_+/g, 'x').replace(/^[^]*(?:\b(?:and|or|plus)\b|[,&;])/iu, ' ');
+    return new RegExp(`${FILTER_CLAUSE_RE.source}(?:\\s+[\\p{L}\\p{N}$.-]+){0,3}\\s*$`, 'iu').test(head) || PREPOSITION_OBJECT_RE.test(head);
   };
   // Measure words with nothing but a space or hyphen between them form one
   // noun phrase ("vacant units", "leases renewed"): one figure, covered when
@@ -1686,21 +1706,13 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
     else if (!last || h.start >= last.end) phrases.push({ kinds: new Set([h.kind]), start: h.start, end: h.end, text: h.text });
   }
   const asked = phrases.filter((p) => !governed(p));
-  // Two neighbouring measure phrases coordinate when only a short link joins
-  // them: punctuation or up to four words, none of them a verb, relative or
-  // preposition ("vacancy and renewal rate", "renewal rate along with
-  // vacancy", "vacancy rate, renewal rate"). A predicate or clause between
-  // them ("units are vacant", "leases that toured") describes one figure.
-  for (let i = 0; i + 1 < asked.length; i++) {
-    const a = asked[i], b = asked[i + 1];
-    if (hits.some((h) => h.start >= a.end && h.end <= b.start)) continue;
-    if ([...a.kinds].sort().join('+') === [...b.kinds].sort().join('+')) continue;
-    // A sentence end or a colon (a topic label: "Zillow leads: tour-to-lease") is not a link.
-    if (/[.?!:]/.test(question.slice(a.end, b.start).replace(/\d\.\d/g, ''))) continue;
-    const words = question.slice(a.end, b.start).match(/[\p{L}\p{N}_$]+/gu) ?? [];
-    if (words.length > 4 || words.some((w) => /_/.test(w) || NON_LINK_WORD_RE.test(w))) continue;
-    for (const p of [a, b]) if (![...p.kinds].some(covers)) return p.text;
-  }
+  // "Vacancy at X" counts vacancies; beside a unit count it is a second figure.
+  const unitAsked = asked.some((p) => p.kinds.has('unit'));
+  // Fail safe: any measure phrase the question asks for that the plan's
+  // measure does not cover is a figure left out, wherever it sits and
+  // whatever words or names lie between it and the measure answered.
+  if (measure === 'unsupported') return null;
+  for (const p of asked) if (![...p.kinds].some(covers)) return p.text;
   return null;
 }
 
@@ -1725,6 +1737,31 @@ export function isMeasureNoun(word: string): boolean {
 }
 
 /** The nouns each marketing scalar names; a measure not listed is not checked. */
+/**
+ * What each measure's answer reports beyond its name, by category: the
+ * population it counts or the inputs it is built from. A measure phrase in
+ * one of these categories is part of that one figure, not a second one.
+ */
+const MEASURE_REPORTS: Readonly<Partial<Record<IntentMeasure, readonly string[]>>> = {
+  tour_to_lease_rate: ['lead'],
+  lead_count: ['lead'],
+  applied_without_tour: ['lead', 'application', 'tour'],
+  applied_and_leased: ['lead', 'application', 'lease'],
+  signed_leases_ranking: ['lead', 'lease'],
+  dead_spend_building: ['spend', 'lease', 'lead'],
+  dead_spend_pairs: ['spend', 'lease', 'lead'],
+  reallocation_leases: ['spend', 'lease'],
+  rent_at_risk: ['rent', 'lease', 'resident'],
+  total_concession: ['concession', 'lease', 'move_in'],
+  average_concession: ['concession', 'lease', 'move_in'],
+  renewal_rate: ['renewal', 'lease'],
+  ending_and_renewed: ['renewal', 'lease'],
+  lease_count: ['lease'],
+  unit_count: ['unit', 'status', 'resident'],
+  vacancy_rate: ['vacancy', 'unit', 'status'],
+  occupied_share: ['occupancy', 'unit', 'status'],
+};
+
 const MEASURE_CONSUMES: Readonly<Partial<Record<IntentMeasure, readonly string[]>>> = {
   spend_total: ['spend'],
   lead_count: ['lead'],
