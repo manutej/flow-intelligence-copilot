@@ -1556,6 +1556,11 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
     const m = re.exec(q);
     if (m) return `${what} ("${m[0].trim()}")`;
   }
+  const currency = unsupportedCurrency(question);
+  if (currency) return currency;
+  // A to-date period is relative to a "today" the exports do not carry.
+  const toDate = /\b(?:ytd|qtd|mtd|(?:year|quarter|month)[\s-]+to[\s-]+date)\b/i.exec(question);
+  if (toDate) return `a to-date period ("${toDate[0].trim()}"), but FlowIQ has no "today" to count to`;
   const unitFilter = unappliedUnitFilter(question, intent);
   if (unitFilter) return unitFilter;
   const rentRoll = unsplittableFilter(question, intent, store);
@@ -1668,7 +1673,11 @@ function unsplittableFilter(question: string, intent: ParsedQueryIntent, store: 
   if (source) return `a lead source ("${source}"), but ${intent.domain === 'units' ? 'unit' : 'lease'} figures are not split by source`;
   const pet = /\b(?:dogs?|cats?|pets?|pet[\s-]friendly)\b(?!\s+runs?\b)/i.exec(q);
   if (pet) return `a pet filter ("${pet[0]}"), but the rent roll does not record pets`;
+  const term = LEASE_TERM_RE.exec(q);
+  if (term) return `a lease term ("${term[0].trim()}"), but the lease ledger records only new or renewal, not the term`;
   if (intent.domain === 'units') {
+    const end = PERIOD_END_RE.exec(q);
+    if (end) return `a period end ("${end[0].trim()}"), but unit figures are one snapshot of the current rent roll, not a history`;
     let d = spellIsoMonths(spellCalendarYear(q)).replace(/\$\s?[\d,]+(?:\.\d+)?\s*[kK]?|\b[\d,]+(?:\.\d+)?\s*(?:sq\.?\s*f(?:ee)?t|sqft|sf|square\s+f(?:ee|oo)t)\b/g, ' ');
     for (const re of COMPARATOR_PHRASES) d = d.replace(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`), ' ');
     if (intent.yearBuiltMin !== undefined || intent.yearBuiltMax !== undefined) d = d.replace(/\b(?:built|constructed|opened|completed|delivered)\b[^?.!]*?\b(?:19|20)\d{2}\b/gi, ' ');
@@ -1678,6 +1687,22 @@ function unsplittableFilter(question: string, intent: ParsedQueryIntent, store: 
     if (dated) return `a period ("${dated[0].trim()}"), but unit figures are one snapshot of the current rent roll, not a history`;
   }
   return null;
+}
+
+/** A lease term the ledger does not record (it holds only new or renewal). */
+const LEASE_TERM_RE = /\b(?:month[\s-]+to[\s-]+month|m2m|mtm|fixed[\s-]+term|short[\s-]+term|long[\s-]+term|\d+[\s-]*(?:month|mo|year|yr)[\s-]+(?:leases?|terms?))\b/i;
+
+/** A point in time at the end of a period ("at year end", "end of quarter"). */
+const PERIOD_END_RE = /\b(?:(?:fiscal[\s-]+)?(?:year|quarter|month|week|period|fy)[\s-]*end(?:ing)?|end\s+of\s+(?:the\s+)?(?:fiscal\s+)?(?:year|quarter|month|week|period|fy)|eo[ymqw])\b/i;
+
+/**
+ * Every figure FlowIQ reports is in USD (CAD invoices are converted). A
+ * figure asked for in any other currency would carry the wrong unit, so the
+ * currency is left over rather than ignored.
+ */
+function unsupportedCurrency(question: string): string | null {
+  const m = /(?:\b(?:in|into|to|as|using)\s+(?:the\s+)?)((?:CAD|EUR|GBP|MXN|JPY|AUD|CHF|CNY|INR|BRL)\b|C\$|€|£|¥|(?:canadian|australian|aussie)\s+dollars?\b|loonies\b|euros?\b|pounds?(?:\s+sterling)?\b|pesos?\b|yen\b)/iu.exec(question.normalize('NFKC'));
+  return m ? `a currency ("${m[1]}"), but FlowIQ reports figures in USD only` : null;
 }
 
 /** Words a "from <phrase>" source phrase may hold besides source, property and date names. */
