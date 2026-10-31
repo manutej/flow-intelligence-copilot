@@ -41,9 +41,8 @@ describe('FLOW-103 & FLOW-106 · Data Sanitization, Trust Boundaries, and P09 Qu
     assert.equal(p09.propertyId, 'P09');
     assert.equal(p09.actualUnitCount, 0);
     assert.equal(p09.pms, 'AppFolio');
-    assert.ok(
-      p09.decodedEasterEggUrls.includes('join.ormus.solutions/ninth-house'),
-    );
+    assert.equal(p09.withheldAliasCount, 1);
+    assert.doesNotMatch(JSON.stringify(p09), /ormus\.solutions|ninth-house/);
     assert.equal(p09.onboardingReadiness.readyForOperatingPool, false);
     assert.equal(p09.onboardingReadiness.hasUnitsInUnitsCsv, false);
     assert.equal(p09.onboardingReadiness.noBase64TokensInAka, false);
