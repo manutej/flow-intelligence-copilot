@@ -18,7 +18,7 @@ import type {
   UnitQuerySummary,
 } from '../domain/metrics.ts';
 import type { PropertyResolutionResult } from '../domain/resolver.ts';
-import { droppedBreakdownOf, parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
+import { droppedBreakdownOf, scalarLeftoverOf, parseQueryIntent, type ParsedQueryIntent } from './intent.ts';
 import {
   dataCoverage,
   describeCoverage,
@@ -182,6 +182,12 @@ export function executeCompositionalPlan(
       const unbound = unknownWords(question, store);
       return unknown(
         `the question asks for ${what} ("${dropped.words}"), and FlowIQ has no answer laid out that way for this measure, so it will not give one overall figure in its place.${unbound.length > 0 ? ` FlowIQ also has no meaning for ${unbound.map((w) => `"${w}"`).join(', ')} in this question.` : ''}`,
+      );
+    }
+    const leftover = scalarLeftoverOf(intent);
+    if (leftover) {
+      return unknown(
+        `FlowIQ would answer this with one overall figure, but the question also asks for ${leftover}, which one figure cannot carry, so it will not answer a different question in its place.`,
       );
     }
     return unknown(

@@ -1,4 +1,6 @@
 import { typedQueryErrors } from './typed-query.ts';
+import { COMPARATOR_PHRASES } from '../domain/comparators.ts';
+import { spellCalendarYear } from '../domain/fiscal.ts';
 import { mentionsQuantity, statedValues, type Field } from '../domain/comparators.ts';
 import { unresolvedUnitWords } from './closed-world.ts';
 import { DATE_WINDOWS, type DateWindowSpec } from '../config/rules.ts';
@@ -432,6 +434,7 @@ export function parseExplicitDateWindow(
   question: string,
   asOfDate = '2026-10-01',
 ): DateWindowSpec | null {
+  question = spellCalendarYear(question);
   const defaultYear = Number.parseInt(asOfDate.slice(0, 4), 10) || 2026;
 
   if (/\bthis\s+month\b/i.test(question)) {
@@ -1446,6 +1449,93 @@ export function droppedBreakdown(question: string, intent: ParsedQueryIntent): {
   return null;
 }
 
+/**
+ * A pooled scalar carries one measure, one period, at most one property and
+ * filters. Words that ask for an ordering, a choice, a comparison, a list or
+ * a ratio have no place in it, so a scalar parse is only answered when no
+ * such word is left over, and when it names at most one property. A list
+ * or grouping word with a dimension is requestedBreakdowns' job; "which"
+ * with a filter ("which buildings have EV charging") is a lookup. The parse consumes them when it ranks (argmax or
+ * argmin) or when its answer lists a dimension; a filter comparator ("more
+ * than 2 bedrooms", "at most $2000") is consumed by that filter.
+ */
+const SCALAR_LEFTOVERS: ReadonlyArray<readonly [string, RegExp]> = [
+  ['an ordering', /\b(?:top|bottom|best|worst|highest|lowest|most|least|biggest|largest|greatest|smallest|cheapest|priciest|richest|leader(?:s|board)?|leads\s+in|rank\w*|sort\w*|order(?:ed)?|number\s+one|winner|tops|topped)\b|#\s*1\b|-(?:best|worst|highest|lowest)\b/i],
+  ['a comparison', /\b(?:compar\w*|versus|vs\.?|higher|lower|more|fewer|less|than|difference|differ\w*|relative)\b/i],
+  // A ratio operator before a rate denominator; "concierge/doorman" is an
+  // alternation and "for every lease where ..." is the set being summed.
+  ['a ratio', new RegExp(String.raw`(?:\s\/\s*|\/\s*(?=(?:signed\s+)?(?:leads?|leases?|tours?|units?|apartments?|doors?|applications?|renewals?|move[-\s]?ins?)\b)|\bdivided\s+by\s+|\bfor\s+(?:each|every)\s+)(?:signed\s+)?(?:leads?|leases?|tours?|units?|apartments?|doors?|applications?|renewals?|move[-\s]?ins?)\b(?!\s+(?:where|that|which|who|with)\b)|\bratio\b`, 'i')],
+];
+
+/** What a scalar parse leaves unaccounted for, or null. */
+function scalarLeftover(question: string, intent: ParsedQueryIntent, store: PortfolioStore): string | null {
+  if (intent.measure === 'unsupported' || answerLayout(intent).size > 0) return null;
+  // A ranked parse whose measure has no ranked layout is answered as one
+  // pooled figure, so its ordering words are left over like a value parse's.
+  if (!['value', 'argmax', 'argmin'].includes(intent.aggregation)) return null;
+  let q = question;
+  for (const re of COMPARATOR_PHRASES) q = q.replace(re, ' ');
+  // A date range ("between April and June") and a number ("2000/month") are periods and amounts.
+  q = q.replace(/\b\d+\s*\/\s*\d+\b/g, ' ').replace(/\/\s*(?:mo|month|yr|year|wk|week|unit|sq\.?\s*ft|sf)\b/gi, ' ');
+  for (const [what, re] of SCALAR_LEFTOVERS) {
+    // A measure that is itself a comparison (H1 versus Q3) consumes the comparison words.
+    if (what === 'a comparison' && /_vs_|comparison|delta|change/.test(intent.measure)) continue;
+    const m = re.exec(q);
+    if (m) return `${what} ("${m[0].trim()}")`;
+  }
+  const named = namedProperties(question, store);
+  // Two named properties are a comparison unless the question pools them outright.
+  if (named.length > 1 && !/\b(?:across|combined|together|altogether|in\s+total|total|sum|all\s+of)\b/i.test(question)) return `more than one property (${named.join(', ')})`;
+  return null;
+}
+
+/** Building-type words that name no one property on their own. */
+const GENERIC_NAME_WORD = /^(?:the|and|residences?|works|yards?|tower|towers|point|commons|lake|row|annex|lofts?|shore|place|park|house|apartments?|street|square|heights|court|view|plaza|station|building)$/i;
+const DISTINCTIVE = new WeakMap<PortfolioStore, Map<string, string[]>>();
+/** Name words that belong to exactly one property ("Marlowe", "Kedzie"). */
+function distinctiveTokens(store: PortfolioStore): Map<string, string[]> {
+  let out = DISTINCTIVE.get(store);
+  if (out) return out;
+  const owners = new Map<string, Set<string>>();
+  for (const p of store.properties) {
+    for (const t of [p.name, ...p.aka].join(' ').toLowerCase().match(/[a-z]{4,}/g) ?? []) {
+      if (GENERIC_NAME_WORD.test(t)) continue;
+      owners.set(t, (owners.get(t) ?? new Set()).add(p.propertyId));
+    }
+  }
+  out = new Map(store.properties.map((p) => [p.propertyId, [] as string[]]));
+  for (const [t, ids] of owners) if (ids.size === 1) out.get([...ids][0])!.push(t);
+  DISTINCTIVE.set(store, out);
+  return out;
+}
+
+/** Properties the question names outright (name, id or alias), not by a description. */
+function namedProperties(question: string, store: PortfolioStore): string[] {
+  // One span that fits two properties ("the Grove") is one mention, an ambiguity for the resolver.
+  const spans = new Map<number, { end: number; names: Set<string> }>();
+  for (const p of store.properties) {
+    for (const l of [p.name, p.propertyId, ...p.aka, ...distinctiveTokens(store).get(p.propertyId)!].map((x) => x.trim()).filter((x) => x.length > 2)) {
+      const m = new RegExp(String.raw`(?<![\p{L}\p{N}])${l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\p{L}\p{N}])`, 'iu').exec(question);
+      if (!m) continue;
+      const s = spans.get(m.index) ?? { end: m.index + m[0].length, names: new Set<string>() };
+      s.end = Math.max(s.end, m.index + m[0].length);
+      s.names.add(p.name);
+      spans.set(m.index, s);
+    }
+  }
+  // Drop spans inside a longer one ("Works" inside "Kedzie Works").
+  const all = [...spans.entries()];
+  const kept = all.filter(([i, s]) => !all.some(([j, t]) => (j < i && t.end >= s.end) || (j === i && t.end > s.end)));
+  // Two names of one property (Kedzie Works, Logan Lofts) are one mention.
+  return [...new Set(kept.map(([, s]) => [...s.names].sort().join(' or ')))];
+}
+
+const LEFTOVER = new WeakMap<object, string>();
+/** What a scalar parse left unaccounted for, if that made it unsupported. */
+export function scalarLeftoverOf(intent: ParsedQueryIntent): string | undefined {
+  return LEFTOVER.get(intent);
+}
+
 const DROPPED = new WeakMap<object, { dim: Dimension; words: string }>();
 /** Why a parse was made unsupported by a dropped breakdown, if it was. */
 export function droppedBreakdownOf(intent: ParsedQueryIntent): { dim: Dimension; words: string } | undefined {
@@ -1491,10 +1581,12 @@ export function parseQueryIntent(question: string, store: PortfolioStore): Parse
   const conflicting = (['bedrooms', 'bathrooms'] as const).some((f) => intent[f] !== undefined && statedValues(question, f).length > 1);
   const setStated = intent.unitStatusIn !== undefined && [...statuses].every((s) => intent.unitStatusIn!.includes(s as UnitStatus));
   const dropped = droppedBreakdown(question, intent);
-  const uncovered = (statuses.size > 1 && !setStated) || conflicting || dropped !== null || COVERAGE_RULES.some((r) => r.words.test(question) && !r.covered(intent));
+  const leftover = dropped === null ? scalarLeftover(question, intent, store) : null;
+  const uncovered = (statuses.size > 1 && !setStated) || conflicting || dropped !== null || leftover !== null || COVERAGE_RULES.some((r) => r.words.test(question) && !r.covered(intent));
   // Only a valid TypedQuery is ever executed (S1R-L1-4).
   if (!(unmet || uncovered || typedQueryErrors(intent).length > 0)) return intent;
   const out: ParsedQueryIntent = { ...intent, measure: 'unsupported' };
   if (dropped && intent.measure !== 'unsupported') DROPPED.set(out, dropped);
+  if (leftover && intent.measure !== 'unsupported') LEFTOVER.set(out, leftover);
   return out;
 }
