@@ -581,7 +581,7 @@ function withoutMetaInstructions(question: string): string {
 function leftOutMeasure(asked: string, out: ReturnType<typeof executeCompositionalPlan>, store: PortfolioStore): string | null {
   const measure = (out.envelope.query?.intent as { measure?: string } | undefined)?.measure;
   if (!measure) return null;
-  const missing = coordinatedMeasureLeftOut(asked, measure, store);
+  const missing = coordinatedMeasureLeftOut(asked, measure, store, Object.keys((out.envelope.result ?? {}) as Record<string, unknown>));
   return missing ? `the question asks for two measures but the plan computed only one; "${missing}" has no figure` : null;
 }
 

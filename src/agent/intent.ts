@@ -1651,7 +1651,7 @@ export function onlyInFilterClause(question: string, word: string): boolean {
  * plan that computed one measure has answered only part of such a question,
  * whatever words or names sit between the measures.
  */
-export function coordinatedMeasureLeftOut(question: string, measure: string, store: PortfolioStore): string | null {
+export function coordinatedMeasureLeftOut(question: string, measure: string, store: PortfolioStore, reported: readonly string[] = []): string | null {
   // A composite measure ("void_and_duplicate_counts", "new_vs_renewal_and_concession") computes several figures.
   if (/_and_|_vs_/.test(measure)) return null;
   // Source and property names are not quantities ("Zillow and Rent.", "Marlowe Residences").
@@ -1674,6 +1674,8 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
     ['unit', /\b(?:units?|doors?)\b/gi],
   ];
   // A bedroom or unit-type phrase, and a unit status set aside, filter the population.
+  // A unit-type phrase ("2-bed units", "studios") names units: it is still a unit phrase for the status check below.
+  const typedUnits = [...question.matchAll(new RegExp(BEDROOM_PHRASE_RE.source, 'gi'))].map((m) => ({ kinds: new Set(['unit']), start: m.index!, end: m.index! + m[0].length, text: m[0] }));
   question = question.replace(BEDROOM_PHRASE_RE, (m) => '_'.repeat(m.length)).replace(UNIT_STATUS_EXCLUSION_RE, (m) => '_'.repeat(m.length));
   const hits: { kind: string; start: number; end: number; text: string }[] = [];
   for (const [kind, re] of kinds) for (const m of question.matchAll(new RegExp(re.source, 'gi'))) hits.push({ kind, start: m.index!, end: m.index! + m[0].length, text: m[0] });
@@ -1722,6 +1724,61 @@ export function coordinatedMeasureLeftOut(question: string, measure: string, sto
   // whatever words or names lie between it and the measure answered.
   if (measure === 'unsupported') return null;
   for (const p of asked) if (![...p.kinds].some(covers)) return p.text;
+  // Fail safe for unit statuses: a status word ("occupied", "empty") either
+  // sits inside the computed measure's own noun phrase ("occupied 2-bed
+  // units" when units are counted, "vacant ___ rent"), or is governed by a
+  // filter clause or preposition ("rent of vacant units", "units that are
+  // occupied"). Anywhere else it asks for a count of its own, whatever noun
+  // or word order follows it; a status run ("notice or occupied") is one word.
+  const own = asked.filter((p) => [...p.kinds].some((k) => kinds.some(([kk, re]) => kk === k && new RegExp(re.source, 'i').test(named)) || (MEASURE_CONSUMES[measure as IntentMeasure] ?? []).includes(k)));
+  // The measure's own phrases, governed or not ("share of units"), anchor its noun phrase.
+  const ownAll = phrases.filter((p) => [...p.kinds].some((k) => kinds.some(([kk, re]) => kk === k && new RegExp(re.source, 'i').test(named)) || (MEASURE_CONSUMES[measure as IntentMeasure] ?? []).includes(k)));
+  const primary0 = ownAll.length > 0 ? ownAll : phrases.filter((p) => [...p.kinds].some(covers));
+  // Unit nouns beyond "units"/"doors" ("apartments", "homes", "studios") anchor a unit measure's phrase too.
+  const unitMeasure = covers('unit') || covers('vacancy') || covers('occupancy');
+  const unitNouns = [...question.matchAll(/\b(?:units?|doors?|apartments?|apts?|homes?|residences?|studios?|flats?)\b/gi)].map((m) => ({ kinds: new Set(['unit']), start: m.index!, end: m.index! + m[0].length, text: m[0] }));
+  // A rate's phrase is its rate noun (or "share of units"): a unit noun elsewhere is not part of it.
+  const isRate = /^(?:vacancy_rate|occupied_share)$/.test(measure);
+  const primary = [...(unitMeasure && !isRate ? unitNouns : []), ...primary0, ...typedUnits.filter((p) => !isRate && [...p.kinds].some(covers) && (own.length === 0 || own.some((o) => o.kinds.has('unit'))))];
+  const LINK = /\b(?:and|or|plus|also|then|alongside|vs|versus|as\s+well\s+as|along\s+with|together\s+with)\b|[,;&+/]|\s-\s/i;
+  const STATUS = String.raw`(?:vacant|unoccupied|occupied|empty|available|on\s+notice|notice(?!\s+(?:to|of|that|period|date)\b))`;
+  // Statuses describe units: the check runs when units are in play, so "came up empty on leases" is not a status.
+  if (!unitMeasure && typedUnits.length === 0 && !/\b(?:units?|doors?|apartments?|homes?|residences?|studios?)\b/i.test(question)) return null;
+  for (const m of question.matchAll(new RegExp(String.raw`\b${STATUS}(?:\s*(?:,|or|and|\/)\s*${STATUS})*\b`, 'gi'))) {
+    const run = { start: m.index!, end: m.index! + m[0].length };
+    // A figure the plan already returns for this status ("occupied_units") is not left out.
+    if (m[0].split(/[^\p{L}]+/u).filter((w) => w && !/^(?:or|and|on)$/i.test(w)).every((w) => reported.some((k) => k.toLowerCase().split('_').includes(w.toLowerCase())))) continue;
+    // A status that defines how units are counted ("with status occupied or
+    // notice", "count notice as occupied", "(occupied or notice)") restates
+    // the population; it asks for no figure.
+    if (/(?:\bstatus(?:es)?(?:\s+(?:is|of|as|=|:))?|\b(?:count|treat|consider|includ)\w*\b[^,;.?!]{0,40}\bas|\()\s*$/i.test(question.slice(Math.max(0, run.start - 64), run.start))) continue;
+    const rateOwn = measure === 'vacancy_rate' ? /^(?:vacant|unoccupied|empty|available)$/i : measure === 'occupied_share' ? /^occupied$/i : null;
+    const restatesRate = !!rateOwn && m[0].split(/\s*(?:,|\bor\b|\band\b|\/)\s*/i).every((w) => rateOwn.test(w));
+    // A rate's population is all units, so a status that does not restate the rate cannot filter it.
+    if (rateOwn && !restatesRate) return m[0];
+    // With no other measure phrase, a status that restates the rate names it ("Portfolio occupied share?").
+    if (restatesRate && primary.length === 0) continue;
+    if (governed(run)) {
+      // A clause or preposition governs the status only within the measure's
+      // conjunct: after a link, a new noun phrase ("plus the residences that
+      // are occupied") heads a figure of its own; a clause that continues the
+      // filter ("and that are occupied", "and with ...") does not.
+      const lead = question.slice(0, run.start);
+      const cut = [...lead.matchAll(new RegExp(LINK.source, 'gi'))].pop();
+      if (!cut) continue;
+      const seg = lead.slice(cut.index! + cut[0].length);
+      if (/^\s*(?:(?:that|which|who|where|with|without|excluding|except|not|are|is|were|being)\b|$)/i.test(seg)) continue;
+      if (primary.some((p) => p.start >= cut.index! + cut[0].length && p.end <= run.start)) continue;
+      return m[0];
+    }
+    // A plan that also returns a unit count ("count") counts the units a status
+    // describes ("4-bedroom units are vacant ..., and their rent"); a rate never does.
+    const near = (p: { start: number; end: number }) => !LINK.test(p.end <= run.start ? question.slice(p.end, run.start) : question.slice(run.end, p.start));
+    if (reported.includes('count') && !isRate && [...typedUnits, ...unitNouns].some(near)) continue;
+    // Inside the measure's phrase: nothing but words, names and hyphens, with no link, between them.
+    const inside = primary.some((p) => !LINK.test(p.end <= run.start ? question.slice(p.end, run.start) : question.slice(run.end, p.start)) && !/\bthat\s+(?:are|were)\b/i.test(question.slice(Math.min(p.end, run.end), Math.max(p.start, run.start))));
+    if (!inside) return m[0];
+  }
   return null;
 }
 
