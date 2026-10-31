@@ -5,7 +5,7 @@ import { boundPolicyValues, identifierTokens, statedNumbers, usedInputs } from '
 import { executeCompositionalPlan } from '../agent/planner.ts';
 import { verifyAnswerEnvelope } from '../domain/guards.ts';
 import type { PortfolioStore } from '../data/schema.ts';
-import { convert } from '../fx/convert.ts';
+import { convert, fxAnswer, type FxResult } from '../fx/convert.ts';
 import type { RateQuote } from '../fx/provider.ts';
 
 /**
@@ -139,10 +139,15 @@ export function specErrors(spec: ChartSpec, ev: Evidence, store?: PortfolioStore
   if (spec.answer !== undefined && store) {
     const main = ev.items.find((i) => i.key === 'main');
     const fresh = main && runRecipe(main, store);
+    // a converted panel's text is the currency tool's sentence, rebuilt from its fx result
+    const fx = ev.items.find((i) => i.tool?.kind === 'fx');
+    if (fx) { if (spec.answer !== fxAnswer(fx.result as unknown as FxResult)) errs.push('spec.answer: not the currency tool\'s sentence'); }
+    else {
     // a breakdown (bars with no winner) may label the pooled answer "Overall: ", nothing else
     const pooled = spec.template === 'sorted_bar' && spec.props.highlight.length === 0;
     const text = pooled && spec.answer.startsWith(OVERALL) ? spec.answer.slice(OVERALL.length) : spec.answer;
     if (!fresh || fresh.answer !== text) errs.push('spec.answer: not the recomputed answer text');
+    }
   }
   if (!TEMPLATES.includes(spec.template)) errs.push(`template ${String(spec.template)} is not in the closed set`);
   for (const it of ev.items) if (hashOf(it.result) !== it.result_hash) errs.push(`evidence ${it.key}: result hash mismatch`);

@@ -2,7 +2,7 @@ import { extreme } from '../domain/extreme.ts';
 import { twoMeasureGuard, misspeltBuildingGuard } from './guards.ts';
 import { currencyAsk, withoutCurrency, type CurrencyAsk } from './currency.ts';
 import { rateProvider } from '../fx/provider.ts';
-import { convert, rateLabel } from '../fx/convert.ts';
+import { convert, fxAnswer, rateLabel } from '../fx/convert.ts';
 import { billedRows } from './spec.ts';
 import { askFlowIqCopilot, type CopilotTurnResult } from '../agent/copilot.ts';
 import { parseQueryIntent, type ParsedQueryIntent } from '../agent/intent.ts';
@@ -271,8 +271,14 @@ export function pick({ question: asked, turn, store }: PickInput): { spec: Chart
   }
   // scatter: rent vs size by building
   if (SCATTER.test(question) || m === 'avg_market_rent_and_sqft') {
-    const names = store.operatingProperties.map((p) => p.name);
-    const pts = store.operatingProperties.map((p) => {
+    // the buildings asked about: one named building is its own two figures, never the portfolio
+    const ids = new Set(resolvePropertiesFromText(store, core).matched.map((p) => p.propertyId));
+    const scope = ids.size ? store.operatingProperties.filter((p) => ids.has(p.propertyId)) : store.operatingProperties;
+    if (scope.length === 1 && m === 'avg_market_rent_and_sqft' && typeof main.result.usd === 'number' && typeof main.result.sqft === 'number')
+      return done({ ...base, template: 'kpi', props: { value: num(main, 'usd'), unit: '$', secondary: [{ label: 'average square footage', value: num(main, 'sqft'), unit: 'sqft' }], good_direction: gd } });
+    if (scope.length === 1) return { spec: { ...clarify('unknown', { ...turn, clarifyingQuestion: `This chart compares buildings, and the question names one (${scope[0].name}), so nothing is charted rather than widening the scope; ask for that building's figures directly.` } as CopilotTurnResult, tid, asked), title: 'One building named' }, evidence: { items: [] } };
+    const names = scope.map((p) => p.name);
+    const pts = scope.map((p) => {
       const rq = `What is the average market rent at ${p.name}?`, sq = `What is the average square footage at ${p.name}?`;
       const rent = sub(store, rq, parseQueryIntent(rq, store), `${p.propertyId}_rent`, p.name);
       const size = sub(store, sq, parseQueryIntent(sq, store), `${p.propertyId}_sqft`, p.name);
@@ -467,15 +473,17 @@ async function currencyPanel(input: string, question: string, ask: CurrencyAsk, 
     const { answer: _drop, ...rest } = sp;
     return out({ ...rest, title: `${sp.title}, billed in ${ask.code} only`, insight: `Only spend rows whose currency column is ${ask.code}`, template: 'kpi',
       props: { value: { v: r.native, ref: 'items.billed.result.native' }, unit: ask.code, good_direction: sp.props.good_direction,
-        secondary: [{ label: `posted in USD at the FlowIQ policy rate (fixed, not a market rate)`, value: { v: r.usd_posted, ref: 'items.billed.result.usd_posted' }, unit: '$' }, { label: 'spend rows', value: { v: r.rows, ref: 'items.billed.result.rows' }, unit: 'count' }],
-        fx: { rate: { v: r.policy_rate, ref: 'items.billed.result.policy_rate' }, quote: ask.code, source: 'FlowIQ policy CAD rate (fixed)', as_of: null, rate_label: 'fixed policy rate, USD per CAD' } } }, [main, item]);
+        secondary: [{ label: `posted in USD at the data kit's fixed CAD rate (KIT_README), not a market rate`, value: { v: r.usd_posted, ref: 'items.billed.result.usd_posted' }, unit: '$' }, { label: 'spend rows', value: { v: r.rows, ref: 'items.billed.result.rows' }, unit: 'count' }],
+        fx: { rate: { v: r.policy_rate, ref: 'items.billed.result.policy_rate' }, quote: ask.code, source: 'FlowIQ data kit (KIT_README)', as_of: null, rate_label: 'fixed kit rate, USD per CAD (KIT_README)' } } }, [main, item]);
   }
   const got = await rateProvider().rate('USD', ask.code, new Date());
   if (!got.ok) return idk(`No usable USD to ${ask.code} rate (${got.source}: ${got.reason.replace('_', ' ')}), so no converted figure is shown. FlowIQ never falls back to a fixed rate or to the US-dollar figure.`, `No ${ask.code} rate available`);
   const q = got.quote;
-  const r = { usd, rate: q.rate, converted: convert(usd, q), base: 'USD', quote: ask.code, source: q.source, as_of: q.asOf, label: rateLabel(q), ...(q.fallbackFrom ? { fallback_from: q.fallbackFrom } : {}) };
+  // spend with CAD-billed rows was posted to USD at the kit's fixed rate (KIT_README); said so, not undone
+  const kit = /\bCAD converted at\b/.test(sp.answer ?? '') ? { kit_rate: store.policy.cadToUsdRate } : {};
+  const r = { usd, rate: q.rate, converted: convert(usd, q), base: 'USD', quote: ask.code, source: q.source, as_of: q.asOf, label: rateLabel(q), ...kit, ...(q.fallbackFrom ? { fallback_from: q.fallbackFrom } : {}) };
   const item: EvidenceItem = { key: 'fx', label: `USD to ${ask.code}`, template_id: main.template_id, result: r, result_hash: hashOf(r), citations: [], recipe: main.recipe, tool: { kind: 'fx' } };
-  return out({ ...sp, title: `${sp.title}, in ${ask.code}`, insight: `Converted from US dollars by the currency tool`,
+  return out({ ...sp, answer: fxAnswer(r), title: `${sp.title}, in ${ask.code}`, insight: `Converted from US dollars by the currency tool`,
     props: { value: { v: r.converted, ref: 'items.fx.result.converted' }, unit: ask.code, good_direction: sp.props.good_direction,
       secondary: [{ label: 'computed in USD', value: sp.props.value, unit: '$' }, { label: `${ask.code} per USD`, value: { v: q.rate, ref: 'items.fx.result.rate' }, unit: 'rate' }],
       fx: { rate: { v: q.rate, ref: 'items.fx.result.rate' }, quote: ask.code, source: q.source, as_of: q.asOf, rate_label: r.label } } }, [...base.evidence.items, item]);

@@ -7,7 +7,6 @@
  */
 import type { PortfolioStore } from '../data/schema.ts';
 import type { ParsedQueryIntent } from '../agent/intent.ts';
-import { editDistance } from '../util/suggest.ts';
 
 /** Measure nouns, one family each; a family is one measure the engine answers on its own. */
 const FAMILIES: ReadonlyArray<readonly [string, RegExp]> = [
@@ -47,6 +46,16 @@ export function twoMeasureGuard(q: string, intent: ParsedQueryIntent | null): st
   return null;
 }
 
+/** Edit distance where swapping two adjacent letters ("marolwe" for "marlowe") is one typo. */
+function typoDistance(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+  }
+  return d[a.length][b.length];
+}
+const FUNCTION_WORDS = new Set(['the', 'and', 'a', 'an', 'at', 'of', 'in', 'on', 'for', 'to', 'vs', 'or', 'with', 'by', 'from']);
 const norm = (x: string) => x.toLowerCase().replace(/&/g, 'and').replace(/^the\s+/, '').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
 /** A building name a few edits from a real one, where the question does not also name it exactly. */
 export function misspeltBuildingGuard(q: string, store: PortfolioStore): string | null {
@@ -67,7 +76,11 @@ export function misspeltBuildingGuard(q: string, store: PortfolioStore): string 
       for (let i = 0; i + k <= words.length; i++) {
         const span = words.slice(i, i + k).join(' ');
         if (known.has(span)) continue;
-        const d = editDistance(span, cand);
+        // a function word in place of a name word ("halsted and the" for "halsted and lake") is
+        // the sentence going on, not a misspelling
+        const sw = span.split(' '), cw = cand.split(' ');
+        if (sw.some((w, j) => w !== cw[j] && FUNCTION_WORDS.has(w))) continue;
+        const d = typoDistance(span, cand);
         // an alias is shown with the building it names: "Logan Lofts (Kedzie Works)"
         const shown = ci === 0 ? p.name : `${(p as { aka?: readonly string[] }).aka![ci - 1]} (${p.name})`;
         if (d > 0 && d <= limit && span[0] === cand[0] && (!best || d < best.d)) best = { span, name: shown, d };

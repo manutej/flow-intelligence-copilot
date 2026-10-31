@@ -16,7 +16,7 @@ import { FIXED } from './vocabulary.ts';
  * of income, military status, and others.
  */
 
-export type FairHousingAction = 'targeting' | 'exclusion' | 'steering' | 'preference' | 'differential';
+export type FairHousingAction = 'targeting' | 'exclusion' | 'steering' | 'preference' | 'differential' | 'identification';
 
 export interface ProtectedClassRule {
   readonly protectedClass: string;
@@ -45,7 +45,7 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     protectedClass: 'national origin, ancestry, or language',
     legalBasis: `${FHA} and ${IHRA}`,
     pattern:
-      /\b(national\s+origin|ancestry|immigrants?|foreign(?:ers)?|citizens?(?:hip)?|non[-\s]?citizens?|undocumented|green\s+card|accents?|english[-\s]speak\w*|(?:first|native)\s+language|mother\s+tongue|perfect\s+english|from\s+(?:mexico|china|india|poland|another\s+country|abroad)|native\s+english|speaks?\s+(?:good\s+|fluent\s+)?english|spanish[-\s]speak\w*|non[-\s]english|esl|mexican\w*|indian|chinese|polish|arab\w*|middle\s+eastern|puerto\s+ricans?|somalis?|nigerians?|koreans?|vietnamese|filipin[oa]s?|russians?|ukrainians?|haitians?|syrians?|afghans?|(?:people|tenants|renters|applicants|callers|families)\s+from\s+(?!the\s+(?:website|portal|ils|ad)\b)[a-z]+)\b/i,
+      /\b(national\s+origin|ancestry|immigrants?|immigration(?:\s+status)?|visa\s+status|(?:legal\s+)?status\s+in\s+the\s+(?:us|u\.s\.|country)|foreign(?:ers)?|citizens?(?:hip)?|non[-\s]?citizens?|undocumented|green\s+card|accents?|english[-\s]speak\w*|(?:first|native)\s+language|mother\s+tongue|perfect\s+english|from\s+(?:mexico|china|india|poland|another\s+country|abroad)|native\s+english|speaks?\s+(?:good\s+|fluent\s+)?english|spanish[-\s]speak\w*|non[-\s]english|esl|mexican\w*|indian|chinese|polish|arab\w*|middle\s+eastern|puerto\s+ricans?|somalis?|nigerians?|koreans?|vietnamese|filipin[oa]s?|russians?|ukrainians?|haitians?|syrians?|afghans?|(?:people|tenants|renters|applicants|callers|families)\s+from\s+(?!the\s+(?:website|portal|ils|ad)\b)[a-z]+)\b/i,
   },
   {
     protectedClass: 'religion',
@@ -63,7 +63,7 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     protectedClass: 'disability',
     legalBasis: `${FHA}(f)`,
     pattern:
-      /\b(disab(?:ility|ilities|led)|handicap\w*|wheelchairs?|walkers?|canes?|crutches|mobility\s+aids?|service\s+(?:animals?|dogs?)|emotional\s+support\s+animals?|esas?|blind|deaf|mental(?:ly)?\s+ill\w*|mental\s+health|hiv|aids\s+patients?|recovering\s+addicts?)\b/i,
+      /\b(disab(?:ility|ilities|led)|handicap\w*|wheelchairs?|walkers?|canes?|crutches|mobility\s+aids?|service\s+(?:animals?|dogs?)|emotional\s+support\s+animals?|esas?|blind|deaf|mental(?:ly)?\s+ill\w*|mental\s+health|hiv|aids\s+patients?|recovering\s+addicts?|medical\s+(?:needs?|conditions?|issues?|histor(?:y|ies)|records?)|health\s+(?:conditions?|issues?|problems?)|illness\w*|chronic(?:ally)?\s+ill\w*|impair\w*)\b/i,
   },
   {
     protectedClass: 'age',
@@ -135,6 +135,13 @@ const ACTION_RULES: ReadonlyArray<{ readonly action: FairHousingAction; readonly
     action: 'differential',
     pattern:
       /\b(charg\w*|quot\w*|higher|lower|extra|surcharg\w*|deposits?|co-?signers?|guarantors?|delay\w*|slow\w*|los[et]\w*|misplac\w*|ignor\w*|pay\w*|turn\w*\s+down|told|tell\w*|treat\w*|requir\w*|need\w*|must|should|ought|make\s+(?:them|\w+\s+\w+)|callbacks?|call\w*\s+back|last\s+in\s+line|back\s+of\s+the\s+line|waitlist\w*|stricter|more\s+(?:documents?|paperwork|checks?|screening))\b/i,
+  },
+  {
+    // Identification: finding, listing or counting people by who they are ("which residents
+    // have medical needs", "list tenants who are pregnant"); a protected trait is not a column
+    action: 'identification',
+    pattern:
+      /\b(?:which|who|whom|whose|what|list|identify|find|flag|show|count|name|how\s+many)\b[^.?!;]*?\b(?:residents?|tenants?|renters?|applicants?|occupants?|households?|prospects?|people|persons|callers|lessees|leaseholders)\b|\b(?:residents?|tenants?|renters?|applicants?|occupants?|households?|people)\s+(?:who|that|with)\b/i,
   },
   {
     action: 'targeting',

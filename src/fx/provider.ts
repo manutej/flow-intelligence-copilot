@@ -34,7 +34,7 @@ export function checkRate(source: string, base: string, quote: string, rate: unk
   if (typeof r !== 'number' || !Number.isFinite(r) || r <= 0) return fail(source, 'bad_rate', `rate is not a positive number: ${JSON.stringify(rate)}`);
   if (typeof asOf !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) return fail(source, 'bad_rate', `no observation date: ${JSON.stringify(asOf)}`);
   const ageDays = (now.getTime() - Date.parse(`${asOf}T00:00:00Z`)) / 86_400_000;
-  if (!(ageDays <= MAX_AGE_DAYS + 1)) return fail(source, 'stale_rate', `rate as of ${asOf} is older than ${MAX_AGE_DAYS} days`);
+  if (!(ageDays <= MAX_AGE_DAYS)) return fail(source, 'stale_rate', `rate as of ${asOf} is older than ${MAX_AGE_DAYS} days`);
   return { ok: true, quote: { base, quote, rate: r, source, asOf, basis: 'daily' } };
 }
 const invert = (q: RateQuote): RateQuote => ({ ...q, base: q.quote, quote: q.base, rate: 1 / q.rate });
