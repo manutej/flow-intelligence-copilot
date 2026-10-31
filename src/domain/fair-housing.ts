@@ -36,7 +36,7 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
     terms: ['children', 'pregnant', 'pregnancy', 'expecting', 'families', 'mothers', 'toddlers', 'teenagers'],
     legalBasis: FHA,
     pattern:
-      /\b(famil(?:y|ies)|children|child|kids?|minors|toddlers?|little\s+ones|babies|baby|prams?|buggies|moms?|mothers?|kid[-\s]?free|teen(?:ager)?s?|pregnan\w*|expecting\s+mothers?|expecting(?=\s*(?:[?.!;,]|$|a\s+(?:baby|child)|twins))|strollers?|school[-\s]?age|parents?|adults?[-\s]only|no[-\s]kids|child[-\s]?free|empty[-\s]?nesters?|dinks?)\b/i,
+      /\b(famil(?:y|ies)|children|child|kids?|minors|toddlers?|little\s+ones|babies|baby|prams?|buggies|moms?|mothers?|kid[-\s]?free|teen(?:ager)?s?|pregnan\w*|expecting\s+mothers?|expecting(?=\s*(?:[?.!;,]|$|a\s+(?:baby|child)|twins))|(?:a\s+)?(?:baby|babies|kids?|child|little\s+ones?)\s+on\s+the\s+way|strollers?|school[-\s]?age|parents?|adults?[-\s]only|no[-\s]kids|child[-\s]?free|empty[-\s]?nesters?|dinks?)\b/i,
   },
   {
     protectedClass: 'race or color',
@@ -47,17 +47,17 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
   },
   {
     protectedClass: 'national origin, ancestry, or language',
-    terms: ['immigrant', 'immigrants', 'immigration', 'foreigner', 'foreigners', 'citizen', 'citizens', 'citizenship', 'undocumented', 'mexican', 'ancestry'],
+    terms: ['immigrant', 'immigrants', 'refugee', 'refugees', 'asylum', 'immigration', 'foreigner', 'foreigners', 'citizen', 'citizens', 'citizenship', 'undocumented', 'mexican', 'ancestry'],
     legalBasis: `${FHA} and ${IHRA}`,
     pattern:
-      /\b(national\s+origin|ancestry|immigrants?|immigration(?:\s+status)?|visa\s+status|(?:legal\s+)?status\s+in\s+the\s+(?:us|u\.s\.|country)|foreign(?:ers)?|citizens?(?:hip)?|non[-\s]?citizens?|undocumented|green\s+card|accents?|english[-\s]speak\w*|(?:first|native)\s+language|mother\s+tongue|perfect\s+english|from\s+(?:mexico|china|india|poland|another\s+country|abroad)|born\s+(?:abroad|overseas|outside\s+(?:the\s+)?(?:us|u\.s\.|country|united\s+states))|(?:foreign|overseas)[-\s]born|native\s+english|speaks?\s+(?:good\s+|fluent\s+)?english|spanish[-\s]speak\w*|non[-\s]english|esl|mexican\w*|indian|chinese|polish|arab\w*|middle\s+eastern|puerto\s+ricans?|somalis?|nigerians?|koreans?|vietnamese|filipin[oa]s?|russians?|ukrainians?|haitians?|syrians?|afghans?|(?:people|tenants|renters|applicants|callers|families)\s+from\s+(?!the\s+(?:website|portal|ils|ad)\b)[a-z]+)\b/i,
+      /\b(national\s+origin|ancestry|immigrants?|immigration(?:\s+status)?|visa\s+status|(?:legal\s+)?status\s+in\s+the\s+(?:us|u\.s\.|country)|foreign(?:ers)?|citizens?(?:hip)?|non[-\s]?citizens?|undocumented|green\s+card|accents?|english[-\s]speak\w*|(?:first|native)\s+language|mother\s+tongue|perfect\s+english|from\s+(?:mexico|china|india|poland|another\s+country|abroad)|(?:lack\w*|no|without|ha(?:ve|s)\s+no)\s+(?:legal\s+)?(?:status|papers|documents)|legal\s+status|immigration\s+papers|from\s+overseas|refugees?|asylum\s+seekers?|asylees?|asylum|born\s+(?:abroad|overseas|outside\s+(?:the\s+)?(?:us|u\.s\.|country|united\s+states))|(?:foreign|overseas)[-\s]born|native\s+english|speaks?\s+(?:good\s+|fluent\s+)?english|spanish[-\s]speak\w*|non[-\s]english|esl|mexican\w*|indian|chinese|polish|arab\w*|middle\s+eastern|puerto\s+ricans?|somalis?|nigerians?|koreans?|vietnamese|filipin[oa]s?|russians?|ukrainians?|haitians?|syrians?|afghans?|(?:people|tenants|renters|applicants|callers|families)\s+from\s+(?!the\s+(?:website|portal|ils|ad)\b)[a-z]+)\b/i,
   },
   {
     protectedClass: 'religion',
-    terms: ['religion', 'religious', 'muslim', 'muslims', 'christian', 'christians', 'catholic', 'catholics', 'jewish', 'church', 'synagogue', 'mosque'],
+    terms: ['religion', 'religious', 'islam', 'judaism', 'christianity', 'hinduism', 'buddhism', 'ramadan', 'synagogue', 'muslim', 'muslims', 'christian', 'christians', 'catholic', 'catholics', 'jewish', 'church', 'synagogue', 'mosque'],
     legalBasis: FHA,
     pattern:
-      /\b(religio(?:n|us)|church[-\s]?go\w*|churchgo\w*|church|christians?|catholics?|protestants?|muslims?|islamic|jewish|jews?|hindus?|sikhs?|mormons?|evangelicals?|orthodox|hasidi?c?m?|amish|quakers?|jehovah\w*|buddhists?|atheists?|synagogue|mosque|temple[-\s]go\w*|faith[-\s]based|devout|pray\w*|hijabs?|turbans?|yarmulkes?|kippahs?)\b/i,
+      /\b((?:practi[cs]\w*|observ\w*|worship\w*|attend\w*|go(?:es)?\s+to|pray\w*\s+at)\s+(?:at\s+)?(?:an?\s+|the\s+)?(?:islam|judaism|christianity|hinduism|buddhism|sikhism|ramadan|passover|lent|sabbath|shabbat|mass|mosque|church|synagogue|temple|gurdwara)|islam|judaism|christianity|hinduism|buddhism|sikhism|ramadan|shabbat|religio(?:n|us)|church[-\s]?go\w*|churchgo\w*|church|christians?|catholics?|protestants?|muslims?|islamic|jewish|jews?|hindus?|sikhs?|mormons?|evangelicals?|orthodox|hasidi?c?m?|amish|quakers?|jehovah\w*|buddhists?|atheists?|synagogue|mosque|temple[-\s]go\w*|faith[-\s]based|devout|pray\w*|hijabs?|turbans?|yarmulkes?|kippahs?)\b/i,
   },
   {
     protectedClass: 'sex, gender identity, or sexual orientation',
@@ -68,10 +68,10 @@ export const PROTECTED_CLASS_RULES: readonly ProtectedClassRule[] = [
   },
   {
     protectedClass: 'disability',
-    terms: ['disabled', 'disability', 'disabilities', 'wheelchair', 'wheelchairs', 'handicapped', 'medical', 'conditions', 'illness', 'impaired'],
+    terms: ['disabled', 'disability', 'disabilities', 'wheelchair', 'wheelchairs', 'diabetes', 'dialysis', 'chemotherapy', 'dementia', 'epilepsy', 'autism', 'handicapped', 'medical', 'conditions', 'illness', 'impaired'],
     legalBasis: `${FHA}(f)`,
     pattern:
-      /\b(disab(?:ility|ilities|led)|handicap\w*|wheelchairs?|walkers?|canes?|crutches|mobility\s+aids?|service\s+(?:animals?|dogs?)|emotional\s+support\s+animals?|esas?|blind|deaf|mental(?:ly)?\s+ill\w*|mental\s+health|hiv|aids\s+patients?|recovering\s+addicts?|medical\s+(?:needs?|conditions?|issues?|histor(?:y|ies)|records?)|health\s+(?:conditions?|issues?|problems?)|illness\w*|chronic(?:ally)?\s+ill\w*|impair\w*)\b/i,
+      /\b(disab(?:ility|ilities|led)|handicap\w*|wheelchairs?|walkers?|canes?|crutches|mobility\s+aids?|service\s+(?:animals?|dogs?)|emotional\s+support\s+animals?|esas?|blind|deaf|mental(?:ly)?\s+ill\w*|mental\s+health|hiv|aids\s+patients?|recovering\s+addicts?|medical\s+(?:needs?|conditions?|issues?|histor(?:y|ies)|records?)|health\s+(?:conditions?|issues?|problems?)|illness\w*|chronic(?:ally)?\s+ill\w*|impair\w*|hard\s+of\s+hearing|visually\s+impaired|cancer|diabet\w*|dialysis|chemo\w*|autis\w*|epilep\w*|dementia|alzheimer\w*|parkinson\w*|multiple\s+sclerosis|asthma\w*|(?:in\s+)?recovery(?:\s+from\s+addiction)?|addict\w*)\b/i,
   },
   {
     protectedClass: 'age',
@@ -124,7 +124,7 @@ const ACTION_RULES: ReadonlyArray<{ readonly action: FairHousingAction; readonly
     // Identification with the trait as the subject: "list the non-citizens", "who at Fulton Yards
     // is an immigrant"; the people are named by the trait itself
     action: 'identification',
-    pattern: new RegExp(`\\b(?:list|show|find|name|identify|flag|count|which|how\\s+many)\\s+(?:all\\s+)?(?:of\\s+)?(?:the\\s+|our\\s+)?(?:${CLASS_TERM})\\b(?!\\s+(?:units?|apartments?|offices?|leases?|vouchers?|programs?|leave|lawyers?)\\b)|\\bwho\\b[^.?!;]*?\\b(?:is|are)\\s+(?:an?\\s+)?(?:${CLASS_TERM})\\b`, 'i'),
+    pattern: new RegExp(`\\b(?:list|show|find|name|identify|flag|count|which|how\\s+many)\\s+(?:all\\s+)?(?:of\\s+)?(?:the\\s+|our\\s+)?(?:${CLASS_TERM})\\b(?!\\s+(?:units?|apartments?|offices?|leases?|vouchers?|programs?|leave|lawyers?)\\b)|\\bwho\\b[^.?!;]*?\\b(?:is|are|has|have|uses?|needs?|observes?|practi[cs]es?|attends?|worships?|goes|undergo\\w*|(?:is|are)\\s+(?:on|in|undergoing|getting|receiving|from|expecting))\\s+(?:an?\\s+|the\\s+)?(?:${CLASS_TERM})\\b`, 'i'),
   },
   {
     action: 'exclusion',
@@ -159,7 +159,7 @@ const ACTION_RULES: ReadonlyArray<{ readonly action: FairHousingAction; readonly
     // have medical needs", "list tenants who are pregnant"); a protected trait is not a column
     action: 'identification',
     pattern:
-      /\b(?:which|who|whom|whose|list|identify|find|flag|show|count|name|how\s+many)\b[^.?!;]*?\b(?:residents?|tenants?|renters?|applicants?|occupants?|households?|prospects?|people|persons|callers|lessees|leaseholders)\b|\bwhat\s+(?:residents?|tenants?|renters?|applicants?|occupants?|people)\b|\b(?:residents?|tenants?|renters?|applicants?|occupants?|households?|people)\s+(?:who|that|with)\b/i,
+      /\b(?:which|who|whom|whose|list|identify|find|flag|show|count|name|pull\s+up|look\s+up|how\s+many)\b[^.?!;]*?\b(?:residents?|tenants?|renters?|applicants?|occupants?|households?|prospects?|people|persons|callers|lessees|leaseholders)\b|\bwhat\s+(?:residents?|tenants?|renters?|applicants?|occupants?|people)\b|\b(?:residents?|tenants?|renters?|applicants?|occupants?|households?|people)\s+(?:who|that|with)\b/i,
   },
   {
     action: 'targeting',
@@ -397,12 +397,50 @@ const CATEGORY_TERMS = [...new Set(PROTECTED_CLASS_RULES.flatMap((r) => r.terms 
  * that term. Words of six or more letters only, same first letter, and never a word some category
  * already matches as written.
  */
+/** The words a lookup is made of: the lookup verb and the people it asks about. */
+const LOOKUP_TERMS = ['which', 'residents', 'resident', 'tenants', 'tenant', 'applicants', 'applicant', 'renters', 'renter', 'occupants', 'households', 'people'];
+/** Real words one or two edits from a lookup term, never typos: "Marlowe Residences". */
+const REAL_NEIGHBOURS = new Set(['residence', 'residences', 'residency', 'tenancy', 'tenancies', 'tenanted', 'applicable', 'whiche', 'peoples', 'rentals', 'occupancy', 'occupied', 'household']);
+/** Edits a typo may carry: one, or two for a long word against a long term; a five-letter word only a swap. */
+const typoBudget = (w: string, t: string) => (w.length >= 8 && t.length >= 9 ? 2 : w.length >= 6 ? 1 : 0);
 export function correctCategoryTypos(text: string): string {
-  return text.replace(/\b[a-z]{6,}\b/g, (w) => {
-    if (CATEGORY_TERMS.includes(w) || PROTECTED_CLASS_RULES.some((r) => r.pattern.test(w))) return w;
-    const hit = CATEGORY_TERMS.find((t) => t[0] === w[0] && Math.abs(t.length - w.length) <= 1 && typoDistance(w, t) === 1);
+  // spacing variants first: two words that make one term ("wheel chairs") are that term
+  const joined = text.replace(/\b([a-z]+)[\s-]+(?=([a-z]+)\b)/g, (m, a: string, b: string) => (CATEGORY_TERMS.includes(a + b) ? a : m));
+  const targets = [...CATEGORY_TERMS, ...LOOKUP_TERMS];
+  return joined.replace(/\b[a-z]{5,}\b/g, (w) => {
+    if (targets.includes(w) || REAL_NEIGHBOURS.has(w) || PROTECTED_CLASS_RULES.some((r) => r.pattern.test(w))) return w;
+    const hit = targets.find((t) => {
+      if (t[0] !== w[0] || Math.abs(t.length - w.length) > 2) return false;
+      const d = typoDistance(w, t), budget = typoBudget(w, t);
+      return budget ? d >= 1 && d <= budget : w.length === t.length && d === 1 && [...w].sort().join('') === [...t].sort().join('');
+    });
     return hit ?? w;
   });
+}
+
+/** Words that may follow a trait word when it still names people: function words, people nouns,
+ * other traits, and the verbs a lookup uses. Any other word after it ("family-size units", "Indian
+ * restaurant", "veterans day") makes the trait describe a product, place or event. */
+const PEOPLE_FOLLOW = new Set([...'who that which whom whose living live lives are is was were have has had at in on of from with without and or but to for by as here there there\'s now'.split(' '),
+  'residents', 'resident', 'tenants', 'tenant', 'applicants', 'applicant', 'renters', 'renter', 'occupants', 'households', 'people', 'persons', 'folks', 'residences', 'residence', 'families', 'family', 'kids', 'children', 'veterans', 'seekers', 'users', 'members', 'moms', 'mothers', 'parents', 'couples', 'women', 'men', 'twins', 'baby', 'a', 'an', 'the',
+  // attributes of a person, not products: "immigration status", "medical history"
+  'status', 'papers', 'documents', 'background', 'history', 'needs', 'issues', 'issue', 'condition', 'conditions', 'records', 'beliefs', 'origin', 'identity',
+  // verbs a lookup asks about people: "which religions renew most"
+  ...'stay stays stayed renew renews renewed rent rents rented move moves moved pay pays paid leave leaves left sign signs signed tend tends do does did get gets got churn churns complain complains call calls apply applies applied tour tours toured book books booked respond responds convert converts can could will would should may might'.split(' ')]);
+/** A following word names people when it is in PEOPLE_FOLLOW, typos included ("Resdiences"). */
+const followsPeople = (w: string) =>
+  PEOPLE_FOLLOW.has(w) || (w.length >= 6 && [...PEOPLE_FOLLOW].some((p) => p.length >= 6 && p[0] === w[0] && typoDistance(w, p) <= typoBudget(w, p)));
+function maskDescriptiveTraits(sentence: string): string {
+  let out = sentence;
+  for (const r of PROTECTED_CLASS_RULES) {
+    const re = new RegExp(r.pattern.source, 'gi');
+    out = out.replace(re, (m: string, ...rest: unknown[]) => {
+      const at = rest.find((x) => typeof x === 'number') as number;
+      const next = /^(?:['’]s?)?[-\s]+([a-z]+)/.exec(out.slice(at + m.length));
+      return next && !followsPeople(next[1]) && !PROTECTED_CLASS_RULES.some((q) => q.pattern.test(next[1])) ? ' '.repeat(m.length) : m;
+    });
+  }
+  return out;
 }
 
 export function classifyFairHousingRequest(rawQuestion: string): FairHousingClassification {
@@ -424,9 +462,14 @@ export function classifyFairHousingRequest(rawQuestion: string): FairHousingClas
   // A class and an action count only when they share a sentence: naming a
   // group ("Jewish holidays", "speaks Spanish") is not a decision about it.
   const sentences = (question.match(/[^.?!;\n]+[.?!;\n]?/g) ?? []).filter((x) => x.trim());
-  const refusedByClass = sentences.some((x) => {
-    const named = PROTECTED_CLASS_RULES.some((r) => r.pattern.test(x) || r.pattern.test(reversedWords(x)));
-    const acts = ACTION_RULES.filter((r) => r.pattern.test(x)).map((r) => r.action);
+  const refusedByClass = sentences.some((x0) => {
+    // a lookup with no other action reads trait words only where they name people, not where
+    // they describe a product, place or event ("family-size units", "military discount")
+    const acts0 = ACTION_RULES.filter((r) => r.pattern.test(x0)).map((r) => r.action);
+    const lookupOnly = acts0.every((a) => a === 'identification' || a === 'differential');
+    const x = lookupOnly ? maskDescriptiveTraits(x0) : x0;
+    const named = PROTECTED_CLASS_RULES.some((r) => r.pattern.test(x) || (!lookupOnly && r.pattern.test(reversedWords(x))));
+    const acts = lookupOnly ? ACTION_RULES.filter((r) => r.pattern.test(x)).map((r) => r.action) : acts0;
     return named && acts.length > 0 && !(DESCRIPTIVE_RE.test(x) && !acts.some((a) => a !== 'differential'));
   });
   const directed = personDirected(question);
