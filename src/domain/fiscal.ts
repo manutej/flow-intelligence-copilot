@@ -36,7 +36,7 @@ export const CALENDAR_PERIOD_RE =
   /\b(?:19|20)\d{2}\b|\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b|\bq[1-4]\b|\b(?:last|this|next|past|previous|prior)\s+(?:\d+\s+)?(?:months?|quarters?|years?|weeks?)\b|\bytd\b|\byear[\s-]+to[\s-]+date\b/i;
 
 /** "FY" with no period: a property only after at/for/in ("spend at FY"). */
-export const LOCATIVE_FY_RE = /\b(?:at|for|in)\s+(?:the\s+)?f\.?y\.?(?![\p{L}\p{N}])/iu;
+export const LOCATIVE_FY_RE = /\bat\s+(?:the\s+)?f\.?y\.?(?![\p{L}\p{N}])/iu;
 export const BARE_FY_RE = /(?<![\p{L}\p{N}])f\.?y\.?(?![\p{L}\p{N}])/iu;
 
 const FISCAL_TOKEN_GLOBAL = new RegExp(FISCAL_TOKEN_RE.source, 'giu');
@@ -54,5 +54,5 @@ export function maskFiscalTokens(text: string): string {
 
 /** The text with every non-locative bare "FY" blanked: only "at FY" names a property. */
 export function maskNonLocativeFy(text: string): string {
-  return text.replace(/(\b(?:at|for|in)\s+(?:the\s+)?)?((?<![\p{L}\p{N}])f\.?y\.?(?![\p{L}\p{N}]))/giu, (m, loc: string | undefined, fy: string) => (loc ? m : ' '.repeat(fy.length)));
+  return text.replace(/(\bat\s+(?:the\s+)?)?((?<![\p{L}\p{N}])f\.?y\.?(?![\p{L}\p{N}]))/giu, (m, loc: string | undefined, fy: string) => (loc ? m : ' '.repeat(fy.length)));
 }
