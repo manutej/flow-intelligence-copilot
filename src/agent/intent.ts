@@ -1288,11 +1288,11 @@ function answerLayout(i: ParsedQueryIntent): ReadonlySet<Dimension> {
 }
 
 const DIMENSION_HEADS: ReadonlyArray<readonly [Dimension, RegExp]> = [
-  ['other', /^(?:year\s+built|build\s+year|vintages?|unit\s+types?|bed(?:room)?s?|bed\s+counts?|bedroom\s+counts?|floorplans?|floors?|views?|sizes?|ages?|tenant\s+ages?|lease\s+terms?|terms?|neighbou?rhoods?|submarkets?|regions?|markets?|zip(?:\s+codes?)?|pms|managers?|cities|city|states?)\b/i],
-  ['class', /^(?:(?:property|building|asset)\s+)?class(?:es)?\b/i],
-  ['source', /^(?:(?:lead|listing|marketing|ad|paid|ils)\s+)?(?:sources?|channels?|vendors?|ils|sites?|platforms?)\b/i],
-  ['building', /^(?:operating\s+)?(?:propert(?:y|ies)|buildings?|assets?|communit(?:y|ies)|sites?|locations?)\b/i],
-  ['time', /^(?:months?|quarters?|weeks?|years?|days?|periods?|half|halves)\b/i],
+  ['other', /^(?:year\s+built|build\s+year|vintages?|unit\s+types?|bed(?:room)?s?|bed\s+counts?|bedroom\s+counts?|floorplans?|floors?|views?|sizes?|ages?|tenant\s+ages?|lease\s+terms?|terms?|neighbou?rhoods?|nbhds?|submarkets?|regions?|markets?|zip(?:\s+codes?)?|pms|managers?|cities|city|states?)\b/i],
+  ['class', /^(?:(?:property|prop|building|bldg|asset)\s+)?class(?:es)?\b/i],
+  ['source', /^(?:(?:lead|listing|marketing|ad|paid|ils)\s+)?(?:sources?|srcs?|channels?|chnls?|vendors?|ils|sites?|platforms?)\b/i],
+  ['building', /^(?:operating\s+)?(?:propert(?:y|ies)|props?|buildings?|bldgs?|assets?|communit(?:y|ies)|cmtys?|sites?|locations?)\b/i],
+  ['time', /^(?:months?|mos|quarters?|qtrs?|weeks?|wks?|years?|yrs?|days?|periods?|half|halves)\b/i],
 ];
 /** The denominator of a rate ("cost per lead", "rent per unit"), not a group. */
 const RATE_DENOMINATOR = /^(?:(?:signed\s+)?leases?|leads?|tours?|units?|apartments?|doors?|sq\.?\s*ft|sqft|square\s+(?:foot|feet)|sf|applications?|applicants?|renewals?|move[-\s]?ins?)\b/i;
@@ -1312,6 +1312,19 @@ function isQualifiedScope(rest: string): boolean {
   return /^\s*(?:[a-d]\+?(?![a-z])|with\b|that\b|which\b|on\b|in\b|running\b|having\b|where\b|whose\b)/i.test(after) || /^\S+\s+buildings?\b/i.test(after.trim() ? after.trim() : '');
 }
 
+/** The first dimension noun anywhere in a span (optionally plural only). */
+function firstHeadIn(span: string, pluralOnly = false): { dim: Dimension; head: string } | null {
+  const words = span.trim().split(/\s+/).filter(Boolean);
+  for (let i = 0; i < words.length; i++) {
+    const rest = words.slice(i).join(' ');
+    for (const [dim, re] of DIMENSION_HEADS) {
+      const m = re.exec(rest);
+      if (m && (!pluralOnly || /(?:s|ies|es)$/i.test(m[0]))) return { dim, head: m[0] };
+    }
+  }
+  return null;
+}
+
 function headOf(rest: string): { dim: Dimension; head: string } | null {
   const np = rest.replace(/^(?:of\s+)?(?:the|our|all\s+the|all|my|its|their)\s+/i, '').trim();
   for (const [dim, re] of DIMENSION_HEADS) { const m = re.exec(np); if (m) return { dim, head: m[0] }; }
@@ -1323,6 +1336,9 @@ function headOf(rest: string): { dim: Dimension; head: string } | null {
   return null;
 }
 const headDimension = (rest: string): Dimension | null => headOf(rest)?.dim ?? null;
+
+const NUMERAL = String.raw`(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)`;
+const RANK_VERB = String.raw`(?:rank(?:ed|ing|s)?|sort(?:ed|s)?|order(?:ed)?|list|compare|comparison|leaderboard)`;
 
 /** The breakdowns a question asks for: [dimension, words, ranked?]. */
 export function requestedBreakdowns(question: string): Array<{ dim: Dimension; words: string; ranked: boolean }> {
@@ -1365,10 +1381,26 @@ export function requestedBreakdowns(question: string): Array<{ dim: Dimension; w
   // A superlative over an entity type ("which building has the highest ...",
   // "the top source", "highest renewal rate of any property").
   const SUP = String.raw`(?:tops|ranks\s+(?:first|#?1)|highest|lowest|most|least|fewest|best|worst|top|bottom|largest|smallest|biggest|max(?:imum)?|min(?:imum)?|strongest|weakest|leading|cheapest|priciest)`;
-  for (const m of q.matchAll(new RegExp(String.raw`\b(?:which|what)\s+((?:\w+\s+){0,2}?)(\w+(?:\s+\w+)?)\b(?=[^?.!]*\b${SUP}\b)`, 'gi'))) {
-    const h = headOf(m[2]) ?? headOf(`${m[1]}${m[2]}`.trim());
+  // "which ... <superlative>": any dimension noun between the two words.
+  for (const m of q.matchAll(new RegExp(String.raw`\b(?:which|what)\b([^?.!]*?)\b${SUP}\b`, 'gi'))) {
+    const h = firstHeadIn(m[1]);
     if (h) out.push({ dim: h.dim, words: `which ${h.head}`, ranked: true });
   }
+  // "where is X highest": a location ranking, so over buildings.
+  if (new RegExp(String.raw`\bwhere\b[^?.!]*\b${SUP}\b`, 'i').test(q)) out.push({ dim: 'building', words: 'where', ranked: true });
+  // "top 3 buildings": the numeral is a count, not the noun.
+  for (const m of q.matchAll(new RegExp(String.raw`\b(?:top|bottom|best|worst)\s+(?:${NUMERAL}\s+)?([^?.!]*)`, 'gi'))) {
+    const h = headOf(m[1]);
+    if (h && !/^floor\b/i.test(h.head)) out.push({ dim: h.dim, words: m[0].split(/\s+/).slice(0, 4).join(' '), ranked: true });
+  }
+  // "rank/sort/list/compare ... buildings": a ranking or listing verb with a
+  // plural dimension noun anywhere after it.
+  for (const m of q.matchAll(new RegExp(String.raw`\b${RANK_VERB}\b([^?.!]*)`, 'gi'))) {
+    const h = firstHeadIn(m[1], true);
+    if (h) out.push({ dim: h.dim, words: `${m[0].split(/\s+/)[0]} ... ${h.head}`, ranked: true });
+  }
+  // "building by building", "each building's": the noun repeated or possessed by "each".
+  for (const m of q.matchAll(/\b(\w+)\s+by\s+\1\b/gi)) { const h = headOf(m[1]); if (h) out.push({ dim: h.dim, words: m[0], ranked: false }); }
   for (const m of q.matchAll(new RegExp(String.raw`\b${SUP}\b[^?.!]*?\b(?:of\s+any|among(?:st)?\s+(?:the\s+)?|of\s+all(?:\s+the)?|of\s+the)\s+(\w+(?:\s+\w+)?)`, 'gi'))) {
     const dim = headDimension(m[1]);
     if (dim) out.push({ dim, words: m[0].trim(), ranked: true });
@@ -1381,6 +1413,29 @@ export function requestedBreakdowns(question: string): Array<{ dim: Dimension; w
   }
   return out;
 }
+
+/**
+ * "Spend per lead" asks for a ratio: a measure that computes a sum or a
+ * count cannot answer it (the total would come back under the rate's name).
+ * "Rent per month" is the amount's own unit, not a ratio.
+ */
+function asksRatioPer(question: string, measure: IntentMeasure): boolean {
+  const noun = TOTAL_NOUN[measure];
+  if (!noun) return false;
+  // The measure's own quantity directly before "per <denominator>".
+  for (const m of question.matchAll(new RegExp(String.raw`\b${noun}\s+per\s+(?:each\s+)?(?=(\S[^?.!]*))`, 'gi'))) {
+    if (RATE_DENOMINATOR.test(m[1])) return true;
+  }
+  return false;
+}
+/** The quantity a sum or count measure totals, as a question names it. */
+const TOTAL_NOUN: Partial<Record<IntentMeasure, string>> = {
+  spend_total: String.raw`(?:(?:marketing\s+|ad\s+|paid\s+)?(?:spend|spending|dollars|budget))`,
+  lead_count: String.raw`(?:leads|inquiries)`,
+  lease_count: String.raw`(?:leases)`,
+  unit_count: String.raw`(?:units)`,
+  rent_at_risk: String.raw`(?:rent)\s+at\s+risk`,
+};
 
 /** The first breakdown the parse does not carry, or null. */
 export function droppedBreakdown(question: string, intent: ParsedQueryIntent): { dim: Dimension; words: string } | null {
@@ -1427,7 +1482,7 @@ const STATUS_OF: Readonly<Record<string, string>> = { unoccupied: 'vacant', empt
 export function parseQueryIntent(question: string, store: PortfolioStore): ParsedQueryIntent {
   const intent = parseQueryIntentRaw(question, store);
   const produced = MEASURE_STATISTICS[intent.measure];
-  const unmet = REQUESTED_STATISTIC.some(([stat, re]) => re.test(question) && !produced.includes(stat as Statistic));
+  const unmet = REQUESTED_STATISTIC.some(([stat, re]) => re.test(question) && !produced.includes(stat as Statistic)) || asksRatioPer(question, intent.measure);
   const statuses = new Set(
     [...stripNegatedStatus(question).replace(/\boccupied\s+or\s+(?:on\s+)?notice\b/gi, 'occupied').matchAll(STATUS_WORD_RE)]
       .map((m) => { const w = m[0].toLowerCase().replace(/\s+/g, ' '); return STATUS_OF[w] ?? w; }),
