@@ -55,6 +55,8 @@ export function createServer() {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     try {
+      // every request, GETs included: a rebinding page (Host: evil.com) must not read panels, drafts or the token
+      if (!LOCAL_HOST.test(String(req.headers.host ?? ''))) return send(res, 403, { error: 'host not allowed' });
       if (req.method !== 'GET') { const g = writeGuard(req, token); if (g) return send(res, g[0], { error: g[1] }); }
       if (req.method === 'POST' && url.pathname === '/api/ask') {
         const { question } = await body(req);
