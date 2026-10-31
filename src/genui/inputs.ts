@@ -267,11 +267,14 @@ const FUNCTION_WORD = /^(?:a|an|the|is|are|was|were|be|been|am|'s|would|will|sho
 // leads, decisions).
 const SCHEMA_NOUNS = new Set(FLOW_PORTFOLIO_SCHEMA.stalks.map((s) => s.name.toLowerCase()).filter((n) => !settingUnit(' ' + n))
   .flatMap((n) => [n, n.replace(/ies$/, 'y').replace(/s$/, '')]));
-const SCHEMA_NOUNS_I18N = /^(?:propiedad(?:es)?|edificios?|inmuebles?|apartamentos?|departamentos?|viviendas?|prospectos?|propri[ée]t[ée]s?|b[âa]timents?|immeubles?|appartements?|logements?|prospects?|geb[äa]ude|h[äa]user|haus|immobilien|immobilie|wohnungen|wohnung|interessenten?)$/iu;
+// ES/FR/DE schema equivalents, split by number so they agree with their count like English nouns;
+// the invariant Gebäude counts as plural
+const SCHEMA_NOUNS_I18N_SG = /^(?:propiedad|edificio|inmueble|apartamento|departamento|vivienda|prospecto|propri[ée]t[ée]|b[âa]timent|immeuble|appartement|logement|prospect|haus|immobilie|wohnung|interessent)$/iu;
+const SCHEMA_NOUNS_I18N_PL = /^(?:propiedades|edificios|inmuebles|apartamentos|departamentos|viviendas|prospectos|propri[ée]t[ée]s|b[âa]timents|immeubles|appartements|logements|prospects|geb[äa]ude|h[äa]user|immobilien|wohnungen|interessenten)$/iu;
 const UNIT_NOUN = new RegExp(`^(?:${UNIT_NOUN_RE.source})$`, 'iu');
 // an English record noun agrees with its count: "4 flat" or "1800 flat" is not a count of flats
-const knownNoun = (surface: string, v: number, w: string) => SCHEMA_NOUNS_I18N.test(w) || UNIT_NOUN.test(`${surface} ${w}`) ||
-  (SCHEMA_NOUNS.has(w.toLowerCase()) || UNIT_NOUN.test(w)) && (v === 1 || /s$/iu.test(w));
+const knownNoun = (surface: string, v: number, w: string) => SCHEMA_NOUNS_I18N_PL.test(w) || UNIT_NOUN.test(`${surface} ${w}`) ||
+  (SCHEMA_NOUNS_I18N_SG.test(w) || SCHEMA_NOUNS.has(w.toLowerCase()) || UNIT_NOUN.test(w)) && (v === 1 || /s$/iu.test(w) && !SCHEMA_NOUNS_I18N_SG.test(w));
 const content = (w: string | undefined) => !!w && /^\p{L}+$/u.test(w) && !FUNCTION_WORD.test(w);
 // can this number, in this turn, be the value of a learner setting? Fail closed. The only
 // evidence that frees it is the word right after it: a record noun the parser or schema knows
@@ -282,7 +285,8 @@ function settingCandidate(t: string, a: number, b: number, n: Num): boolean {
   const after = t.slice(n.end, b);
   if (settingUnit(after)) return true;
   const words = /^[\s-]*[,;:!?.]/u.test(after) ? [] : after.split(/[\s,;:!?.()]+/u).filter(Boolean);
-  if (content(words[0]) && knownNoun(n.surface, n.value, words[0])) return false;
+  // "4 buildings worth (of spend)" measures an amount by the count: it is a value, not a count
+  if (content(words[0]) && knownNoun(n.surface, n.value, words[0]) && !/^(?:worth|wert)$/iu.test(words[1] ?? '')) return false;
   if (ONE.test(n.surface) && !words.length && /(?:^|[\s,;])(?:a|an)\s+\p{L}+\s*$/iu.test(t.slice(a, n.start))) return false; // "a quick one"
   return true;
 }
