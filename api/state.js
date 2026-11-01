@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { loadPortfolioStore } from '../src/data/loader.ts';
-import { evaluateBudgetDecisionsAndLearn } from '../src/domain/learner.ts';
 import {
   queryDataQualityAudit,
   queryLeasesAndRenewals,
@@ -73,7 +72,6 @@ export default async function handler(req, res) {
       period: 'APR_SEP_2026',
       paidOnly: false,
     });
-    const learner = evaluateBudgetDecisionsAndLearn(store);
     const dataQuality = queryDataQualityAudit(store);
     const sheaf = evaluateSheafCoboundary(store, FLOW_PORTFOLIO_SHEAF_EDGES);
 
@@ -104,13 +102,6 @@ export default async function handler(req, res) {
           totalSignedLeases: marketing.totalSignedLeases,
           bySource: marketing.bySource,
           deadSpendReallocation: marketing.deadSpendReallocation,
-        },
-        learnerSummary: {
-          priorAlpha0: learner.priorAlpha0,
-          priorBeta0Usd: learner.priorBeta0Usd,
-          windowInvarianceVerified: learner.windowInvarianceVerified,
-          evaluatedDecisions: learner.evaluatedDecisions,
-          proposedNextDecisions: learner.proposedNextDecisions,
         },
         dataQuality,
         sheafSummary: {

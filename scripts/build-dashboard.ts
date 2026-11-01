@@ -11,7 +11,6 @@ import {
   loadPortfolioStore,
   loadQuestionsFile,
 } from "../src/data/loader.ts";
-import { evaluateBudgetDecisionsAndLearn } from "../src/domain/learner.ts";
 import {
   queryDataQualityAudit,
   queryLeasesAndRenewals,
@@ -229,7 +228,6 @@ export async function buildOrmusDashboard(): Promise<void> {
     period: "APR_SEP_2026",
     paidOnly: false,
   });
-  const learner = evaluateBudgetDecisionsAndLearn(store);
   const dataQuality = queryDataQualityAudit(store);
 
   const swarmTracePath = path.join(repoRoot, ".toq", "flow-copilot", "temporal-llm-swarm-trace.json");
@@ -302,13 +300,6 @@ export async function buildOrmusDashboard(): Promise<void> {
       totalSignedLeases: marketing.totalSignedLeases,
       bySource: marketing.bySource,
       deadSpendReallocation: marketing.deadSpendReallocation,
-    },
-    learnerSummary: {
-      priorAlpha0: learner.priorAlpha0,
-      priorBeta0Usd: learner.priorBeta0Usd,
-      windowInvarianceVerified: learner.windowInvarianceVerified,
-      evaluatedDecisions: learner.evaluatedDecisions,
-      proposedNextDecisions: learner.proposedNextDecisions,
     },
     dataQuality,
     properties: store.properties,
