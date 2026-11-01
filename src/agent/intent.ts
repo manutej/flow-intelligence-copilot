@@ -1192,7 +1192,8 @@ function parseQueryIntentRaw(
   } else if (
     /\b(occupied\s+share|share\s+of.*occupied|occupancy\s+rate|occupancy\s+at|percent(?:age)?\s+of.*occupied)\b/i.test(
       question,
-    )
+    ) ||
+    (/\boccupancy\b/i.test(question) && !/\beconomic\s+occupancy\b/i.test(question))
   ) {
     unitMeasure = 'occupied_share';
   } else if (

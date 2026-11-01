@@ -1,4 +1,5 @@
 import { sealProof } from './envelope.ts';
+import { occupancy as occupancyTool } from '../tools/occupancy.ts';
 import { costPerLead } from '../tools/cost-per-lead.ts';
 import type { ClarifyOption } from './clarify.ts';
 import { fmtUsd, plural } from '../domain/format.ts';
@@ -1332,11 +1333,14 @@ export function executeCompositionalPlan(
       const formulaNote = store.policy.occupiedIncludesNotice
         ? `${propRow.occupiedUnits} occupied + ${propRow.noticeUnits} on notice, with ${propRow.vacantUnits} vacant`
         : `${propRow.occupiedUnits} occupied only (notice=${propRow.noticeUnits} excluded by active policy), with ${propRow.vacantUnits} vacant`;
+      // FIQ-TOOLS-1 tool 5: the shipped-policy figure comes from the occupancy tool.
+      const occTool = store.policy.occupiedIncludesNotice ? occupancyTool(store, { property_id: propRow.propertyId }).value : null;
+      const pctOcc = occTool?.occupied_share_pct ?? propRow.occupiedSharePercent;
       return finalize(
-        `At ${propRow.propertyName} (${propRow.propertyId}), ${propRow.occupiedSharePercent.toFixed(1)}% of units are occupied (${numerator} of ${plural(propRow.totalUnits, 'unit')}, comprising ${formulaNote}).`,
+        `At ${propRow.propertyName} (${propRow.propertyId}), ${pctOcc.toFixed(1)}% of units are occupied (${numerator} of ${plural(propRow.totalUnits, 'unit')}, comprising ${formulaNote}).`,
         {
           property_id: propRow.propertyId,
-          percent: propRow.occupiedSharePercent,
+          percent: pctOcc,
         },
         propRow.citations.slice(0, 8),
       );
@@ -1344,7 +1348,9 @@ export function executeCompositionalPlan(
 
     const share = hasUnitSubsetFilter
       ? unitSummary.filteredOccupiedSharePercent
-      : unitSummary.portfolioOccupiedSharePercent;
+      : (!matchedPropIds || matchedPropIds.length === 0) && store.policy.occupiedIncludesNotice
+        ? occupancyTool(store).value!.occupied_share_pct
+        : unitSummary.portfolioOccupiedSharePercent;
     const num = hasUnitSubsetFilter
       ? store.policy.occupiedIncludesNotice
         ? unitSummary.filteredOccupiedUnits + unitSummary.filteredNoticeUnits
