@@ -22,7 +22,8 @@ test('banner counts and as-of come from the data', () => {
   assert.match(html, new RegExp(`data-demo="buildings">${s.buildings}<`));
   assert.match(html, /Your data isn't uploaded here\./);
   assert.match(html, /id="privacy-note"/);
-  assert.match(html, /Want this on your portfolio\? Contact/);
+  assert.match(html, /href="mailto:"[^>]*>Want this on your portfolio\? Contact \(coming soon\)</);
+  assert.doesNotMatch(html, /Chicago/);
   const shifted = demoBannerHtml(loadPortfolioStore(undefined, { asOfDate: '2026-12-15' }));
   assert.match(shifted, /Dec 15, 2026/);
 });

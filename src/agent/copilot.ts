@@ -640,5 +640,5 @@ export function demoOnlyReply(question: string, store: PortfolioStore): string |
   if (!ownData) return null;
   const operating = new Set(store.operatingProperties.map((p) => p.propertyId));
   const units = store.units.filter((u) => operating.has(u.propertyId)).length;
-  return `This is a demo. FlowIQ here answers questions over a fixed demo portfolio: ${store.operatingProperties.length} Chicago buildings, ${units.toLocaleString('en-US')} units, data as of ${store.policy.asOfDate}. You can't upload a rent roll, connect a PMS such as Yardi, sign up, or add your own buildings on this site, and your data isn't uploaded here. Want this on your portfolio? Use the Contact link in the demo banner. Buildings you can ask about: ${store.operatingProperties.map((p) => p.name).join(', ')}.`;
+  return `This is a demo. FlowIQ here answers questions over a fixed demo portfolio: ${store.operatingProperties.length} buildings, ${units.toLocaleString('en-US')} units, data as of ${store.policy.asOfDate}. You can't upload a rent roll, connect a PMS such as Yardi, sign up, or add your own buildings on this site, and your data isn't uploaded here. Want this on your portfolio? Use the Contact link in the demo banner. Buildings you can ask about: ${store.operatingProperties.map((p) => p.name).join(', ')}.`;
 }
