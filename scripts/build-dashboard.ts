@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { askFlowIqCopilot } from "../src/agent/copilot.ts";
 import { MODEL_PROVIDER_PROFILES } from "../src/agent/model-harness.ts";
 import {
@@ -347,6 +348,8 @@ export async function buildOrmusDashboard(): Promise<void> {
     .replace(/production-grade/gi, "audit-verified")
     .replace(/production-ready/gi, "audit-verified");
 
+  assertInlineScriptsParse(html);
+
   const publicDir = path.join(repoRoot, "public");
   const uiDir = path.join(repoRoot, "ui");
   fs.mkdirSync(publicDir, { recursive: true });
@@ -389,4 +392,22 @@ if (isMain) {
     console.error(err);
     process.exit(1);
   });
+}
+
+// The jargon rewrite above runs over the whole page, scripts included. A
+// rewrite that lands in an identifier (e.g. "operadicRuns" -> "multi-hopRuns")
+// is a syntax error that silently kills every handler on the page, so refuse
+// to write a page whose inline scripts do not parse.
+export function assertInlineScriptsParse(html: string): void {
+  const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = re.exec(html))) {
+    try {
+      new vm.Script(m[1], { filename: `inline-script-${i}.js` });
+    } catch (err) {
+      throw new Error(`dashboard inline script ${i} does not parse: ${(err as Error).message}`);
+    }
+    i++;
+  }
 }

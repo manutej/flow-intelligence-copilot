@@ -1097,15 +1097,32 @@ function selectPresetById(id, chipEl) {
   const match = (INITIAL_STATE.runs || []).find(function(r) { return r.id === id; });
   if (match) {
     document.getElementById("ask-input").value = match.question;
-    renderLiveTurnCard(match);
+    runLiveAsk();
   }
 }
 
+function escapeAskHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+
+function showAskStatus(kind, text) {
+  const card = document.getElementById("live-answer-card");
+  const color = kind === "error" ? "var(--red, #e5534b)" : "var(--muted)";
+  card.innerHTML = "<div id=\"ask-" + kind + "\" role=\"" + (kind === "error" ? "alert" : "status") +
+    "\" class=\"mono\" style=\"font-size:13px;color:" + color + ";\">" + escapeAskHtml(text) + "</div>";
+}
+
+let askInFlight = false;
 async function runLiveAsk() {
   const q = document.getElementById("ask-input").value.trim();
-  if (!q) return;
+  if (!q || askInFlight) return;
+  askInFlight = true;
   const btn = document.getElementById("ask-btn");
   btn.textContent = "Executing...";
+  btn.disabled = true;
+  showAskStatus("loading", "Asking /api/ask\u2026");
   const cadRate = parseFloat(document.getElementById("mut-cad").value || "0.73");
   const occNotice = document.getElementById("mut-occ").value === "true";
   const bucketBy = document.getElementById("mut-bucket").value;
@@ -1131,21 +1148,24 @@ async function runLiveAsk() {
         }
       })
     });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.ok) {
-        renderLiveTurnCard(data);
-        btn.textContent = "Execute Query (/api/ask)";
-        return;
-      }
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+    if (!res.ok) {
+      const msg = data && (data.error || data.message);
+      showAskStatus("error", "Request failed (HTTP " + res.status + ")" + (msg ? ": " + msg : "") + ". Please try again.");
+    } else if (data && data.ok) {
+      renderLiveTurnCard(data);
+    } else {
+      const msg = data && (data.error || data.message);
+      showAskStatus("error", "The server could not answer this question" + (msg ? ": " + msg : "") + ".");
     }
-  } catch (_) {}
-  const lower = q.toLowerCase();
-  const fallback = (INITIAL_STATE.runs || []).find(function(r) { return r.question.toLowerCase() === lower; }) ||
-    (INITIAL_STATE.runs || []).find(function(r) { return r.question.toLowerCase().includes(lower); }) ||
-    INITIAL_STATE.runs[0];
-  renderLiveTurnCard(fallback);
-  btn.textContent = "Execute Query (/api/ask)";
+  } catch (err) {
+    showAskStatus("error", "Network error: could not reach /api/ask" + (err && err.message ? " (" + err.message + ")" : "") + ".");
+  } finally {
+    btn.textContent = "Execute Query (/api/ask)";
+    btn.disabled = false;
+    askInFlight = false;
+  }
 }
 
 function resetPolicyMutators() {
@@ -1468,9 +1488,9 @@ function renderTemporalAndSwarm(wf, swarm) {
 }
 
 function buildClientFallbackSwarm() {
-  const operadicRuns = (INITIAL_STATE.runs || []).filter(function(r) { return r.suite === "operadic"; }).slice(0, 40);
+  const benchRuns = (INITIAL_STATE.runs || []).filter(function(r) { return r.suite === "operadic"; }).slice(0, 40);
   const crashAt = 18;
-  const activities = operadicRuns.map(function(r, idx) {
+  const activities = benchRuns.map(function(r, idx) {
     const actIdx = idx + 1;
     const replayed = actIdx <= crashAt;
     return {
