@@ -5,6 +5,7 @@ import { costPerLead } from '../tools/cost-per-lead.ts';
 import type { ClarifyOption } from './clarify.ts';
 import { fmtUsd, plural } from '../domain/format.ts';
 import { roundTo } from '../data/loader.ts';
+import { ratePercent1 } from '../data/rate.ts';
 import type {
   AnswerEnvelope,
   CitationId,
@@ -21,7 +22,7 @@ import type {
   UnitQuerySummary,
 } from '../domain/metrics.ts';
 import type { PropertyResolutionResult } from '../domain/resolver.ts';
-import { droppedBreakdownOf, scalarLeftoverOf, parseQueryIntent, sourceModeOf, UNIT_STATUS_EXCLUSION_RE, type ParsedQueryIntent } from './intent.ts';
+import { BUILDING_BREAKDOWN_MEASURES, droppedBreakdownOf, requestedBreakdowns, scalarLeftoverOf, parseQueryIntent, sourceModeOf, UNIT_STATUS_EXCLUSION_RE, type ParsedQueryIntent } from './intent.ts';
 import {
   dataCoverage,
   describeCoverage,
@@ -1280,6 +1281,76 @@ export function executeCompositionalPlan(
     if (subset.totalFilteredUnits === 0) {
       return unknown(`no unit at ${matchedPropIds && matchedPropIds.length > 0 ? buildingName(matchedPropIds) : 'any operating building'} matches the unit filter in "${question.trim()}" (data/pms/units.csv), so there is no figure to give for it.`, propRes?.citations ?? []);
     }
+  }
+
+  // FLOWIQ-SITE-004: "occupancy at each building", "vacancies by property",
+  // "units in each building" list one row per building, total last.
+  // Occupancy follows the active policy; on-notice units are shown as their
+  // own figure on every row. Counting notice as occupied is the CURRENT
+  // DEFAULT (Tau's default, not yet confirmed by Manu).
+  if (
+    BUILDING_BREAKDOWN_MEASURES.has(intent.measure) &&
+    intent.aggregation !== 'argmax' && intent.aggregation !== 'argmin' &&
+    requestedBreakdowns(question).some((b) => b.dim === 'building' && !b.ranked) &&
+    unitSummary.byProperty.length > 1
+  ) {
+    const filtered = hasUnitSubsetFilter || intent.unitStatus !== undefined;
+    const notice = store.policy.occupiedIncludesNotice;
+    const pick = (p: {
+      totalUnits: number; occupiedUnits: number; noticeUnits: number; vacantUnits: number;
+      filteredUnitCount: number; filteredOccupiedUnits: number; filteredNoticeUnits: number; filteredVacantUnits: number;
+    }) => {
+      const units = filtered ? p.filteredUnitCount : p.totalUnits;
+      const occ = filtered ? p.filteredOccupiedUnits : p.occupiedUnits;
+      const ntc = filtered ? p.filteredNoticeUnits : p.noticeUnits;
+      const vac = filtered ? p.filteredVacantUnits : p.vacantUnits;
+      return { units, occ, ntc, vac, occupiedCount: notice ? occ + ntc : occ };
+    };
+    const pct = ratePercent1;
+    const rows = unitSummary.byProperty.map((p) => ({ id: p.propertyId, name: p.propertyName, ...pick(p) }));
+    const total = pick({
+      totalUnits: unitSummary.portfolioTotalUnits, occupiedUnits: unitSummary.portfolioOccupiedUnits,
+      noticeUnits: unitSummary.portfolioNoticeUnits, vacantUnits: unitSummary.portfolioVacantUnits,
+      filteredUnitCount: unitSummary.totalFilteredUnits, filteredOccupiedUnits: unitSummary.filteredOccupiedUnits,
+      filteredNoticeUnits: unitSummary.filteredNoticeUnits, filteredVacantUnits: unitSummary.filteredVacantUnits,
+    });
+    const noticeNote = notice
+      ? 'current default: occupied includes units on notice, shown separately'
+      : 'units on notice are not counted as occupied under the active policy';
+    let lines: string[];
+    let header: string;
+    let result: Record<string, unknown>;
+    if (intent.measure === 'occupied_share') {
+      header = `Occupancy by building (${noticeNote}):`;
+      const line = (label: string, r: typeof total) =>
+        `${label}: ${pct(r.occupiedCount, r.units).toFixed(1)}% (${r.occupiedCount}/${r.units} units; ${r.ntc} on notice)`;
+      lines = [...rows.map((r) => line(`${r.name} [${r.id}]`, r)), line('Portfolio total', total)];
+      result = {
+        by_property: rows.map((r) => ({ property_id: r.id, percent: pct(r.occupiedCount, r.units), occupied: r.occupiedCount, notice: r.ntc, units: r.units })),
+        total: { percent: pct(total.occupiedCount, total.units), occupied: total.occupiedCount, notice: total.ntc, units: total.units },
+      };
+    } else if (intent.measure === 'vacancy_rate') {
+      header = 'Vacancy rate by building:';
+      const line = (label: string, r: typeof total) => `${label}: ${pct(r.vac, r.units).toFixed(1)}% (${r.vac}/${r.units} units vacant)`;
+      lines = [...rows.map((r) => line(`${r.name} [${r.id}]`, r)), line('Portfolio total', total)];
+      result = {
+        by_property: rows.map((r) => ({ property_id: r.id, percent: pct(r.vac, r.units), vacant: r.vac, units: r.units })),
+        total: { percent: pct(total.vac, total.units), vacant: total.vac, units: total.units },
+      };
+    } else {
+      const what = intent.unitStatus === 'vacant' ? 'Vacant units' : intent.unitStatus ? `Units (${intent.unitStatus})` : 'Units';
+      header = `${what} by building:`;
+      lines = [...rows.map((r) => `${r.name} [${r.id}]: ${r.units}`), `Portfolio total: ${total.units}`];
+      result = {
+        by_property: rows.map((r) => ({ property_id: r.id, count: r.units })),
+        total: { count: total.units },
+      };
+    }
+    return finalize(
+      `${header}\n${lines.map((l) => `- ${l}`).join('\n')}${buildExcludedOnboardingSuffix(store)}`,
+      result,
+      [...new Set(unitSummary.byProperty.flatMap((p) => p.citations.slice(0, 2)))].slice(0, 16),
+    );
   }
 
   if (intent.measure === 'vacancy_rate') {

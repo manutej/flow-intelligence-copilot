@@ -676,7 +676,7 @@
   <div class="mutator-bar">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
       <div class="panel-eyebrow" style="margin:0;">/ LIVE POLICY SENSITIVITY MUTATORS (CALLS /api/state &amp; RECOMPUTES PORTFOLIO INVARIANTS IN REAL TIME)</div>
-      <button class="nav-btn" onclick="resetPolicyMutators()">Reset to Kit v2 Defaults (CAD=0.73, Notice=Occupied, lease_start_date, β₀=$3,250)</button>
+      <button class="nav-btn" onclick="resetPolicyMutators()">Reset to Kit v2 Defaults (CAD=0.73, Notice=Occupied (current default), lease_start_date, β₀=$3,250)</button>
     </div>
     <div class="mutator-grid">
       <div class="mutator-cell">
@@ -687,7 +687,7 @@
       <div class="mutator-cell">
         <label>2. OCCUPIED DEFINITION</label>
         <select id="mut-occ" onchange="onPolicyMutate()">
-          <option value="true">occupied + notice (Kit Default · P01 = 95.0%, Fleet = 93.9%)</option>
+          <option value="true">occupied + notice (current default · P01 = 95.0%, Fleet = 93.9%)</option>
           <option value="false">strictly occupied only (P01 = 92.1%, Fleet = 88.9%)</option>
         </select>
       </div>
