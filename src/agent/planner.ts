@@ -22,7 +22,7 @@ import type {
   UnitQuerySummary,
 } from '../domain/metrics.ts';
 import type { PropertyResolutionResult } from '../domain/resolver.ts';
-import { BUILDING_BREAKDOWN_MEASURES, droppedBreakdownOf, requestedBreakdowns, scalarLeftoverOf, parseQueryIntent, sourceModeOf, UNIT_STATUS_EXCLUSION_RE, type ParsedQueryIntent } from './intent.ts';
+import { BUILDING_BREAKDOWN_MEASURES, cplRankDimension, droppedBreakdownOf, requestedBreakdowns, scalarLeftoverOf, parseQueryIntent, sourceModeOf, UNIT_STATUS_EXCLUSION_RE, type ParsedQueryIntent } from './intent.ts';
 import {
   dataCoverage,
   describeCoverage,
@@ -716,6 +716,38 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_lead') {
+      // FLOWIQ-SITE-002: rank buildings when the question names a building,
+      // sources when it names a source, and give both, labelled, when it
+      // names neither (inside one named building, the ranking is over sources).
+      const cplDim = cplRankDimension(question, intent);
+      const oneBuilding = !!matchedPropIds && matchedPropIds.length === 1;
+      if (cplDim === 'building' || (cplDim === 'both' && !oneBuilding)) {
+        const wantMin = intent.aggregation === 'argmin';
+        const word = wantMin ? 'lowest' : 'highest';
+        const bRows = mkt.byProperty
+          .filter((r) => r.leadsCreatedCount > 0)
+          .map((r) => ({ r, usd: Math.round((r.spendUsd / r.leadsCreatedCount) * 100) / 100 }))
+          .sort((x, y) => (wantMin ? x.usd - y.usd : y.usd - x.usd) || x.r.propertyId.localeCompare(y.r.propertyId));
+        if (bRows.length === 0) return noOverall('cost per lead');
+        const tiedB = tiedAtTop(bRows, (x) => x.usd);
+        const bText = `${listNames(tiedB.map((x) => `${x.r.propertyName} (${x.r.propertyId})`))} ${tiedB.length > 1 ? 'tied for' : 'had'} the ${word} cost per lead among buildings at ${fmtUsd(bRows[0].usd)} (${tiedB.map((x) => `${fmtUsd(x.r.spendUsd)} spend / ${plural(x.r.leadsCreatedCount, 'deduplicated lead')}`).join(', ')})`;
+        const bResult = { property_id: bRows[0].r.propertyId, ...(tiedB.length > 1 ? { tied_property_ids: tiedB.map((x) => x.r.propertyId) } : {}), usd: bRows[0].usd };
+        const bCites = tiedB.flatMap((x) => x.r.citations.slice(0, 4));
+        if (cplDim === 'building') {
+          return finalize(`${scope} in ${mkt.windowLabel}, ${bText}.`, bResult, bCites.slice(0, 12));
+        }
+        const paidRows = mkt.bySource.filter((r) => r.isPaidSource && r.costPerLeadUsd !== null)
+          .sort((x, y) => (wantMin ? x.costPerLeadUsd! - y.costPerLeadUsd! : y.costPerLeadUsd! - x.costPerLeadUsd!) || x.source.localeCompare(y.source));
+        const tiedS = paidRows.length > 0 ? tiedAtTop(paidRows, (r) => r.costPerLeadUsd!) : [];
+        const sText = paidRows.length > 0
+          ? `${listNames(tiedS.map((r) => r.source))} ${tiedS.length > 1 ? 'tied for' : 'had'} the ${word} cost per lead among paid sources at ${fmtUsd(paidRows[0].costPerLeadUsd!)} (${tiedS.map((r) => `${fmtUsd(r.spendUsd)} spend / ${plural(r.leadsCreatedCount, 'deduplicated lead')}`).join(', ')})`
+          : 'no paid source had leads';
+        return finalize(
+          `"${word[0].toUpperCase()}${word.slice(1)} cost per lead" can mean a building or an ad source, so here are both. ${scope} in ${mkt.windowLabel}: by building, ${bText}; by source, ${sText}.`,
+          { building: bResult, source: paidRows.length > 0 ? { source: paidRows[0].source, usd: paidRows[0].costPerLeadUsd } : null },
+          [...bCites, ...tiedS.flatMap((r) => r.citations.slice(0, 4))].slice(0, 16),
+        );
+      }
       if (!sourceShaped || sourceMode === 'pooled') {
         // Phase 1b item 4: every pooled / overall CPL (paid-only, multi-building,
         // bedroom-filtered too) is the cost_per_lead tool's figure; no second formula.

@@ -44,6 +44,10 @@ export const FIXED = new Set(
   'where which who whole whose wide window with works would x yardi yards you',
   'your zero zillow',
   'sq ft homes least dead running name data',
+  // FLOWIQ-SITE-002: cost-per-lead abbreviation.
+  'cpl',
+  // FLOWIQ-SITE-002 (Tau ruling): 'fewest' is the argmin sort ('fewest vacant units').
+  'fewest',
   // Conversational filler that carries no meaning.
   'ok okay fine thanks thank sure great hi hello',
   // Paraphrases of the supported questions (blind-redteam paraphrase set).
