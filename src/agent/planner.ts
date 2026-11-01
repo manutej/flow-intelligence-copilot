@@ -1269,7 +1269,8 @@ export function executeCompositionalPlan(
   // FLOWIQ-SITE-004: "occupancy at each building", "vacancies by property",
   // "units in each building" list one row per building, total last.
   // Occupancy follows the active policy; on-notice units are shown as their
-  // own figure on every row (Tau's default: notice counts as occupied).
+  // own figure on every row. Counting notice as occupied is the CURRENT
+  // DEFAULT (Tau's default, not yet confirmed by Manu).
   if (
     BUILDING_BREAKDOWN_MEASURES.has(intent.measure) &&
     intent.aggregation !== 'argmax' && intent.aggregation !== 'argmin' &&
@@ -1297,7 +1298,7 @@ export function executeCompositionalPlan(
       filteredNoticeUnits: unitSummary.filteredNoticeUnits, filteredVacantUnits: unitSummary.filteredVacantUnits,
     });
     const noticeNote = notice
-      ? 'occupied includes units on notice, shown separately'
+      ? 'current default: occupied includes units on notice, shown separately'
       : 'units on notice are not counted as occupied under the active policy';
     let lines: string[];
     let header: string;

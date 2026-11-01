@@ -50,3 +50,15 @@ test('a single total still returns a single number', async () => {
     assert.ok(typeof r.percent === 'number' || typeof r.count === 'number', `${q}: ${JSON.stringify(r)}`);
   }
 });
+
+test('on-notice-as-occupied is labelled "current default" in answer and UI', async () => {
+  const { askFlowIqCopilot } = await import('../src/agent/copilot.ts');
+  const { loadPortfolioStore } = await import('../src/data/loader.ts');
+  const fs = await import('node:fs');
+  const r = await askFlowIqCopilot('What is occupancy at each building?', { store: loadPortfolioStore(), parse: null });
+  assert.match(r.envelope.answer, /current default: occupied includes units on notice/);
+  for (const f of ['public/index.html', 'scripts/dashboard-template.html', 'ui/flowiq-visual-studio.html']) {
+    const html = fs.readFileSync(new URL(`../${f}`, import.meta.url).pathname, "utf-8");
+    assert.match(html, /occupied \+ notice \(current default/, f);
+  }
+});
