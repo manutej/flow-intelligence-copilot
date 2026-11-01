@@ -4,7 +4,7 @@ import type {
   CitationId,
   PortfolioStore,
 } from '../data/schema.ts';
-import { classifyFairHousingRequest } from './fair-housing.ts';
+import { classifyFairHousingRequest, isVoucherQuestion } from './fair-housing.ts';
 import { resolvePropertiesFromText } from './resolver.ts';
 import { BARE_FISCAL_RE, BARE_FY_RE, CALENDAR_PERIOD_RE, FISCAL_TOKEN_RE, LOCATIVE_FY_RE, maskFiscalTokens, spellCalendarYear } from './fiscal.ts';
 
@@ -45,6 +45,17 @@ export function checkFairHousingGuard(
 
   const classification = classifyFairHousingRequest(question);
   const matchedRules = classification.classes;
+  if (!classification.refused && isVoucherQuestion(question)) {
+    // HIGH-1 (TENACITY 2026-10-31): any voucher / HCV / Section 8 question is
+    // refused, even a neutral one, so no reply ranks or filters by it.
+    return {
+      refused: true,
+      protectedClass: 'source of income',
+      legalBasis: 'Chicago Human Rights Ordinance and Illinois Human Rights Act',
+      reason: 'Refused: I do not answer questions about housing vouchers (Section 8 / Housing Choice Vouchers). Source of income is a protected class under the Chicago Human Rights Ordinance and the Illinois Human Rights Act, and the portfolio exports do not record it. I can help with the same question asked about all applicants.',
+      citations: [],
+    };
+  }
   if (!classification.refused) {
     return {
       refused: false,
