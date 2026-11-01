@@ -93,9 +93,9 @@ export default async function handler(req, res) {
         "Which of my buildings is bleeding money on marketing right now, and why?",
     ).trim();
 
-    // M-3: chat uses the live, dated CAD rate; FLOWIQ_LIVE_FX=0 keeps the pinned one.
-    const live = process.env.FLOWIQ_LIVE_FX === "0"
-      ? { overrides: parsePolicyOverrides(body.policy || body), status: "pinned" }
+    // D-24: the fixed dated CAD rate by default; FLOWIQ_LIVE_FX=1 opts in to the live ECB rate.
+    const live = process.env.FLOWIQ_LIVE_FX !== "1"
+      ? { overrides: parsePolicyOverrides(body.policy || body), status: "fixed" }
       : await liveCadOverrides(parsePolicyOverrides(body.policy || body));
     const policyOverrides = live.overrides;
     const store = loadPortfolioStore(repoRoot, policyOverrides);
