@@ -267,6 +267,20 @@ async function askUnsealed(
     };
   }
 
+  // F-TSC-1 (Tau): an explicit upload ask gets the honest demo-only reply
+  // first, then a short capability line; the more specific answer wins.
+  if (EXPLICIT_UPLOAD.test(question)) {
+    const demo = demoOnlyReply(question, store);
+    if (demo) {
+      const envelope: AnswerEnvelope = { id: qRecord.id, answer: `${demo} ${capabilityLine()}`, result: { unknown: true, demo_only: true }, citations: [] };
+      return {
+        envelope, toolCalls, clarificationNeeded: false, clarifyingQuestion: null,
+        modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
+        verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+      };
+    }
+  }
+
   // FLOWIQ-SITE-007: first-visit orientation ("what can you do?").
   const capability = capabilityReply(question, store);
   if (capability) {
@@ -706,6 +720,14 @@ function sessionRefusal(session: FairHousingSession | undefined, question: strin
 
 const OWN_DATA_ACTION = /\b(?:upload|import|connect|integrate|hook\s+up|link|sync|plug\s+in|add|load|bring)\b/i;
 const OWN_DATA_OBJECT = /\b(?:rent\s*roll|yardi|realpage|entrata|appfolio|buildium|resman|mri|pms|crm|spreadsheet|csv|excel|my\s+(?:own\s+)?(?:data|portfolio|propert(?:y|ies)|buildings?|units?|file))\b/i;
+
+/** F-TSC-1: a question that explicitly asks about uploading. */
+export const EXPLICIT_UPLOAD = /\bupload(?:s|ed|ing)?\b/i;
+
+/** F-TSC-1: one short line of what the demo can do, appended after the demo-only reply. */
+export function capabilityLine(): string {
+  return 'What you can do here: ask about vacancy, leases and renewals, leads and cost per lead by source, and marketing spend across the demo buildings. More at /help.';
+}
 
 /** FLOWIQ-SITE-005: the demo-only reply for own-data / upload / connect asks, or null. */
 export function demoOnlyReply(question: string, store: PortfolioStore): string | null {
