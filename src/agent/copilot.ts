@@ -99,7 +99,7 @@ export async function askFlowIqCopilot(
   const refusedQuestion = options.session?.refusedQuestion;
   const t = await askUnsealed(input, options);
   const kind = nonAnswerKind(t.envelope.result as Record<string, unknown>);
-  if (!kind) return t;
+  if (!kind) return { ...t, envelope: { ...t.envelope, answer: withIlsLabel(question, t.envelope.answer) } };
   // Seal every refusal, "I don't know" and clarify to what it was rendered from.
   const store = options.store && !options.policy ? options.store : loadPortfolioStore(undefined, options.policy);
   // A tool-calling harness non-answer has no re-render of its own: it is
@@ -142,6 +142,20 @@ export function resultTable(result: Record<string, unknown>): string | null {
 }
 
 export function deterministicTurn(qRecord: QuestionRecord, store: PortfolioStore): AnswerEnvelope {
+  const env = deterministicTurnInner(qRecord, store);
+  return nonAnswerKind(env.result as Record<string, unknown>) ? env : { ...env, answer: withIlsLabel(qRecord.question, env.answer) };
+}
+
+// Phase 1b item 3 (M-10): no ILS site list is defined, so a cost-per-lead
+// "from ILS" answers over all paid sources and says so.
+const ILS_CPL_RE = /\bILS(?:es)?\b/i;
+const CPL_RE = /\b(?:cost\s+per\s+lead|CPL)\b/i;
+export const ILS_LABEL = 'ILS sites not yet defined, showing all paid sources.';
+function withIlsLabel(question: string, answer: string): string {
+  return ILS_CPL_RE.test(question) && CPL_RE.test(question) && !answer.includes(ILS_LABEL) ? `${answer} (${ILS_LABEL.replace(/\.$/, '')})` : answer;
+}
+
+function deterministicTurnInner(qRecord: QuestionRecord, store: PortfolioStore): AnswerEnvelope {
   const chartRest = stripChartAsk(qRecord.question);
   if (chartRest) {
     const inner = deterministicTurn({ ...qRecord, question: chartRest }, store);
