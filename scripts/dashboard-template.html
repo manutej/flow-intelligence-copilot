@@ -529,6 +529,7 @@
     <div class="nav-links">
       <a href="#ask" class="nav-btn gold">Ask your own agent</a>
       <span id="conn-badge" class="stamp accept">✓ LIVE API &amp; DETERMINISTIC CORE READY</span>
+      <a href="/demo.html" class="btn" style="background:#d29e3d;color:#0e1830;font-weight:600;border-color:#f0be59;">▶ Watch 1:26 Screen Recording</a>
       <a href="/field-notebook.html" class="nav-btn">Field &amp; Meta Notebook (12 Plates)</a>
       <a href="/AGENTS.md" class="nav-btn">AGENTS.md</a>
       <a href="/llms.txt" class="nav-btn">/llms.txt</a>
@@ -1265,6 +1266,14 @@ function renderBenchmarkTable() {
     "<table><thead><tr><th>ID</th><th>Question, Leaf Sub-Goal &amp; Answer</th><th>Verified Result</th><th>Row Citations</th></tr></thead><tbody>" + rows + "</tbody></table>";
 }
 
+function formatVoidAmount(v) {
+  const raw = v.rawAmount != null ? v.rawAmount : v.amountOriginal;
+  const n = raw == null || raw === "" ? NaN : Number(raw);
+  if (!Number.isFinite(n)) return "—";
+  const cur = v.currency ? String(v.currency) : "";
+  return (cur === "USD" ? "$" : "") + n.toFixed(2) + (cur ? " " + cur : "");
+}
+
 function renderSheafAndSecurityTables() {
 
   document.getElementById("box-security-quarantine").innerHTML =
@@ -1295,7 +1304,7 @@ function renderSheafAndSecurityTables() {
       "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('" + v.citationId + "')\">" + v.spendId + "</span></td>" +
       "<td class=\"mono\">" + v.propertyId + " · " + v.source + "</td>" +
       "<td class=\"mono\">" + v.month + "</td>" +
-      "<td class=\"mono\" style=\"color:#fca5a5;\">$" + Number(v.rawAmount != null ? v.rawAmount : v.amountOriginal).toFixed(2) + " " + v.currency + "</td>" +
+      "<td class=\"mono\" style=\"color:#fca5a5;\">" + formatVoidAmount(v) + "</td>" +
     "</tr>";
   }).join("");
   document.getElementById("tbl-void-spend").innerHTML =
