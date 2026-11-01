@@ -120,6 +120,12 @@ export function executeCompositionalPlan(
     };
   };
 
+  // FLOWIQ-SITE-003: upcoming renewals/expirations with no window: ask for one.
+  if (/\b(?:renewals?|leases?|expirations?)\b[^?]*\b(?:coming\s+up|upcoming|due\s+soon)\b|\bupcoming\s+(?:renewals?|lease\s+expirations?)\b/i.test(question)
+    && !/\b(?:this|next|last)\s+(?:month|quarter|year)\b|\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b|\bq[1-4]\b|\b20\d\d\b|\bwithin\b|\bdays?\b/i.test(question)) {
+    const ask = `Which window do you mean? For example "next month" (November 2026 from the data's as-of date ${store.policy.asOfDate}), "in December", or "next quarter".`.replace('November 2026', nextMonthLabel(store.policy.asOfDate));
+    return finalize(`I need a window to count upcoming renewals. ${ask}`, { clarification_needed: true, clarifying_question: ask }, [], true, ask);
+  }
   // Honest "I don't know" (FLOW-103): answer only what the exports can answer.
   const unknown = (
     reason: string,
@@ -1199,6 +1205,29 @@ export function executeCompositionalPlan(
     const nonZeroProps = leaseSummary.byProperty.filter(
       (p) => p.matchingLeaseCount > 0,
     );
+    // FLOWIQ-SITE-003: name the lease-end window the count covers, and give a
+    // renewal-status breakdown when asked.
+    const relativeWindow = /\b(?:this|next)\s+month\b/i.test(question)
+      || (/\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/i.test(question) && !/\b20\d\d\b/.test(question));
+    const endWin = intent.leaseEndWindow && relativeWindow ? ` with a lease end date in ${intent.leaseEndWindow.label}` : '';
+    if (endWin && !intent.renewalStatus && /\b(?:by|per)\s+(?:renewal[-\s]+)?status\b|\brenewal[-\s]+status\s+breakdown\b/i.test(question)) {
+      const parts: Array<[string, number]> = [['renewed', leaseSummary.renewedCount], ['pending', leaseSummary.pendingCount], ['notice_given', leaseSummary.noticeGivenCount], ['not_due', leaseSummary.notDueCount]];
+      return finalize(
+        `Of the ${plural(leaseSummary.totalMatchingLeases, 'lease')}${endWin}, by renewal status: ${parts.map(([k, n]) => `${k} ${n}`).join(', ')}.`,
+        { count: leaseSummary.totalMatchingLeases, by_renewal_status: Object.fromEntries(parts) },
+        leaseSummary.citations.slice(0, 12),
+      );
+    }
+    if (endWin) {
+      const statusNote = intent.renewalStatus ? ` and renewal status ${intent.renewalStatus}` : '';
+      return finalize(
+        `${leaseSummary.totalMatchingLeases} ${leaseSummary.totalMatchingLeases === 1 ? 'lease' : 'leases'}${endWin}${statusNote} (window resolved from the data's as-of date ${store.policy.asOfDate}). By building: ${nonZeroProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.matchingLeaseCount}`).join(', ') || 'none'}.`,
+        'property_ids' in schema
+          ? { count: leaseSummary.totalMatchingLeases, property_ids: nonZeroProps.map((p) => p.propertyId) }
+          : { count: leaseSummary.totalMatchingLeases, window: intent.leaseEndWindow!.label },
+        leaseSummary.citations.slice(0, 12),
+      );
+    }
     return finalize(
       `Across the matching operating buildings (${nonZeroProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.matchingLeaseCount}`).join(', ') || 'none'}), there are ${plural(leaseSummary.totalMatchingLeases, 'lease')} matching the criteria.`,
       'property_ids' in schema
@@ -1581,4 +1610,10 @@ function unitFilterLabel(intent: ParsedQueryIntent): string {
   if (intent.view) parts.push(`${intent.view} view`);
   if (intent.buildingClass) parts.push(`class ${intent.buildingClass}`);
   return parts.length > 0 ? ` ${parts.join(', ')}` : '';
+}
+
+function nextMonthLabel(asOf: string): string {
+  const [y, m] = asOf.split('-').map(Number);
+  const d = new Date(Date.UTC(y!, m!, 1));
+  return d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
