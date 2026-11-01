@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import http from "node:http";
+import http, { type Server } from "node:http";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import askHandler from "../api/ask.js";
@@ -40,7 +40,7 @@ type Mode = "real" | "http500" | "network";
 let mode: Mode = "real";
 let posts = 0;
 
-function startServer(): Promise<http.Server> {
+function startServer(): Promise<Server> {
   const html = fs.readFileSync(path.join(repoRoot, "public/index.html"), "utf-8");
   const server = http.createServer(async (req, res) => {
     if (req.url?.startsWith("/api/ask")) {

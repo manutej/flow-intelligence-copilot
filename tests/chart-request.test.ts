@@ -28,7 +28,7 @@ test('not a chart ask: "chart of accounts" and plain questions are untouched', (
 });
 
 test('chart ask on an unanswerable question stays a non-answer without the chart line', () => {
-  const t = turn('Plot vacancy rate by building');
+  const t = turn('Plot tenant satisfaction by building');
   assert.equal((t.result as { unknown?: boolean }).unknown, true);
   assert.doesNotMatch(t.answer, /chart isn't available/);
 });

@@ -170,6 +170,7 @@ declare module "node:http" {
     method?: string;
     headers: Record<string, string | string[] | undefined>;
     body?: unknown;
+    socket: { destroy(): void };
     [Symbol.asyncIterator](): AsyncIterator<Buffer | string>;
     on(event: "data", listener: (chunk: Buffer) => void): this;
     on(event: "end", listener: () => void): this;
@@ -259,9 +260,14 @@ declare module "node:assert/strict" {
 }
 
 declare module "node:test" {
+  export interface TestContext {
+    test(name: string, fn: (t: TestContext) => void | Promise<void>): Promise<void>;
+    skip(message?: string): void;
+  }
   export function describe(name: string, fn: () => void | Promise<void>): void;
   export function it(name: string, fn: () => void | Promise<void>): void;
-  export function test(name: string, fn: () => void | Promise<void>): void;
+  export function test(name: string, fn: (t: TestContext) => void | Promise<void>): void;
+  export default test;
   export function after(fn: () => void | Promise<void>): void;
   export function afterEach(fn: () => void | Promise<void>): void;
 }
@@ -277,4 +283,12 @@ declare module "node:net" {
     family: string;
     port: number;
   }
+}
+
+declare module "node:vm" {
+  export class Script {
+    constructor(code: string, options?: { filename?: string });
+  }
+  const vmDefault: { Script: typeof Script };
+  export default vmDefault;
 }

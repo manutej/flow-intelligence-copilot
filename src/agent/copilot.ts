@@ -267,11 +267,10 @@ async function askUnsealed(
     };
   }
 
-  // FLOWIQ-SITE-005: uploading, connecting a PMS or adding the asker's own
-  // building is not possible here; say so plainly, with no made-up steps.
-  const demoOnly = demoOnlyReply(question, store);
-  if (demoOnly) {
-    const envelope: AnswerEnvelope = { id: qRecord.id, answer: demoOnly, result: { unknown: true, demo_only: true }, citations: [] };
+  // FLOWIQ-SITE-007: first-visit orientation ("what can you do?").
+  const capability = capabilityReply(question, store);
+  if (capability) {
+    const envelope: AnswerEnvelope = { id: qRecord.id, answer: capability, result: { unknown: true, capability: true }, citations: [] };
     return {
       envelope, toolCalls, clarificationNeeded: false, clarifyingQuestion: null,
       modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
@@ -279,10 +278,11 @@ async function askUnsealed(
     };
   }
 
-  // FLOWIQ-SITE-007: first-visit orientation ("what can you do?").
-  const capability = capabilityReply(question, store);
-  if (capability) {
-    const envelope: AnswerEnvelope = { id: qRecord.id, answer: capability, result: { unknown: true, capability: true }, citations: [] };
+  // FLOWIQ-SITE-005: uploading, connecting a PMS or adding the asker's own
+  // building is not possible here; say so plainly, with no made-up steps.
+  const demoOnly = demoOnlyReply(question, store);
+  if (demoOnly) {
+    const envelope: AnswerEnvelope = { id: qRecord.id, answer: demoOnly, result: { unknown: true, demo_only: true }, citations: [] };
     return {
       envelope, toolCalls, clarificationNeeded: false, clarifyingQuestion: null,
       modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
