@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>FlowIQ — ask your own agent about the portfolio</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
 <style>
   :root {
     --bg: #0e1830;
@@ -531,7 +532,7 @@
       <a href="/field-notebook.html" class="nav-btn">Field &amp; Meta Notebook (12 Plates)</a>
       <a href="/help" class="nav-btn">Help</a>
       <a href="/llms.txt" class="nav-btn">/llms.txt</a>
-      <button class="nav-btn" onclick="toggleHarnessDrawer()">Agent &amp; Model Harness + Vault Drawer</button>
+      <span class="vault-wrap" style="display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;"><button class="nav-btn" onclick="toggleHarnessDrawer()" title="Optional: choose which model answers your questions and where its API key comes from. Not needed; the built-in engine answers without it." aria-describedby="vault-hint">Agent &amp; Model Harness + Vault Drawer</button><span id="vault-hint" class="mono" style="font-size:10.5px;color:var(--muted);max-width:300px;line-height:1.35;">Optional: choose which model answers your questions and where its API key comes from. Not needed; the built-in engine answers without it.</span></span>
     </div>
   </div>
 
@@ -666,7 +667,7 @@
         <li><strong>xAI API:</strong> add <span class="ask-step">{"type": "mcp", "server_url": "…/api/mcp", "server_label": "flowiq"}</span> to <span class="ask-step">tools</span> in a Responses API call.</li>
       </ul>
       <p style="margin-top:10px;">Try: <span class="ask-q">"Over at Kedzie Works, which paid source got us signed leases cheapest from April to September 2026?"</span> → Google Ads, $2,005.00 per lease. Facebook Ads signed none, whatever the CRM note says.</p>
-      <p class="ask-step" style="margin-top:8px;">Also works with Claude Code, Claude Desktop and Cursor: <code>npm run mcp:install</code>. Setup for every client: <a href="https://github.com/manutej/flow-intelligence-copilot/blob/main/docs/MCP_SETUP.md">docs/MCP_SETUP.md</a>.</p>
+      <p class="ask-step" style="margin-top:8px;">Also works with Claude Code, Claude Desktop and Cursor: <code>npm run mcp:install</code>. Setup for every client: <a href="https://github.com/manutej/flow-intelligence-copilot/blob/main/docs/MCP_SETUP.md" target="_blank" rel="noopener noreferrer" class="external-link" aria-label="docs/MCP_SETUP.md (opens GitHub in a new tab)">docs/MCP_SETUP.md ↗</a> <span class="ask-step">(opens GitHub)</span>.</p>
     </div>
     <div class="panel">
       <div class="panel-eyebrow">/ For reviewers</div>
