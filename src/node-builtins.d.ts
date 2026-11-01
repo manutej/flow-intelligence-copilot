@@ -131,6 +131,7 @@ declare module "node:crypto" {
 }
 
 declare module "node:child_process" {
+  export function execFileSync(file: string, args?: readonly string[], options?: Record<string, unknown>): string | Buffer;
   export function execFile(
     file: string,
     args: readonly string[],
@@ -183,7 +184,7 @@ declare module "node:http" {
     listen(port: number, cb?: () => void): this;
     listen(port: number, host: string, cb?: () => void): this;
     address(): import("node:net").AddressInfo | string | null;
-    close(cb?: () => void): this;
+    close(cb?: (err?: Error) => void): this;
   }
   export function createServer(
     handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>,

@@ -778,7 +778,7 @@ async function buildFieldNotebook(): Promise<void> {
     },
     operadicBank: operadicRecords,
     decisionsAudit: learnerReport.evaluatedDecisions,
-    deadSpendPairs: mktReport.zeroLeasePairs,
+    deadSpendPairs: mktReport.deadSpendReallocation.deadPairs,
     sheafEdgesCount: Object.keys(sheafReport.byEdge).length,
   };
 

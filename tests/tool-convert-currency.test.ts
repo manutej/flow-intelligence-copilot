@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { convertCurrency, liveFx, fxLine, CONVERT_CURRENCY_DESCRIPTION } from '../src/tools/convert-currency.ts';
@@ -85,4 +86,17 @@ test('Q4: live cache keyed by date, 24-hour expiry', async () => {
   assert.equal(calls, 2);
   t = LIVE_CACHE_TTL_MS; await getLiveCadRate();
   assert.equal(calls, 3);
+});
+
+test('what-if stores: in memory keyed by settings incl. rate, never persisted, never the default', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const snap = () => String(execFileSync('git', ['status', '--porcelain', '--ignored', '--untracked-files=all', '--', 'data'], { cwd: root }));
+  const before = snap();
+  const a = loadPortfolioStore(undefined, { cadToUsdRate: 0.8 });
+  assert.equal(loadPortfolioStore(undefined, { cadToUsdRate: 0.8 }), a);
+  assert.notEqual(loadPortfolioStore(undefined, { cadToUsdRate: 0.81 }), a);
+  assert.notEqual(loadPortfolioStore(), a);
+  assert.equal(loadPortfolioStore().policy.cadToUsdRate, FIXED_RATE.rate);
+  assert.equal(snap(), before);
 });
