@@ -839,7 +839,6 @@
   <!-- 4 OPERATOR TABS -->
   <div class="tabs-bar">
     <button class="tab-btn active" onclick="switchOperatorTab('portfolio', this)">Tab 1 · Portfolio &amp; Capital Allocation ($46,599.90 → +15 Leases)</button>
-    <button class="tab-btn" onclick="switchOperatorTab('learner', this)">Tab 2 · Closed-Loop Decision Learner (X001–X010)</button>
     <button class="tab-btn" onclick="switchOperatorTab('integrity', this)">Tab 3 · Cross-Table Integrity &amp; Red/Blue Security Audit</button>
     <button class="tab-btn" onclick="switchOperatorTab('temporal', this)">Tab 4 · Durable Temporal Worker (250k Rows) &amp; Parallel LLM Swarm</button>
   </div>
@@ -882,29 +881,10 @@
     </div>
   </div>
 
-  <!-- TAB 2: CLOSED-LOOP DECISION LEARNER (X001..X010) -->
-  <div id="tab-learner" class="tab-pane">
-    <div class="panel">
-      <div class="panel-eyebrow">/ FLOW-105 · EMPIRICAL-BAYES GAMMA-POISSON SHRINKAGE &amp; COUNTERFACTUAL REGRET (X001–X010)</div>
-      <h2>Historical Budget Decisions Audit &amp; Next-Month Policy Recommendations (X011–X020)</h2>
-      <p style="color:var(--muted);margin:0 0 12px;">Conjugate prior <code>α₀ = 1.0</code> lease per <code>β₀ = $3,250</code> spend. Notice how 2-month <code>X009</code> (<code>P01 Facebook Ads</code>, <code>$950</code> post spend, Poisson zero-lease tail <code>Pr(K=0) = 74.7%</code>) is protected from premature cancellation via shrinkage (<code>$3,295.00</code>), while 5-month <code>X001</code> (<code>P01 Zillow</code>, <code>$8,170</code> post spend, <code>0</code> leases, <code>Pr(K=0) = 8.1%</code>) and unaccepted <code>X010</code> (<code>P08 Zillow</code>) are flagged for reallocation.</p>
-      <div id="tbl-learner"></div>
-    </div>
-    <div class="panel">
-      <div class="panel-eyebrow">/ PROPOSED NEXT-MONTH ALLOCATION MOVES (X011–X020)</div>
-      <h2>Closed-Loop Recommendations Generated from Posterior CPSL &amp; Occupancy Need</h2>
-      <div id="tbl-proposed-decisions"></div>
-    </div>
-  </div>
 
   <!-- TAB 3: Cross-Table Integrity & RED/BLUE SECURITY AUDIT -->
   <div id="tab-integrity" class="tab-pane">
     <div class="grid-2">
-      <div class="panel">
-        <div class="panel-eyebrow">/ 6 CROSS-TABLE INTEGRITY EDGES (E1–E6) &amp; DATA HYGIENE QUOTIENT</div>
-        <h2>Cross-Table Integrity Audit (<code>src/domain/integrity-engine</code>)</h2>
-        <div id="tbl-integrity-edges"></div>
-      </div>
       <div class="panel">
         <div class="panel-eyebrow">/ FLOW-103 · PROMPT-INJECTION QUARANTINE &amp; NINTH HOUSE ONBOARDING</div>
         <h2>Untrusted CRM Note Strip (<code>leads:D01011</code>) &amp; <code>P09 Cornell Annex</code></h2>
@@ -1195,7 +1175,6 @@ async function onPolicyMutate() {
       if (liveState && liveState.ok) {
         activeState = Object.assign({}, INITIAL_STATE, liveState);
         renderPortfolioTables();
-        renderLearnerTables();
       }
     }
   } catch (_) {}
@@ -1287,53 +1266,7 @@ function renderBenchmarkTable() {
     "<table><thead><tr><th>ID</th><th>Question, Leaf Sub-Goal &amp; Answer</th><th>Verified Result</th><th>Row Citations</th></tr></thead><tbody>" + rows + "</tbody></table>";
 }
 
-function renderLearnerTables() {
-  const decs = activeState.learnerSummary.evaluatedDecisions || [];
-  const rows = decs.map(function(d) {
-    const cls = (d.outcomeVerdict.includes("positive") || d.outcomeVerdict.includes("small_sample")) ? "accept" : "gate";
-    return "<tr>" +
-      "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('decisions:" + d.decisionId + "')\">" + d.decisionId + "</span><div style=\"color:var(--muted);font-size:10px;\">" + d.decisionMonth + "</div></td>" +
-      "<td class=\"mono\">" + d.propertyId + " · <b>" + d.source + "</b></td>" +
-      "<td class=\"mono\">" + d.action + " (" + (d.ChangePct > 0 ? "+" : "") + d.ChangePct + "%)<div style=\"color:var(--muted);font-size:10px;\">accepted: " + d.accepted + "</div></td>" +
-      "<td class=\"mono\">$" + d.postSpendUsd.toFixed(2) + " / " + d.postSignedLeases + " leases<div style=\"color:var(--muted);font-size:10px;\">" + d.postMonthsObserved + " mo · Pr(K=0)=" + (d.zeroLeasePoissonTailProb * 100).toFixed(1) + "%</div></td>" +
-      "<td class=\"mono\" style=\"color:var(--gold);\">$" + d.posteriorShrunkCpslUsd.toFixed(2) + "</td>" +
-      "<td><span class=\"stamp " + cls + "\">" + d.outcomeVerdict + "</span></td>" +
-    "</tr>";
-  }).join("");
-
-  document.getElementById("tbl-learner").innerHTML =
-    "<table><thead><tr><th>Decision</th><th>Target Pair</th><th>Historical Action</th><th>Post Window &amp; Poisson Tail</th><th>Posterior CPSL</th><th>Closed-Loop Verdict</th></tr></thead><tbody>" + rows + "</tbody></table>";
-
-  const propRows = (activeState.learnerSummary.proposedNextDecisions || []).map(function(p) {
-    const cls = p.recommendedAction === "increase" ? "accept" : "gate";
-    return "<tr>" +
-      "<td class=\"mono\" style=\"color:var(--gold);\">" + p.proposedDecisionId + "</td>" +
-      "<td class=\"mono\">" + p.propertyId + " (" + p.propertyName + ")</td>" +
-      "<td><b>" + p.source + "</b></td>" +
-      "<td><span class=\"stamp " + cls + "\">" + p.recommendedAction.toUpperCase() + " (" + (p.recommendedChangePct > 0 ? "+" : "") + p.recommendedChangePct + "%)</span></td>" +
-      "<td class=\"mono\">$" + p.posteriorCpslUsd.toFixed(2) + "</td>" +
-      "<td style=\"font-size:12px;color:var(--muted);\">" + p.rationale + "</td>" +
-    "</tr>";
-  }).join("");
-
-  document.getElementById("tbl-proposed-decisions").innerHTML =
-    "<table><thead><tr><th>ID</th><th>Building</th><th>Source</th><th>Recommended Move</th><th>Posterior CPSL</th><th>Empirical-Bayes Rationale</th></tr></thead><tbody>" + propRows + "</tbody></table>";
-}
-
 function renderintegrityAndSecurityTables() {
-  const edges = activeState.integritySummary.edges || [];
-  const edgeRows = edges.map(function(e) {
-    return "<tr>" +
-      "<td class=\"mono\" style=\"color:var(--gold);\"><b>" + e.edgeId + "</b></td>" +
-      "<td class=\"mono\">" + e.sourcetable + " → " + e.targettable + "</td>" +
-      "<td>" + e.invariantDescription + "</td>" +
-      "<td class=\"mono\">" + e.residualCount + " rows</td>" +
-      "<td><span class=\"stamp accept\">✓ Quotient Reconciled</span></td>" +
-    "</tr>";
-  }).join("");
-
-  document.getElementById("tbl-integrity-edges").innerHTML =
-    "<table><thead><tr><th>Edge</th><th>Table Join Pair</th><th>Restriction Invariant</th><th>Raw Residuals</th><th>Integrity Status</th></tr></thead><tbody>" + edgeRows + "</tbody></table>";
 
   document.getElementById("box-security-quarantine").innerHTML =
     "<div style=\"background:var(--bg-deep);border:1px solid var(--red);border-radius:3px;padding:12px;margin-bottom:10px;\">" +
@@ -1363,7 +1296,7 @@ function renderintegrityAndSecurityTables() {
       "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('" + v.citationId + "')\">" + v.spendId + "</span></td>" +
       "<td class=\"mono\">" + v.propertyId + " · " + v.source + "</td>" +
       "<td class=\"mono\">" + v.month + "</td>" +
-      "<td class=\"mono\" style=\"color:#fca5a5;\">$" + v.amountOriginal.toFixed(2) + " " + v.currency + "</td>" +
+      "<td class=\"mono\" style=\"color:#fca5a5;\">$" + Number(v.rawAmount != null ? v.rawAmount : v.amountOriginal).toFixed(2) + " " + v.currency + "</td>" +
     "</tr>";
   }).join("");
   document.getElementById("tbl-void-spend").innerHTML =
@@ -1470,9 +1403,9 @@ function renderTemporalAndSwarm(wf, swarm) {
 }
 
 function buildClientFallbackSwarm() {
-  const multi-hopRuns = (INITIAL_STATE.runs || []).filter(function(r) { return r.suite === "multi-hop"; }).slice(0, 40);
+  const benchRuns = (INITIAL_STATE.runs || []).filter(function(r) { return r.suite === "multi-hop"; }).slice(0, 40);
   const crashAt = 18;
-  const activities = multi-hopRuns.map(function(r, idx) {
+  const activities = benchRuns.map(function(r, idx) {
     const actIdx = idx + 1;
     const replayed = actIdx <= crashAt;
     return {
@@ -1568,7 +1501,6 @@ async function runLiveWorkflowSim() {
 renderLiveTurnCard((INITIAL_STATE.runs || [])[0]);
 renderPortfolioTables();
 renderBenchmarkTable();
-renderLearnerTables();
 renderintegrityAndSecurityTables();
 currentSwarmData = buildClientFallbackSwarm();
 renderTemporalAndSwarm(INITIAL_STATE.workflowSim, currentSwarmData);
