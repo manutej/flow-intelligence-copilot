@@ -2,6 +2,7 @@ import { sealProof } from './envelope.ts';
 import type { ClarifyOption } from './clarify.ts';
 import { fmtUsd, plural } from '../domain/format.ts';
 import { roundTo } from '../data/loader.ts';
+import { ratePercent1 } from '../data/rate.ts';
 import type {
   AnswerEnvelope,
   CitationId,
@@ -1289,7 +1290,7 @@ export function executeCompositionalPlan(
       const vac = filtered ? p.filteredVacantUnits : p.vacantUnits;
       return { units, occ, ntc, vac, occupiedCount: notice ? occ + ntc : occ };
     };
-    const pct = (n: number, d: number) => (d === 0 ? 0 : Number(((n / d) * 100).toFixed(1)));
+    const pct = ratePercent1;
     const rows = unitSummary.byProperty.map((p) => ({ id: p.propertyId, name: p.propertyName, ...pick(p) }));
     const total = pick({
       totalUnits: unitSummary.portfolioTotalUnits, occupiedUnits: unitSummary.portfolioOccupiedUnits,
