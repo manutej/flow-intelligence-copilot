@@ -4,6 +4,7 @@
  */
 import type { CitationId, PortfolioStore } from '../data/schema.ts';
 import { DATA_END, DATA_START, periodLabel, roundHalfUp, unknownEnvelope, type FxOut, type ToolEnvelope } from './envelope.ts';
+import { convert, fxBlock, toolRate } from './currency.ts';
 
 export const SPEND_BY_CHANNEL_DESCRIPTION =
   "Total USD spend grouped by source, optionally by building and period. Use for 'how much did we spend on Zillow / by channel'. Do NOT use for 'listing sites' or 'ILS' as a group: that returns unknown until the user gives a list of sites (M-10). Do NOT compute CPL here.";
@@ -33,7 +34,7 @@ export function spendByChannel(store: PortfolioStore, args: SpendByChannelArgs =
   const wanted = args.group === 'ILS' ? new Set(ILS_SITES!) : args.sources ? new Set(args.sources) : null;
   const start = args.start_date ?? DATA_START;
   const end = args.end_date ?? DATA_END;
-  const rate = fx?.rate ?? store.policy.cadToUsdRate;
+  const rate = toolRate(store.policy, fx);
   const operating = new Set(store.operatingProperties.map((p) => p.propertyId));
   const rows = store.spend.filter((s) => !s.isVoid && operating.has(s.propertyId)
     && (!args.property_id || s.propertyId === args.property_id) && (!wanted || wanted.has(s.source))
@@ -42,7 +43,7 @@ export function spendByChannel(store: PortfolioStore, args: SpendByChannelArgs =
   let cad = false;
   for (const s of rows) {
     if (s.currency === 'CAD') cad = true;
-    raw.set(s.source, (raw.get(s.source) ?? 0) + (s.currency === 'CAD' ? s.rawAmount * rate : s.rawAmount));
+    raw.set(s.source, (raw.get(s.source) ?? 0) + convert(s.rawAmount, s.currency, 'USD', undefined, rate).amount);
   }
   const by_source: Record<string, number> = {};
   for (const k of [...raw.keys()].sort()) by_source[k] = roundHalfUp(raw.get(k)!, 2);
@@ -50,7 +51,7 @@ export function spendByChannel(store: PortfolioStore, args: SpendByChannelArgs =
   return {
     value: { by_source, total_usd: roundHalfUp(total, 2) },
     period: { label: periodLabel(start, end), start, end, partial: end > DATA_END, basis: 'spend.month' },
-    fx: cad ? (fx ?? { applied: true, rate, rate_date: store.policy.cadRateDate, source: store.policy.cadRateSource }) : null,
+    fx: cad ? fxBlock(rate) : null,
     dedup: null, unknown: false, unknown_reason: null,
     citations: rows.slice(0, 8).map((s) => s.citationId as CitationId),
   };

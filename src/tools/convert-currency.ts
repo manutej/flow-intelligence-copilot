@@ -1,9 +1,10 @@
 /** convert_currency (FIQ-TOOLS-1 §2.3, M-3). */
 import { roundHalfUp, unknownEnvelope, type FxOut, type ToolEnvelope } from './envelope.ts';
 import { getLiveCadRate } from './fx-rate.ts';
+import { convert, fxBlock, liveEnabled, loadLiveRate } from './currency.ts';
 
 export const CONVERT_CURRENCY_DESCRIPTION =
-  'Convert CAD to USD (or back) at the live rate, and always state the rate and its date. Use whenever an amount is in CAD. Do NOT hard-code 0.73.';
+  'Convert CAD to USD (or back) at the fixed dated rate (live only when enabled), and always state the rate, its source and its date. Use whenever an amount is in CAD. Do NOT hard-code 0.73.';
 
 export interface ConvertArgs { readonly amount: number; readonly from: 'CAD' | 'USD'; readonly to: 'CAD' | 'USD' }
 
@@ -19,11 +20,9 @@ export function fxLine(fx: FxOut): string {
 
 export async function convertCurrency(args: ConvertArgs): Promise<ToolEnvelope<{ amount_out: number }>> {
   if (!Number.isFinite(args.amount)) return unknownEnvelope('amount is not a number');
-  if (args.from === args.to) {
-    return { value: { amount_out: roundHalfUp(args.amount, 2) }, period: null, fx: null, dedup: null, unknown: false, unknown_reason: null, citations: [] };
-  }
-  const fx = await liveFx();
-  if (!fx) return unknownEnvelope('live rate unavailable');
-  const out = args.from === 'CAD' ? args.amount * fx.rate : args.amount / fx.rate;
-  return { value: { amount_out: roundHalfUp(out, 2) }, period: null, fx, dedup: null, unknown: false, unknown_reason: null, citations: [] };
+  // D-24 / FIQ-CURRENCY-1: the currency tool decides the rate (fixed unless FLOWIQ_LIVE_FX=1).
+  if (liveEnabled()) await loadLiveRate();
+  const c = convert(args.amount, args.from, args.to);
+  const fx = args.from === args.to ? null : fxBlock({ rate: c.rate, rate_date: c.rate_date, source: c.rate_source });
+  return { value: { amount_out: roundHalfUp(c.amount, 2) }, period: null, fx, dedup: null, unknown: false, unknown_reason: null, citations: [] };
 }

@@ -1,0 +1,170 @@
+{
+ "ALL": {
+  "answer": 10,
+  "clarify": 90,
+  "unknown_next_step": 587,
+  "unknown": 2160,
+  "refused": 153,
+  "draft": 0
+ },
+ "P07": {
+  "answer": 0,
+  "clarify": 2,
+  "unknown_next_step": 13,
+  "unknown": 135,
+  "refused": 0,
+  "draft": 0
+ },
+ "P08": {
+  "answer": 1,
+  "clarify": 3,
+  "unknown_next_step": 8,
+  "unknown": 138,
+  "refused": 0,
+  "draft": 0
+ },
+ "P09": {
+  "answer": 0,
+  "clarify": 13,
+  "unknown_next_step": 17,
+  "unknown": 120,
+  "refused": 0,
+  "draft": 0
+ },
+ "P11": {
+  "answer": 0,
+  "clarify": 4,
+  "unknown_next_step": 89,
+  "unknown": 57,
+  "refused": 0,
+  "draft": 0
+ },
+ "P12": {
+  "answer": 0,
+  "clarify": 12,
+  "unknown_next_step": 71,
+  "unknown": 67,
+  "refused": 0,
+  "draft": 0
+ },
+ "P13": {
+  "answer": 0,
+  "clarify": 6,
+  "unknown_next_step": 14,
+  "unknown": 130,
+  "refused": 0,
+  "draft": 0
+ },
+ "P14": {
+  "answer": 0,
+  "clarify": 0,
+  "unknown_next_step": 3,
+  "unknown": 147,
+  "refused": 0,
+  "draft": 0
+ },
+ "P15": {
+  "answer": 0,
+  "clarify": 0,
+  "unknown_next_step": 1,
+  "unknown": 37,
+  "refused": 112,
+  "draft": 0
+ },
+ "P17": {
+  "answer": 0,
+  "clarify": 0,
+  "unknown_next_step": 7,
+  "unknown": 119,
+  "refused": 24,
+  "draft": 0
+ },
+ "P19": {
+  "answer": 0,
+  "clarify": 0,
+  "unknown_next_step": 3,
+  "unknown": 147,
+  "refused": 0,
+  "draft": 0
+ },
+ "P22": {
+  "answer": 0,
+  "clarify": 3,
+  "unknown_next_step": 31,
+  "unknown": 109,
+  "refused": 7,
+  "draft": 0
+ },
+ "P23": {
+  "answer": 7,
+  "clarify": 0,
+  "unknown_next_step": 7,
+  "unknown": 136,
+  "refused": 0,
+  "draft": 0
+ },
+ "P25": {
+  "answer": 0,
+  "clarify": 6,
+  "unknown_next_step": 6,
+  "unknown": 138,
+  "refused": 0,
+  "draft": 0
+ },
+ "P27": {
+  "answer": 0,
+  "clarify": 0,
+  "unknown_next_step": 3,
+  "unknown": 144,
+  "refused": 3,
+  "draft": 0
+ },
+ "P28": {
+  "answer": 0,
+  "clarify": 2,
+  "unknown_next_step": 18,
+  "unknown": 130,
+  "refused": 0,
+  "draft": 0
+ },
+ "P29": {
+  "answer": 0,
+  "clarify": 0,
+  "unknown_next_step": 142,
+  "unknown": 8,
+  "refused": 0,
+  "draft": 0
+ },
+ "P30": {
+  "answer": 2,
+  "clarify": 12,
+  "unknown_next_step": 9,
+  "unknown": 127,
+  "refused": 0,
+  "draft": 0
+ },
+ "P31": {
+  "answer": 0,
+  "clarify": 7,
+  "unknown_next_step": 4,
+  "unknown": 139,
+  "refused": 0,
+  "draft": 0
+ },
+ "P32": {
+  "answer": 0,
+  "clarify": 18,
+  "unknown_next_step": 11,
+  "unknown": 114,
+  "refused": 7,
+  "draft": 0
+ },
+ "P33": {
+  "answer": 0,
+  "clarify": 2,
+  "unknown_next_step": 130,
+  "unknown": 18,
+  "refused": 0,
+  "draft": 0
+ }
+}

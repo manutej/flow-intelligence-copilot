@@ -12,6 +12,7 @@ export const PERIOD_TOTAL_DESCRIPTION =
 
 export { LATEST_DATA_DATE } from '../config/rules.ts';
 import { LATEST_DATA_DATE } from '../config/rules.ts';
+import { convert, fxBlock, toolRate } from './currency.ts';
 export type Measure = 'spend_usd' | 'leads' | 'signed_leases' | 'concessions_usd';
 
 /** Resolve a period; an unrecognised one is null (the caller asks), never Apr–Sep. */
@@ -61,10 +62,10 @@ export function periodTotal(store: PortfolioStore, args: PeriodTotalArgs, fx?: F
     if (end < DATA_START || start > DATA_END) return unknownEnvelope('No CRM or spend data outside 2026-04 to 2026-09', period);
   }
   if (args.measure === 'spend_usd') {
-    const rate = fx?.rate ?? store.policy.cadToUsdRate;
+    const rate = toolRate(store.policy, fx);
     const rows = store.spend.filter((s) => !s.isVoid && inProp(s.propertyId) && (!args.source || s.source === args.source) && s.month >= start.slice(0, 7) && s.month <= end.slice(0, 7));
-    values = rows.map((s) => (s.currency === 'CAD' ? s.rawAmount * rate : s.rawAmount));
-    if (rows.some((s) => s.currency === 'CAD')) fxOut = fx ?? { applied: true, rate, rate_date: store.policy.cadRateDate, source: store.policy.cadRateSource };
+    values = rows.map((s) => convert(s.rawAmount, s.currency, 'USD', undefined, rate).amount);
+    if (rows.some((s) => s.currency === 'CAD')) fxOut = fxBlock(rate);
     cites = rows.slice(0, 8).map((s) => s.citationId);
   } else if (args.measure === 'leads') {
     const rows = uniqueLeads(store).filter((l) => inProp(l.propertyId) && (!args.source || l.source === args.source) && l.createdDate >= start && l.createdDate <= end);

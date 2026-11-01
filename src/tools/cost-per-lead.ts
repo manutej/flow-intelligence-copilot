@@ -13,6 +13,7 @@
  */
 import type { CitationId, PortfolioStore } from '../data/schema.ts';
 import { DATA_END, DATA_START, periodLabel, roundHalfUp, type FxOut, type ToolEnvelope } from './envelope.ts';
+import { convert, fxBlock, toolRate } from './currency.ts';
 
 export const COST_PER_LEAD_DESCRIPTION =
   "Spend in USD divided by unique leads (same person counted once) for a building, source or portfolio over a period. Use for 'cost per lead', 'CPL', 'what does a lead cost'. Do NOT use for cost per signed lease or tour (use cost_per_signed_lease), or for raw spend (use spend_by_channel).";
@@ -46,8 +47,8 @@ export function uniqueLeads(store: PortfolioStore) {
 export function costPerLead(store: PortfolioStore, args: CostPerLeadArgs = {}, fx?: FxOut): ToolEnvelope<CostPerLeadValue> {
   const start = args.start_date ?? DATA_START;
   const end = args.end_date ?? DATA_END;
-  const rate = fx?.rate ?? store.policy.cadToUsdRate;
-  const fxOut: FxOut = fx ?? { applied: true, rate, rate_date: store.policy.cadRateDate, source: store.policy.cadRateSource };
+  const rate = toolRate(store.policy, fx);
+  const fxOut: FxOut = fxBlock(rate);
   const operating = new Set(store.operatingProperties.map((p) => p.propertyId));
   const pids = args.property_ids && args.property_ids.length > 0 ? new Set(args.property_ids) : null;
   const srcs = args.sources && args.sources.length > 0 ? new Set(args.sources) : null;
@@ -57,8 +58,8 @@ export function costPerLead(store: PortfolioStore, args: CostPerLeadArgs = {}, f
   const spendRows = store.spend.filter((s) => !s.isVoid && inScope(s.propertyId, s.source) && s.month >= start.slice(0, 7) && s.month <= end.slice(0, 7));
   let cadUsed = false;
   const spend = spendRows.reduce((t, s) => {
-    if (s.currency === 'CAD') { cadUsed = true; return t + s.rawAmount * rate; }
-    return t + s.rawAmount;
+    if (s.currency === 'CAD') cadUsed = true;
+    return t + convert(s.rawAmount, s.currency, 'USD', undefined, rate).amount;
   }, 0);
 
   const paid = new Set(store.paidSources);
