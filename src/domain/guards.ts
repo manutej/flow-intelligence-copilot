@@ -1,4 +1,6 @@
 import { envelopeErrors, nonAnswerErrors } from '../agent/envelope.ts';
+import { ILS_UNKNOWN_REASON } from '../tools/spend-by-channel.ts';
+const ILS_GROUP_RE = /\bILS(?:es)?\b|\blisting (?:sites?|services?|portals?)\b|\binternet listing services?\b/i;
 import type {
   AnswerEnvelope,
   CitationId,
@@ -159,6 +161,13 @@ export function checkUnknownDataGuard(
       reason: null,
       citations: [],
     };
+  }
+
+  // M-10: "ILS" / "listing sites" as a spend group has no defined site list.
+  // Scoped to spend questions (M-10's wording); CPL-from-ILS keeps the s11
+  // paid-sources reading until ruled otherwise.
+  if (ILS_GROUP_RE.test(question.normalize('NFKC')) && /\bspen[dt]/i.test(question)) {
+    return { unknown: true, missingCategory: 'ILS group', reason: `I don't know: ${ILS_UNKNOWN_REASON}.`, citations: ['spend:S0001'], clarifyingQuestion: 'Which listing sites should count as ILS?' };
   }
 
   // Bare "FY" is Fulton Yards only after "at" and only when the resolver
