@@ -17,35 +17,46 @@ export interface Converted {
   readonly rate_source: string;
   readonly rate_date: string | null;
   readonly date?: string;
+  readonly note?: string;
 }
 
 export const FIXED_RATE: Rate = PINNED_CAD_RATE;
-let live: Rate | null = null;
-let liveTried = false;
+const live = new Map<string, Rate | null>(); // key: requested date or 'latest'
 
 export const liveEnabled = () => process.env.FLOWIQ_LIVE_FX === '1';
 
-/** Flag on: fetch and cache the live rate (null when unavailable). Flag off: null, no fetch. */
-export async function loadLiveRate(): Promise<Rate | null> {
+/** Flag on: fetch the live rate as of `date` (Q1) via the 24h per-date cache (Q4); null when unavailable. Flag off: null, no fetch. */
+export async function loadLiveRate(date?: string): Promise<Rate | null> {
   if (!liveEnabled()) return null;
-  liveTried = true;
-  live = await getLiveCadRate();
-  return live;
+  const r = await getLiveCadRate(date);
+  live.set(date ?? 'latest', r);
+  return r;
 }
-export function resetLiveRate(): void { live = null; liveTried = false; }
+export function resetLiveRate(): void { live.clear(); }
 
-/** The rate convert uses when none is given: live if enabled and loaded, else fixed (saying so when live failed). */
-export function currentRate(): Rate {
-  if (liveEnabled() && live) return live;
-  if (liveEnabled() && liveTried) return { ...FIXED_RATE, source: `${FIXED_RATE.source}; live rate unavailable` };
+/** The rate convert uses when none is given: live (for that date) if enabled and loaded, else fixed (labelled when live failed). */
+export function currentRate(date?: string): Rate {
+  const key = date ?? 'latest';
+  if (liveEnabled() && live.get(key)) return live.get(key)!;
+  if (liveEnabled() && live.has(key)) return { ...FIXED_RATE, source: `${FIXED_RATE.source}; live rate unavailable` };
   return FIXED_RATE;
 }
 
-/** Convert an amount; unrounded. `rate` is an explicit CAD→USD rate (a what-if); otherwise currentRate(). */
-export function convert(amount: number, from: Currency, to: Currency, date?: string, rate: Rate = currentRate()): Converted {
+/** Q3: a what-if rate, labelled; passed explicitly to convert, never cached or stored. */
+export function whatIfRate(rate: number): Rate {
+  return { rate, rate_date: null, source: `what-if rate ${rate}` };
+}
+
+/**
+ * Convert an amount; unrounded. `date` asks for the rate as of that date (Q1); the fixed
+ * source ignores it but states it in `note`. `rate` is an explicit rate (a what-if, Q3).
+ */
+export function convert(amount: number, from: Currency, to: Currency, date?: string, rate: Rate = currentRate(date)): Converted {
   const r = from === to ? 1 : rate.rate;
   const out = from === to ? amount : from === 'CAD' ? amount * r : amount / r;
-  return { amount: out, from, to, rate: rate.rate, rate_source: rate.source, rate_date: rate.rate_date, ...(date ? { date } : {}) };
+  const fixed = rate.source.startsWith(FIXED_RATE.source);
+  const note = date && fixed ? `${FIXED_RATE.source} ${rate.rate} (${rate.rate_date}); requested date ${date}` : undefined;
+  return { amount: out, from, to, rate: rate.rate, rate_source: rate.source, rate_date: rate.rate_date, ...(date ? { date } : {}), ...(note ? { note } : {}) };
 }
 
 /** The rate a store-backed tool converts at: an injected fx block, else the store's policy rate (fixed unless a what-if). */

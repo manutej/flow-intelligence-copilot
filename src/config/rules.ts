@@ -90,7 +90,7 @@ export function resolvePolicyConfig(
     parsePositiveFloatEnv(env.FLOW_CAD_RATE, PINNED_CAD_RATE.rate, 'FLOW_CAD_RATE');
   const pinned = overrides.cadToUsdRate === undefined && !envRate;
   const cadRateDate = overrides.cadRateDate ?? (pinned ? PINNED_CAD_RATE.rate_date : env.FLOW_CAD_RATE_DATE ?? 'undated');
-  const cadRateSource = overrides.cadRateSource ?? (pinned ? PINNED_CAD_RATE.source : overrides.cadToUsdRate !== undefined ? 'what-if override' : 'FLOW_CAD_RATE');
+  const cadRateSource = overrides.cadRateSource ?? (pinned ? PINNED_CAD_RATE.source : overrides.cadToUsdRate !== undefined ? `what-if rate ${overrides.cadToUsdRate}` : 'FLOW_CAD_RATE');
   const occupiedIncludesNotice =
     overrides.occupiedIncludesNotice ??
     parseBooleanEnv(env.FLOW_OCCUPIED_INCLUDES_NOTICE, true);

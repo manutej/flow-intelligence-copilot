@@ -27,6 +27,7 @@ import type {
   UnitRecord,
   UnitStatus,
 } from './schema.ts';
+import { convert, toolRate } from '../tools/currency.ts';
 
 const OPERATING_PMS_ADAPTERS = new Set(['Yardi', 'Entrata', 'RealPage', 'MRI']);
 
@@ -648,14 +649,9 @@ export function loadPortfolioStore(
     }
     const status = r.status as SpendStatus;
     const isVoid = status === VOID_INVOICE_STATUS;
-    const rate =
-      currency === 'CAD'
-        ? policy.convertCadToUsd
-          ? policy.cadToUsdRate
-          : 1.0
-        : 1.0;
-    const effectiveUsd =
-      isVoid && policy.excludeVoidSpend ? 0 : roundTo(rawAmount * rate, 4);
+    // FIQ-CURRENCY-1 Q2: conversion goes through currency.ts.
+    const usd = policy.convertCadToUsd ? convert(rawAmount, currency, 'USD', undefined, toolRate(policy)).amount : rawAmount;
+    const effectiveUsd = isVoid && policy.excludeVoidSpend ? 0 : roundTo(usd, 4);
 
     paidSourceSet.add(r.source);
 

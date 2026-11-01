@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 /**
  * Expectations computed from the pinned, dated CAD fixture (M-3), not
  * hard-coded to one rate. Reads data/ils/spend.csv directly, so it is an
@@ -7,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { PINNED_CAD_RATE } from '../../src/config/fx-pinned.ts';
 
 export const FX = PINNED_CAD_RATE;
-const rows = readFileSync(new URL('../../data/ils/spend.csv', import.meta.url), 'utf8').trim().split(/\r?\n/).slice(1).map((l) => {
+const rows = readFileSync(fileURLToPath(new URL('../../data/ils/spend.csv', import.meta.url)), 'utf8').trim().split(/\r?\n/).slice(1).map((l) => {
   const [id, month, pid, source, amount, currency, status] = l.trim().split(',');
   return { id, month, pid, source, amount: Number(amount), currency, status };
 });
