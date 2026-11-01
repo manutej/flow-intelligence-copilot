@@ -1267,8 +1267,13 @@ function renderBenchmarkTable() {
 }
 
 function formatVoidAmount(v) {
-  const raw = v.rawAmount != null ? v.rawAmount : v.amountOriginal;
-  const n = raw == null || raw === "" ? NaN : Number(raw);
+  function num(x) {
+    if (typeof x === "number") return Number.isFinite(x) ? x : NaN;
+    if (typeof x === "string" && x.trim() !== "") { const n = Number(x); return Number.isFinite(n) ? n : NaN; }
+    return NaN;
+  }
+  let n = num(v.rawAmount);
+  if (!Number.isFinite(n)) n = num(v.amountOriginal);
   if (!Number.isFinite(n)) return "—";
   const cur = v.currency ? String(v.currency) : "";
   return (cur === "USD" ? "$" : "") + n.toFixed(2) + (cur ? " " + cur : "");

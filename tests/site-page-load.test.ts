@@ -111,6 +111,12 @@ test("void-spend amounts use their own currency and show — when missing", () =
     assert.equal(fmt({ amountOriginal: 960, currency: "CAD" }), "960.00 CAD", f);
     assert.equal(fmt({ currency: "CAD" }), "\u2014", f);
     assert.equal(fmt({ rawAmount: null, amountOriginal: undefined, currency: "USD" }), "\u2014", f);
+    for (const bad of [NaN, "", Infinity, -Infinity, "abc", [], true, false, {}]) {
+      assert.equal(fmt({ rawAmount: bad, amountOriginal: 960, currency: "CAD" }), "960.00 CAD", `${f} rawAmount=${String(bad)}`);
+      assert.equal(fmt({ rawAmount: bad, currency: "USD" }), "\u2014", `${f} rawAmount=${String(bad)} no fallback`);
+      assert.equal(fmt({ rawAmount: bad, amountOriginal: bad, currency: "USD" }), "\u2014", f);
+    }
+    assert.equal(fmt({ rawAmount: "1520", currency: "USD" }), "$1520.00 USD", f);
     assert.ok(!html.includes('">$" + Number(v.rawAmount'), `${f} still prefixes $ on every void amount`);
   }
 });
