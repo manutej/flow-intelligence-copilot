@@ -10,7 +10,8 @@ const ask = async (q: string) => (await askFlowIqCopilot(q, { store, parse: null
 const nonAnswer = (r: Record<string, unknown>) => r.unknown === true || r.clarification_needed === true || r.refused === true;
 
 const dropped: ReadonlyArray<readonly [string, string]> = [
-  ['Show me vacancy for every community.', 'every community'],
+  // Vacancy per building is now a supported breakdown (FLOWIQ-SITE-004).
+  ['Show me average market rent for every community.', 'every community'],
   ['Spend at each asset for July 2026', 'each asset'],
   ['Renewal rate - by bldg class?', 'bldg class'],
   ['Lead volume quarter over quarter?', 'quarter over quarter'],

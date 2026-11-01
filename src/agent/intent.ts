@@ -694,7 +694,7 @@ const RENT_FILTER_RE = /\b(?:market\s+)?rents?\s+(?:of\s+|is\s+|was\s+)?(?=(?:be
 const measureText = (question: string): string => question.replace(RENT_FILTER_RE, ' ');
 
 const UNIT_COUNT_CUE_RE =
-  /\b(?:how\s+many|number\s+of|count|total|list|which|show|what)\b|\bvacanc(?:y|ies)\b/i;
+  /\b(?:how\s+many|number\s+of|count|total|list|which|show|what)\b|\bvacanc(?:y|ies)\b|^\s*units\s+(?:in|at|per|by|for)\s+(?:each|every)\s+(?:buildings?|propert(?:y|ies))\b/i;
 const UNIT_NOUN_RE =
   /\b(?:units?|apartments?|apts?|vacanc(?:y|ies)|studios?|flats?|homes|buildings?|properties|(?:one|two|three|four|\d)[-\s]?(?:bed(?:room)?s?|br)\b)/i;
 
@@ -1184,7 +1184,7 @@ function parseQueryIntentRaw(
   if (/\bvacancy\s+rate\b/i.test(question)) {
     unitMeasure = 'vacancy_rate';
   } else if (
-    /\b(occupied\s+share|share\s+of.*occupied|occupancy\s+rate|occupancy\s+at|percent(?:age)?\s+of.*occupied)\b/i.test(
+    /\b(occupied\s+share|share\s+of.*occupied|occupancy\s+rate|occupancy\s+at|percent(?:age)?\s+of.*occupied)\b|^\s*(?:what(?:'s|\s+is)\s+(?:the\s+)?)?(?:portfolio\s+)?occupancy\b/i.test(
       question,
     )
   ) {
@@ -1330,6 +1330,8 @@ export type Dimension = 'building' | 'source' | 'class' | 'time' | 'other';
 /** The dimension each answer template lists or ranks over (planner.ts). */
 /** Marketing measures defined per listing source, answered through sourceModeOf. */
 export const SOURCE_MEASURES: ReadonlySet<IntentMeasure> = new Set<IntentMeasure>(['cost_per_lead', 'cost_per_tour', 'cost_per_signed_lease', 'tour_to_lease_rate']);
+/** Unit measures with a per-building table (FLOWIQ-SITE-004). */
+export const BUILDING_BREAKDOWN_MEASURES: ReadonlySet<IntentMeasure> = new Set<IntentMeasure>(['unit_count', 'occupied_share', 'vacancy_rate']);
 export type SourceMode = 'overall' | 'one' | 'pooled' | 'ranked' | 'list' | 'which';
 /**
  * How a source measure picks its source rows, the same way for every source
@@ -1361,6 +1363,12 @@ function answerLayout(i: ParsedQueryIntent, question?: string): ReadonlySet<Dime
     case 'applied_without_tour': case 'signed_leases_ranking': out.add('building'); break;
     case 'cost_per_signed_lease': if (ranked) out.add('source'); break;
     case 'average_concession': case 'total_concession': case 'rent_at_risk': case 'vacancy_rate': case 'unit_count': if (ranked) out.add('building'); break;
+    default: break;
+  }
+  // FLOWIQ-SITE-004: unit counts, occupancy and vacancy rate list one row per
+  // building when the question asks for each building (planner: unitBreakdown).
+  if (question !== undefined && !ranked && BUILDING_BREAKDOWN_MEASURES.has(i.measure) && requestedBreakdowns(question).some((b) => b.dim === 'building' && !b.ranked)) out.add('building');
+  switch (i.measure) {
     default: break;
   }
   return out;
