@@ -1347,11 +1347,36 @@ export function sourceModeOf(question: string, intent: ParsedQueryIntent): Sourc
   return 'overall';
 }
 
+/**
+ * FLOWIQ-SITE-002: what a ranked cost-per-lead question ranks over. A
+ * building/property noun ranks properties; a source/site/channel noun or a
+ * named source ranks sources; neither gives both, each labelled.
+ */
+export function cplRankDimension(question: string, i: ParsedQueryIntent): 'building' | 'source' | 'both' | null {
+  if (i.measure !== 'cost_per_lead' || (i.aggregation !== 'argmax' && i.aggregation !== 'argmin')) return null;
+  if (i.mentionedSources.length > 0) return 'source';
+  const dims = new Set<Dimension>();
+  const words = question.replace(/[^\p{L}\p{N}\s&-]/gu, ' ').split(/\s+/).filter(Boolean);
+  for (let k = 0; k < words.length; k++) {
+    const rest = words.slice(k).join(' ');
+    for (const [dim, re] of DIMENSION_HEADS) { if (re.test(rest)) { dims.add(dim); break; } }
+  }
+  const src = dims.has('source') || /\b(?:ad|listing|marketing)\s+(?:sources?|sites?|channels?)\b/i.test(question);
+  const bld = dims.has('building');
+  if (src && !bld) return 'source';
+  if (bld && !src) return 'building';
+  if (!src && !bld) return 'both';
+  return null;
+}
+
 function answerLayout(i: ParsedQueryIntent, question?: string): ReadonlySet<Dimension> {
   const ranked = i.aggregation === 'argmax' || i.aggregation === 'argmin';
   const out = new Set<Dimension>();
   // A source measure lays out by source whenever the question picks rows by source.
-  if (question !== undefined && SOURCE_MEASURES.has(i.measure) && sourceModeOf(question, i) !== 'overall') out.add('source');
+  const cplDim = question !== undefined ? cplRankDimension(question, i) : null;
+  if (cplDim === 'building') out.add('building');
+  else if (cplDim === 'both') out.add('building').add('source');
+  else if (question !== undefined && SOURCE_MEASURES.has(i.measure) && sourceModeOf(question, i) !== 'overall') out.add('source');
   if (i.isClassComparison || i.measure === 'renewal_rate_class_comparison') out.add('class');
   switch (i.measure) {
     case 'apply_rate': case 'cost_per_tour': out.add('source'); break;
