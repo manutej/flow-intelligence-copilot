@@ -279,6 +279,17 @@ async function askUnsealed(
     };
   }
 
+  // FLOWIQ-SITE-007: first-visit orientation ("what can you do?").
+  const capability = capabilityReply(question, store);
+  if (capability) {
+    const envelope: AnswerEnvelope = { id: qRecord.id, answer: capability, result: { unknown: true, capability: true }, citations: [] };
+    return {
+      envelope, toolCalls, clarificationNeeded: false, clarifyingQuestion: null,
+      modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
+      verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+    };
+  }
+
   const unknownCheck = checkUnknownDataGuard(question, store);
   if (unknownCheck.unknown) {
     const envelope: AnswerEnvelope = {
@@ -706,4 +717,40 @@ export function demoOnlyReply(question: string, store: PortfolioStore): string |
   const operating = new Set(store.operatingProperties.map((p) => p.propertyId));
   const units = store.units.filter((u) => operating.has(u.propertyId)).length;
   return `This is a demo. FlowIQ here answers questions over a fixed demo portfolio: ${store.operatingProperties.length} buildings, ${units.toLocaleString('en-US')} units, data as of ${store.policy.asOfDate}. You can't upload a rent roll, connect a PMS such as Yardi, sign up, or add your own buildings on this site, and your data isn't uploaded here. Want this on your portfolio? Use the Contact link in the demo banner. Buildings you can ask about: ${store.operatingProperties.map((p) => p.name).join(', ')}.`;
+}
+
+const CAPABILITY_QUESTION = [
+  /^\s*(?:hi|hello|hey)?[\s,!.]*(?:what|which)\s+(?:data|information|info)\s+(?:do\s+you\s+have|is\s+(?:in\s+)?(?:here|this))\b/i,
+  /\bwhat\s+can\s+(?:you|i|flowiq)\s+(?:do|ask)\b/i,
+  /\bwhat\s+(?:buildings|properties)\s+(?:are\s+(?:in\s+)?(?:here|there|this)|do\s+you\s+have)\b/i,
+  /\bhow\s+(?:current|recent|fresh|up[-\s]to[-\s]date|old)\s+is\s+(?:this|the)\s+data\b/i,
+  /\bwhere\s+do\s+i\s+start\b|\bhow\s+do\s+i\s+(?:start|use\s+this)\b|^\s*help\s*[?!.]*\s*$/i,
+  /\bis\s+this\s+(?:my\s+data|real(?:\s+data)?|a\s+demo)\b/i,
+];
+
+/** The data domains FlowIQ reads, each named by the export file it comes from. */
+export function dataDomains(store: PortfolioStore): string[] {
+  return [
+    `properties and units (PMS: data/pms/properties.csv, data/pms/units.csv; ${store.units.length.toLocaleString('en-US')} unit rows)`,
+    `leases and renewals (PMS: data/pms/leases.csv; ${store.leases.length.toLocaleString('en-US')} leases)`,
+    `leads, tours, applications and signed leases by source (CRM: data/crm/leads.csv; ${store.leads.length.toLocaleString('en-US')} leads)`,
+    `marketing spend by source (ILS ad billing: data/ils/spend.csv; ${store.spend.length.toLocaleString('en-US')} rows)`,
+    `past budget decisions (data/ops/decisions.csv; ${store.decisions.length.toLocaleString('en-US')} rows)`,
+  ];
+}
+
+export const EXAMPLE_QUESTIONS = [
+  'How many vacant units are at Kedzie Works?',
+  'Which source has the highest cost per lead in Q3 2026?',
+  'What was total marketing spend in Q2 2026?',
+  'How many leases expire at Kedzie Works in 9/2026?',
+];
+
+/** FLOWIQ-SITE-007: orientation answer for first-visit questions, or null. */
+export function capabilityReply(question: string, store: PortfolioStore): string | null {
+  if (!CAPABILITY_QUESTION.some((re) => re.test(question))) return null;
+  const operating = new Set(store.operatingProperties.map((p) => p.propertyId));
+  const units = store.units.filter((u) => operating.has(u.propertyId)).length;
+  const buildings = store.operatingProperties.map((p) => `${p.name} [${p.propertyId}]`).join(', ');
+  return `This is a demo portfolio, not your data. It has ${store.operatingProperties.length} operating buildings (${buildings}) with ${units.toLocaleString('en-US')} units, and the data is as of ${store.policy.asOfDate}. FlowIQ answers questions over these exports: ${dataDomains(store).join('; ')}. Every figure cites the rows it came from. Try: ${EXAMPLE_QUESTIONS.map((q) => `"${q}"`).join(', ')}. More at /help.`;
 }
