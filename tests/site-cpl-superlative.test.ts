@@ -48,3 +48,14 @@ for (const q of ['highest cost per lead?', 'lowest cost per lead?']) {
     assert.match(e.answer, /by building, .*; by source, /);
   });
 }
+
+test("'fewest vacant' sorts ascending and matches the per-building counts", async () => {
+  const r = await askFlowIqCopilot('which building has the fewest vacant units?', { store, parse: null });
+  const op = new Set(store.operatingProperties.map((p) => p.propertyId));
+  const vac = new Map<string, number>();
+  for (const u of store.units) if (op.has(u.propertyId) && u.status === 'vacant') vac.set(u.propertyId, (vac.get(u.propertyId) ?? 0) + 1);
+  for (const p of store.operatingProperties) if (!vac.has(p.propertyId)) vac.set(p.propertyId, 0);
+  const min = Math.min(...vac.values());
+  const winner = store.operatingProperties.find((p) => vac.get(p.propertyId) === min)!;
+  assert.match(r.envelope.answer, new RegExp(`${winner.name.replace(/[&]/g, '\\$&')} \\(${winner.propertyId}\\) has the fewest vacant units at ${min}\\b`));
+});
