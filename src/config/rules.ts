@@ -222,6 +222,14 @@ export const DATE_WINDOWS: Readonly<Record<string, DateWindowSpec>> = {
     endDate: '2026-09-30',
     months: ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'],
   },
+  // M-9: year to date runs Jan 1 to the latest data date and is partial.
+  YTD_2026: {
+    key: 'YTD_2026',
+    label: '2026-01-01 to 2026-09-28 (year to date, partial)',
+    startDate: '2026-01-01',
+    endDate: '2026-09-28',
+    months: ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'],
+  },
   YEAR_2026: {
     key: 'YEAR_2026',
     label: '2026',

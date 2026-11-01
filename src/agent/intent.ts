@@ -1,4 +1,7 @@
 import { typedQueryErrors } from './typed-query.ts';
+/** Year-to-date phrasings (M-9). */
+export const YTD_RE = /\b(?:year[\s-]+to[\s-]+date|ytd|this\s+year(?:\s+so\s+far)?|so\s+far\s+this\s+year)\b/i;
+const YTD_RE_G = new RegExp(YTD_RE.source, 'gi');
 import { COMPARATOR_PHRASES } from '../domain/comparators.ts';
 import { spellCalendarYear } from '../domain/fiscal.ts';
 import { FIXED, isDataWord } from '../domain/vocabulary.ts';
@@ -738,8 +741,11 @@ function parseQueryIntentRaw(
     question,
     store.policy.asOfDate,
   );
-  const dateWindow = explicitWindow ?? DATE_WINDOWS.APR_SEP_2026;
-  const dateExplicit = explicitWindow !== null;
+  // M-9 / L-56: a year-to-date phrasing is YTD (partial), never a silent Apr–Sep.
+  // Lease-end measures (renewals, expirations) keep "this year" as the calendar year.
+  const ytd = explicitWindow === null && YTD_RE.test(question) && !(/\bthis\s+year\b/i.test(question) && /renew|expir|ending|\bend\b/i.test(question) && !/\b(?:ytd|year[\s-]+to[\s-]+date)\b/i.test(question));
+  const dateWindow = explicitWindow ?? (ytd ? DATE_WINDOWS.YTD_2026 : DATE_WINDOWS.APR_SEP_2026);
+  const dateExplicit = explicitWindow !== null || ytd;
 
   const isClassComparison =
     /\bclass\s+[a-z0-9+-]+\s+(?:vs\.?|versus|compared\s+to)\s+class\s+[a-z0-9+-]+/i.test(
@@ -1587,7 +1593,7 @@ function scalarLeftover(question: string, intent: ParsedQueryIntent, store: Port
   // A to-date period is relative to a "today" the exports do not carry.
   const unnamed = unspecifiedPeriod(question);
   if (unnamed && !intent.dateExplicit) return `a period the question refers to but does not name ("${unnamed}")`;
-  const toDate = toDatePeriod(question);
+  const toDate = toDatePeriod(question.replace(YTD_RE_G, ' '));
   if (toDate) return `a to-date period ("${toDate}"), but FlowIQ has no "today" to count to`;
   const unitFilter = unappliedUnitFilter(question, intent);
   if (unitFilter) return unitFilter;

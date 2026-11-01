@@ -117,6 +117,8 @@ export function unknownWords(question: string, store: PortfolioStore): string[] 
   let text = spellCalendarYear(question).toLowerCase();
   // A word a comparator rule reads ("larger than 600 square feet") is understood.
   for (const re of COMPARATOR_PHRASES) text = text.replace(re, ' ');
+  // A year-to-date phrasing is a period (M-9): "ytd", "year to date".
+  text = text.replace(/\b(?:year[\s-]+to[\s-]+date|ytd)\b/gi, ' ');
   // Every letter, digit-free word or pictograph in any script is a token; one
   // outside the vocabulary (Cyrillic, Arabic, CJK, emoji alike) is unknown.
   for (const raw of text.normalize('NFKC').match(/[\p{L}\p{M}]+(?:['’][\p{L}]+)?|\p{Extended_Pictographic}|(?:(?![0-9])\p{N})+/gu) ?? []) {

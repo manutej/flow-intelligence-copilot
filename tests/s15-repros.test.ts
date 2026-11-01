@@ -25,17 +25,26 @@ for (const q of [
   'Spend at Kedzie Works in Q3 2026 in CAD?', 'Cost per lead at Kedzie Works in Q3 2026 in CAD?',
   'Average rent at Kedzie Works in CAD?',
   // Leaks the format tail used to hide (grounded P09-G005, P32-G032, P05-G017).
-  'occupancy at the lake property?', 'How many leads did Kedzie Works get year to date?',
+  'occupancy at the lake property?',
   'How many leases are ending and how many renewed at the Marlowe?',
   // Own rewordings.
   'Occupancy at printers raw?', 'renewal rate at the marlowe tower?',
   'Average rent at Kedzie Works at the end of the quarter?', 'Vacant units at Kedzie Works at EOY?',
   'Concessions at Kedzie Works for 6-month leases?', 'Renewal rate at Kedzie Works for m2m leases?',
   'Spend at Kedzie Works in Q3 2026 in euros?', 'Cost per lead at Kedzie Works in Q3 2026 converted to CAD?',
-  'How many leads did Kedzie Works get YTD?',
 ]) {
   test(`s15: does not answer: ${q}`, async () => {
     assert.ok(notAnswered(await ask(q)));
+  });
+}
+
+// M-9 (Manu, 2026-10-31) supersedes the P32-G032 leak reading: YTD is
+// answered over 2026-01-01..2026-09-28 and labelled partial.
+for (const q of ['How many leads did Kedzie Works get year to date?', 'How many leads did Kedzie Works get YTD?']) {
+  test(`s15 M-9: answers YTD as partial: ${q}`, async () => {
+    const e = await ask(q);
+    assert.ok(!notAnswered(e), e.answer);
+    assert.match(e.answer, /2026-01-01 to 2026-09-28 \(year to date, partial\).*158 leads/);
   });
 }
 

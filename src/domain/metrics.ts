@@ -799,8 +799,10 @@ export function resolveDateWindow(filter: MarketingQueryFilter): {
     const startMonth = filter.startDate.slice(0, 7);
     const endMonth = filter.endDate.slice(0, 7);
     const months = enumerateYearMonths(startMonth, endMonth);
+    const base = `${filter.startDate} to ${filter.endDate}`;
     return {
-      label: `${filter.startDate} to ${filter.endDate}`,
+      // A caller label is kept only when it is this same window plus a note (M-9 partial).
+      label: filter.period && filter.period.startsWith(base) ? filter.period : base,
       startDate: filter.startDate,
       endDate: filter.endDate,
       months,
