@@ -130,7 +130,7 @@ export const POLICY_RULES_OFF: PortfolioPolicyConfig = resolvePolicyConfig({
   leaseBucketBy: 'lead_created_date',
   excludeVoidSpend: false,
   convertCadToUsd: false,
-  deduplicateLeads: false,
+  // M-2: lead dedup by lease_id is unconditional; no preset turns it off.
   includeZeroConcessions: false,
   quarantineZeroUnitProperties: false,
   requireSupportedPmsForOperating: false,

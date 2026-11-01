@@ -1,4 +1,5 @@
 import { sealProof } from './envelope.ts';
+import { costPerLead } from '../tools/cost-per-lead.ts';
 import type { ClarifyOption } from './clarify.ts';
 import { fmtUsd, plural } from '../domain/format.ts';
 import { roundTo } from '../data/loader.ts';
@@ -714,7 +715,13 @@ export function executeCompositionalPlan(
     if (intent.measure === 'cost_per_lead') {
       if (!sourceShaped || sourceMode === 'pooled') {
         if (mkt.totalLeadsCreated === 0) return noOverall('cost per lead');
-        const usd = Math.round((mkt.totalSpendUsd / mkt.totalLeadsCreated) * 100) / 100;
+        let usd = Math.round((mkt.totalSpendUsd / mkt.totalLeadsCreated) * 100) / 100;
+        // One definition (FIQ-TOOLS-1 tool 1): the plain building/portfolio
+        // figure comes from the cost_per_lead tool.
+        if (sourceSet === 'all sources' && sourceMode !== 'pooled' && !intent.paidOnly && intent.bedrooms == null && (!matchedPropIds || matchedPropIds.length <= 1)) {
+          const t = costPerLead(store, { property_id: matchedPropIds?.[0], start_date: intent.dateWindow.startDate, end_date: intent.dateWindow.endDate });
+          if (t.value?.cpl_usd != null) usd = t.value.cpl_usd;
+        }
         return finalize(
           `${scope} in ${mkt.windowLabel}, the ${sourceSet === 'all sources' ? 'overall' : 'pooled'} cost per lead was ${fmtUsd(usd)} (${fmtUsd(mkt.totalSpendUsd)} posted spend / ${plural(mkt.totalLeadsCreated, 'deduplicated lead')} from ${sourceSet}).`,
           sourceMode === 'pooled' ? { sources: [...intent.mentionedSources], usd } : { usd },
