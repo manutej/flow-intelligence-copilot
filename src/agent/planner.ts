@@ -716,16 +716,23 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'cost_per_lead') {
       if (!sourceShaped || sourceMode === 'pooled') {
-        if (mkt.totalLeadsCreated === 0) return noOverall('cost per lead');
-        let usd = Math.round((mkt.totalSpendUsd / mkt.totalLeadsCreated) * 100) / 100;
-        // One definition (FIQ-TOOLS-1 tool 1): the plain building/portfolio
-        // figure comes from the cost_per_lead tool.
-        if (sourceSet === 'all sources' && sourceMode !== 'pooled' && !intent.paidOnly && intent.bedrooms == null && (!matchedPropIds || matchedPropIds.length <= 1)) {
-          const t = costPerLead(store, { property_id: matchedPropIds?.[0], start_date: intent.dateWindow.startDate, end_date: intent.dateWindow.endDate });
-          if (t.value?.cpl_usd != null) usd = t.value.cpl_usd;
-        }
+        // Phase 1b item 4: every pooled / overall CPL (paid-only, multi-building,
+        // bedroom-filtered too) is the cost_per_lead tool's figure; no second formula.
+        const classIds = intent.buildingClass && (!matchedPropIds || matchedPropIds.length === 0)
+          ? store.operatingProperties.filter((p) => p.buildingClass.toUpperCase() === String(intent.buildingClass).toUpperCase()).map((p) => p.propertyId)
+          : undefined;
+        const t = costPerLead(store, {
+          property_ids: matchedPropIds && matchedPropIds.length > 0 ? matchedPropIds : classIds,
+          sources: intent.mentionedSources.length > 0 ? [...intent.mentionedSources] : intent.paidOnly ? store.paidSources : undefined,
+          paid_leads_only: intent.paidOnly,
+          bedrooms_wanted: intent.bedrooms ?? undefined,
+          start_date: intent.dateWindow.startDate,
+          end_date: intent.dateWindow.endDate,
+        });
+        if (!t.value || t.value.cpl_usd == null) return noOverall('cost per lead');
+        const usd = t.value.cpl_usd;
         return finalize(
-          `${scope} in ${mkt.windowLabel}, the ${sourceSet === 'all sources' ? 'overall' : 'pooled'} cost per lead was ${fmtUsd(usd)} (${fmtUsd(mkt.totalSpendUsd)} posted spend / ${plural(mkt.totalLeadsCreated, 'deduplicated lead')} from ${sourceSet}).`,
+          `${scope} in ${mkt.windowLabel}, the ${sourceSet === 'all sources' ? 'overall' : 'pooled'} cost per lead was ${fmtUsd(usd)} (${fmtUsd(t.value.spend_usd)} posted spend / ${plural(t.value.unique_leads, 'deduplicated lead')} from ${sourceSet}).`,
           sourceMode === 'pooled' ? { sources: [...intent.mentionedSources], usd } : { usd },
           mkt.citations.slice(0, 8),
         );

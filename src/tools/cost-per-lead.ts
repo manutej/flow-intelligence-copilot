@@ -24,6 +24,10 @@ export interface CostPerLeadArgs {
   readonly start_date?: string;
   readonly end_date?: string;
   readonly paid_leads_only?: boolean;
+  /** Phase 1b item 4: several buildings, several sources, and a bedrooms-wanted lead filter. */
+  readonly property_ids?: readonly string[];
+  readonly sources?: readonly string[];
+  readonly bedrooms_wanted?: number;
 }
 
 export interface CostPerLeadValue {
@@ -45,8 +49,10 @@ export function costPerLead(store: PortfolioStore, args: CostPerLeadArgs = {}, f
   const rate = fx?.rate ?? store.policy.cadToUsdRate;
   const fxOut: FxOut = fx ?? { applied: true, rate, rate_date: store.policy.cadRateDate, source: store.policy.cadRateSource };
   const operating = new Set(store.operatingProperties.map((p) => p.propertyId));
+  const pids = args.property_ids && args.property_ids.length > 0 ? new Set(args.property_ids) : null;
+  const srcs = args.sources && args.sources.length > 0 ? new Set(args.sources) : null;
   const inScope = (pid: string, src: string) =>
-    operating.has(pid) && (!args.property_id || pid === args.property_id) && (!args.source || src === args.source);
+    operating.has(pid) && (!args.property_id || pid === args.property_id) && (!pids || pids.has(pid)) && (!args.source || src === args.source) && (!srcs || srcs.has(src));
 
   const spendRows = store.spend.filter((s) => !s.isVoid && inScope(s.propertyId, s.source) && s.month >= start.slice(0, 7) && s.month <= end.slice(0, 7));
   let cadUsed = false;
@@ -56,8 +62,9 @@ export function costPerLead(store: PortfolioStore, args: CostPerLeadArgs = {}, f
   }, 0);
 
   const paid = new Set(store.paidSources);
-  const inWindow = (l: { createdDate: string; propertyId: string; source: string }) =>
-    l.createdDate >= start && l.createdDate <= end && inScope(l.propertyId, l.source) && (args.source || !args.paid_leads_only || paid.has(l.source));
+  const inWindow = (l: { createdDate: string; propertyId: string; source: string; bedroomsWanted?: number | null }) =>
+    l.createdDate >= start && l.createdDate <= end && inScope(l.propertyId, l.source) && (args.source || !args.paid_leads_only || paid.has(l.source)) &&
+    (args.bedrooms_wanted === undefined || l.bedroomsWanted === args.bedrooms_wanted);
   const all = store.leads.filter(inWindow);
   const uniq = uniqueLeads(store).filter(inWindow);
   const freeSource = args.source !== undefined && !paid.has(args.source);
