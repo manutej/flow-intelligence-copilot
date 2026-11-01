@@ -122,6 +122,10 @@ npm run flow-106  # P09 onboarding check
 
 [repo-sigma-one-80.vercel.app](https://repo-sigma-one-80.vercel.app), or `npm run dashboard` for http://localhost:4310. Shows every building, the held-out P09, the dead-spend reallocation, the four assumption controls (CAD rate, notice counted as occupied, lease date bucket, prior cost per lease), and the tool trace and cited rows behind each answer. The [field notebook](https://repo-sigma-one-80.vercel.app/field-notebook.html) walks through the pipeline and the data traps.
 
+#### Frozen dashboard state
+
+Never rerun `build-dashboard` (`npm run build-dashboard`, `build:dashboard`, `build-ui`). The `INITIAL_STATE` embedded in `public/index.html`, `ui/flowiq-visual-studio.html` and `docs/index.html` is a frozen artifact: the builder cannot reproduce it (wall-clock timings, a missing `.toq` swarm trace, later code changes). `tests/initial-state-drift.test.ts` pins its sha256 and fails on any change. Changing it needs a reviewed ticket that updates the pinned hashes. Making the builder reproducible is deferred (F-BI-1).
+
 ### CLI
 
 ```bash
