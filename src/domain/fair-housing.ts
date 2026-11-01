@@ -422,3 +422,40 @@ const ANAPHOR_RE =
 export function refersBackToPeople(question: string): boolean {
   return ANAPHOR_RE.test(normalizeForFairHousing(question));
 }
+
+/**
+ * Housing-voucher terms from the source-of-income rule (Section 8, HCV,
+ * housing choice vouchers, voucher holders). Manu's ruling: FlowIQ refuses
+ * every voucher question, neutral ones included, not only those with
+ * discriminatory intent.
+ */
+export const VOUCHER_RE =
+  /\b(?:section[-\s]*(?:8|eight)|housing[-\s]+choice(?:[-\s]+vouchers?)?|vouchers?(?:[-\s]+holders?)?|h\.?[-\s]*c\.?[-\s]*v\.?(?:s\b)?)(?=\W|$)/i;
+
+/**
+ * Ruling (a), 2026-10-31: welcoming or inclusive wording ("we accept
+ * Housing Choice Vouchers", "voucher holders welcome") is allowed. Flip this
+ * one flag to refuse those too.
+ */
+export const ALLOW_INCLUSIVE_VOUCHER_WORDING = true;
+
+const VOUCHER_TERM = String.raw`(?:section[-\s]*(?:8|eight)|housing[-\s]+choice(?:[-\s]+vouchers?)?|vouchers?(?:[-\s]+holders?)?|h\.?[-\s]*c\.?[-\s]*v\.?s?)`;
+const INCLUSIVE_VOUCHER_RE = new RegExp(
+  String.raw`\b(?:we|that\s+we|we\s+(?:gladly|proudly|happily))\s+(?:accept|welcome|take)\s+(?:all\s+)?${VOUCHER_TERM}|\b(?:welcomes?|welcoming|accepts?|accepting)\s+(?:all\s+)?${VOUCHER_TERM}[^?]*$|${VOUCHER_TERM}\s+(?:holders?\s+)?(?:are\s+)?(?:welcome|accepted)\b`,
+  'i',
+);
+/** Any sign of screening, excluding or limiting voucher holders voids the exemption. */
+const VOUCHER_RESTRICT_RE =
+  /\b(?:no|not|don'?t|do\s+not|doesn'?t|never|won'?t|without|except|excluding|exclude\w*|only|limit\w*|cap\w*|max(?:imum)?|fewer|screen\w*|filter\w*|reject\w*|refus\w*|deny|denied|avoid\w*|block\w*|steer\w*|rank\w*|which|who|how\s+many|do\s+you|does|are\s+there)\b|\?/i;
+
+/** An inclusive statement (not a question, no restriction) about accepting vouchers. */
+export function isInclusiveVoucherWording(question: string): boolean {
+  const q = normalizeForFairHousing(question);
+  return INCLUSIVE_VOUCHER_RE.test(q) && !VOUCHER_RESTRICT_RE.test(q);
+}
+
+export function isVoucherQuestion(question: string): boolean {
+  if (!VOUCHER_RE.test(question) && !VOUCHER_RE.test(normalizeForFairHousing(question))) return false;
+  return !(ALLOW_INCLUSIVE_VOUCHER_WORDING && isInclusiveVoucherWording(question));
+}
+
