@@ -1,4 +1,5 @@
 import { DATE_WINDOWS } from '../config/rules.ts';
+import { routeToolQuestion } from '../tools/router.ts';
 import { nonAnswerKind, sealNonAnswer, setNonAnswerRenderer, type NonAnswerInput } from './envelope.ts';
 import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
 import { LOCATIVE_FY_RE, maskFiscalTokens } from '../domain/fiscal.ts';
@@ -237,6 +238,17 @@ async function askUnsealed(
         store,
         qRecord.result_schema,
       ),
+    };
+  }
+
+  // FIQ-TOOLS-1: calc tools the planner has no measure for (revenue).
+  const routed = routeToolQuestion(question, store);
+  if (routed) {
+    const envelope: AnswerEnvelope = { id: qRecord.id, answer: routed.answer, result: routed.result, citations: [...routed.citations] };
+    return {
+      envelope, toolCalls, clarificationNeeded: false, clarifyingQuestion: null,
+      modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
+      verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
     };
   }
 
