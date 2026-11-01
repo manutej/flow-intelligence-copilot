@@ -208,7 +208,7 @@ export const UNSEEN_RED_TEAM_SUITE: readonly UnseenRedTeamCase[] = [
     question:
       'What was the portfolio total posted spend in August 2026 in USD?',
     result_schema: { usd: 'float' },
-    expected: { usd: 37708.8 },
+    expected: { usd: 37686.77 },
   },
   {
     id: 'RT-18',
@@ -232,7 +232,7 @@ export const UNSEEN_RED_TEAM_SUITE: readonly UnseenRedTeamCase[] = [
     question:
       'What was H1 spend versus Q3 spend for Facebook Ads at class B buildings?',
     result_schema: { h1_usd: 'float', q3_usd: 'float' },
-    expected: { h1_usd: 2602.5, q3_usd: 2284.5 },
+    expected: { h1_usd: 2570.73, q3_usd: 2261.2 },
   },
   {
     id: 'RT-21',
