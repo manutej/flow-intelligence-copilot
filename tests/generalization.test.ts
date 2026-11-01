@@ -15,6 +15,10 @@ import {
 } from '../src/domain/sheaf.ts';
 import { runOperadicConsistencySuite } from '../src/operadic-eval.ts';
 import { FLOW_PORTFOLIO_SCHEMA, SAAS_FINOPS_SCHEMA } from '../src/schema.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 const repoRoot = path.resolve(new URL('..', import.meta.url).pathname);
 const store = loadPortfolioStore(repoRoot);
@@ -60,7 +64,7 @@ describe('Category Generalization · Domain 1: FLOW Real-Estate Cellular Sheaf (
     const deadSum = Number(
       e5.reduce((acc, r) => acc + r.residualMagnitude, 0).toFixed(2),
     );
-    assert.equal(deadSum, 46599.9);
+    assert.equal(deadSum, DEAD_USD);
 
     // E6: Accepted decisions step-change coboundary residuals
     const e6 = coboundary.byEdge.E6_DECISIONS_TO_SPEND_STEP;
@@ -83,7 +87,7 @@ describe('Category Generalization · Domain 1: FLOW Real-Estate Cellular Sheaf (
       genericTables,
     );
     assert.equal(genericAlloc.deadPairs.length, 9);
-    assert.equal(genericAlloc.totalDeadSpendUsd, 46599.9);
+    assert.equal(genericAlloc.totalDeadSpendUsd, DEAD_USD);
     assert.equal(genericAlloc.bestChannel, 'Apartments.com');
     assert.equal(genericAlloc.bestChannelCpslUsd, 2915.86);
     assert.equal(genericAlloc.projectedAdditionalOutcomes, 15);

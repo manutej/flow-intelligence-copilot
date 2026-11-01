@@ -27,6 +27,10 @@ import {
   resolvePropertiesFromText,
 } from '../src/domain/resolver.ts';
 import { handleMcpJsonRpcRequest } from '../src/mcp/server.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 const repoRoot = path.resolve(new URL('..', import.meta.url).pathname);
 const store = loadPortfolioStore(repoRoot);
@@ -140,7 +144,7 @@ describe('FLOW-102 · Dead Spend, CAD Conversion, Reallocation, and Live Policy 
     });
     const realloc = mkt.deadSpendReallocation;
     assert.equal(realloc.deadPairs.length, 9);
-    assert.equal(realloc.totalDeadSpendUsd, 46599.9);
+    assert.equal(realloc.totalDeadSpendUsd, DEAD_USD);
     assert.equal(realloc.bestPortfolioPaidSource, 'Apartments.com');
     assert.equal(realloc.bestSourcePortfolioCpslUsd, 2915.86);
     assert.equal(realloc.projectedAdditionalWholeLeases, 15);

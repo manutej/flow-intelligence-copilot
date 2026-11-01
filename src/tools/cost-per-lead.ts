@@ -43,7 +43,7 @@ export function costPerLead(store: PortfolioStore, args: CostPerLeadArgs = {}, f
   const start = args.start_date ?? DATA_START;
   const end = args.end_date ?? DATA_END;
   const rate = fx?.rate ?? store.policy.cadToUsdRate;
-  const fxOut: FxOut = fx ?? { applied: true, rate, rate_date: null, source: 'policy rate (FLOW_CAD_RATE)' };
+  const fxOut: FxOut = fx ?? { applied: true, rate, rate_date: store.policy.cadRateDate, source: store.policy.cadRateSource };
   const operating = new Set(store.operatingProperties.map((p) => p.propertyId));
   const inScope = (pid: string, src: string) =>
     operating.has(pid) && (!args.property_id || pid === args.property_id) && (!args.source || src === args.source);

@@ -666,7 +666,7 @@ function agentContext(repoRoot: string): Record<string, unknown> {
       NO_COLOR: "disable colour",
       FORCE_COLOR: "force colour",
       FLOW_DATA_DIR: "directory holding the six CSV exports",
-      FLOW_CAD_RATE: "default USD per CAD (0.73)",
+      FLOW_CAD_RATE: "default USD per CAD (pinned live rate, dated)",
       XAI_API_KEY: "only for --llm with provider xai",
     },
     mcp: {

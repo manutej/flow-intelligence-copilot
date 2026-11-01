@@ -5,7 +5,7 @@
  * start_date..end_date in whole months (every kit lease is 12, so this
  * equals the truth check's /12).
  */
-import type { PortfolioStore } from '../data/schema.ts';
+import type { CitationId, PortfolioStore } from '../data/schema.ts';
 import { roundHalfUp, unknownEnvelope, type ToolEnvelope } from './envelope.ts';
 
 export const REVENUE_DESCRIPTION =
@@ -34,7 +34,7 @@ export function revenue(store: PortfolioStore, args: { property_id?: string } = 
   const inScope = (pid: string) => operating.has(pid) && (!args.property_id || pid === args.property_id);
   const unit = new Map(store.units.map((u) => [u.unitId, u]));
   let rr = 0, amort = 0, ltv = 0;
-  const cites = [];
+  const cites: CitationId[] = [];
   for (const l of store.leases) {
     const u = unit.get(l.unitId);
     if (!u || !inScope(u.propertyId) || (u.status !== 'occupied' && u.status !== 'notice')) continue;

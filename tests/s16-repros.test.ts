@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 // TENACITY's s16 rows (VERDICT-S2-5eb09d4, s16-probes.ts, s16b-probes.ts)
 // plus set rows it named for finding 5. The "own rewordings" block was
@@ -52,7 +56,7 @@ for (const q of [
 // Controls: data/ils/spend.csv P06 Q3 2026 posts $13,384.50; units.csv P06 96/110 occupied.
 test('s16: format phrase dropped, place filter kept', async () => {
   const e = await ask('Spend in Q3 2026? Be brief, Kedzie Works only.');
-  assert.ok(answered(e)); assert.match(JSON.stringify(e), /13,384\.50/);
+  assert.ok(answered(e)); assert.match(JSON.stringify(e), usdRe(spendUsd({from:'2026-07',to:'2026-09',pid:'P06'})));
 });
 test('s16: USD stays answerable', async () => {
   assert.ok(answered(await ask('Spend at Kedzie Works in Q3 2026 in USD?')));

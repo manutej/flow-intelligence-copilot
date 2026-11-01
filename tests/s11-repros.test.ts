@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 // TENACITY's s11 rows (VERDICT-S2-bc7e870) plus rewordings written at
 // 2026-10-31 02:52 CST against bc7e870, before any s11 fix ran.
@@ -46,19 +50,19 @@ for (const [q, want, not] of [
   [`Cost per lead from Zillow and Apartments.com ${K}`, /pooled cost per lead was \$325\.00.*Apartments\.com and Zillow/, /overall/],
   ['Cost per lead from Zillow and Rent. at Marlowe Residences in Q2 2026?', /\$224\.32/, null],
   // Finding 5: a subset is labelled as the subset.
-  [`Cost per lead for paid sources ${K}`, /\$223\.08.*paid sources/, /all sources/],
+  [`Cost per lead for paid sources ${K}`, new RegExp(usdRe(cpl(spendUsd({from:'2026-07',to:'2026-09',pid:'P06'}), 60)).source + '.*paid sources'), /all sources/],
   [`Tour to lease rate for paid sources ${K}`, /22\.2%/, /all sources/],
-  [`Cost per lead from ILS ${K}`, /\$223\.08.*paid sources/, /all sources/],
-  [`Cost per lead by marketing source ${K}`, /Facebook Ads \$120\.45/, /overall/],
+  [`Cost per lead from ILS ${K}`, new RegExp(usdRe(cpl(spendUsd({from:'2026-07',to:'2026-09',pid:'P06'}), 60)).source + '.*paid sources'), /all sources/],
+  [`Cost per lead by marketing source ${K}`, new RegExp('Facebook Ads ' + usdRe(cpl(spendUsd({from:'2026-07',to:'2026-09',pid:'P06',sources:['Facebook Ads']}), 10)).source), /overall/],
   // Controls that must still answer.
-  ['Marketing spend from July to September 2026?', /\$111,893\.30/, null],
-  ['Marketing spend in July and August 2026?', /\$73,301\.60/, null],
+  ['Marketing spend from July to September 2026?', usdRe(spendUsd({from:'2026-07',to:'2026-09'})), null],
+  ['Marketing spend in July and August 2026?', usdRe(spendUsd({from:'2026-07',to:'2026-08'})), null],
   // VERDICT-S2-d1091cb LOW: an ISO month range is a window, not a refusal.
-  ['Marketing spend in 2026-07 through 2026-08?', /\$73,301\.60/, null],
-  ['Marketing spend in Q3 and September 2026?', /\$111,893\.30/, null],
+  ['Marketing spend in 2026-07 through 2026-08?', usdRe(spendUsd({from:'2026-07',to:'2026-08'})), null],
+  ['Marketing spend in Q3 and September 2026?', usdRe(spendUsd({from:'2026-07',to:'2026-09'})), null],
   [`Cost per lead from Zillow ${K}`, /\$318\.18/, null],
   [`Tour to lease rate ${K}`, /33\.3%/, null],
-  [`Cost per lead ${K}`, /\$159\.34/, null],
+  [`Cost per lead ${K}`, usdRe(cpl(spendUsd({from:'2026-07',to:'2026-09',pid:'P06'}), 84)), null],
   ['Spend at FY in Q2 2026?', /Fulton Yards \(P03\)/, null],
 ] as const) {
   test(`s11: answers: ${q}`, async () => {

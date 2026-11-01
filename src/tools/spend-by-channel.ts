@@ -50,7 +50,7 @@ export function spendByChannel(store: PortfolioStore, args: SpendByChannelArgs =
   return {
     value: { by_source, total_usd: roundHalfUp(total, 2) },
     period: { label: periodLabel(start, end), start, end, partial: end > DATA_END, basis: 'spend.month' },
-    fx: cad ? (fx ?? { applied: true, rate, rate_date: null, source: 'policy rate (FLOW_CAD_RATE)' }) : null,
+    fx: cad ? (fx ?? { applied: true, rate, rate_date: store.policy.cadRateDate, source: store.policy.cadRateSource }) : null,
     dedup: null, unknown: false, unknown_reason: null,
     citations: rows.slice(0, 8).map((s) => s.citationId as CitationId),
   };

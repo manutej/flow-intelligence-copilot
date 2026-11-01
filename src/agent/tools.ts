@@ -1,4 +1,5 @@
 import type { CitationId, PortfolioStore } from '../data/schema.ts';
+import { cadRateLine } from '../config/fx-pinned.ts';
 import {
   type DecisionQueryFilter,
   evaluateBudgetDecisionsAndLearn,
@@ -328,7 +329,7 @@ export function buildFlowIqToolDefinitions(
     },
     {
       name: 'query_marketing_spend_and_funnel',
-      description: `Marketing spend, leads, tours and signed leases by source, and what each signed lease cost. A source with spend and no signed leases has no cost per lease (null), never $0. Joins ILS/ad spend (1 CAD = ${store?.policy.cadToUsdRate ?? 0.73} USD, void invoices = $0), deduplicated CRM leads (notes quarantined), and PMS signed leases (bucketed by ${store?.policy.leaseBucketBy ?? 'lease.start_date'}, credited to earliest lead). Computes Cost Per Signed Lease (CPSL), Cost Per Lead (CPL), Cost Per Tour (CPT), apply rate, tour-to-lease conversion, dead-spend pairs, portfolio reallocation math, and data-quality audits across sources (${distinctSources.join(', ')}).`,
+      description: `Marketing spend, leads, tours and signed leases by source, and what each signed lease cost. A source with spend and no signed leases has no cost per lease (null), never $0. Joins ILS/ad spend (${store ? cadRateLine(store.policy) : 'CAD at the dated policy rate'}, void invoices = $0), deduplicated CRM leads (notes quarantined), and PMS signed leases (bucketed by ${store?.policy.leaseBucketBy ?? 'lease.start_date'}, credited to earliest lead). Computes Cost Per Signed Lease (CPSL), Cost Per Lead (CPL), Cost Per Tour (CPT), apply rate, tour-to-lease conversion, dead-spend pairs, portfolio reallocation math, and data-quality audits across sources (${distinctSources.join(', ')}).`,
       inputSchema: {
         type: 'object',
         properties: {

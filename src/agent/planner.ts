@@ -1,4 +1,5 @@
 import { sealProof } from './envelope.ts';
+import { cadRateLine } from '../config/fx-pinned.ts';
 import { occupancy as occupancyTool } from '../tools/occupancy.ts';
 import { costPerLead } from '../tools/cost-per-lead.ts';
 import type { ClarifyOption } from './clarify.ts';
@@ -464,7 +465,7 @@ export function executeCompositionalPlan(
       const h1Mkt = h1Trace.rawOutput as MarketingQuerySummary;
       const q3Mkt = q3Trace.rawOutput as MarketingQuerySummary;
       return finalize(
-        `For the filtered buildings and sources, H1 2026 posted spend was ${fmtUsd(h1Mkt.totalSpendUsd)} USD vs. Q3 2026 posted spend of ${fmtUsd(q3Mkt.totalSpendUsd)} USD (CAD converted at ${store.policy.cadToUsdRate} USD, void invoices excluded).`,
+        `For the filtered buildings and sources, H1 2026 posted spend was ${fmtUsd(h1Mkt.totalSpendUsd)} USD vs. Q3 2026 posted spend of ${fmtUsd(q3Mkt.totalSpendUsd)} USD (CAD converted at ${cadRateLine(store.policy)}, void invoices excluded).`,
         {
           h1_usd: h1Mkt.totalSpendUsd,
           q3_usd: q3Mkt.totalSpendUsd,
@@ -838,7 +839,7 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'spend_total') {
       return finalize(
-        `In ${mkt.windowLabel}, total posted marketing spend${intent.mentionedSources.length > 0 ? ` from ${sourceSet}` : intent.paidOnly ? ' from paid sources' : ''} ${matchedPropIds && matchedPropIds.length === 1 ? `at ${buildingName(matchedPropIds)}` : 'across the matching operating buildings'} was ${fmtUsd(mkt.totalSpendUsd)} USD (with void invoices at $0 and CAD converted at ${store.policy.cadToUsdRate} USD).`,
+        `In ${mkt.windowLabel}, total posted marketing spend${intent.mentionedSources.length > 0 ? ` from ${sourceSet}` : intent.paidOnly ? ' from paid sources' : ''} ${matchedPropIds && matchedPropIds.length === 1 ? `at ${buildingName(matchedPropIds)}` : 'across the matching operating buildings'} was ${fmtUsd(mkt.totalSpendUsd)} USD (with void invoices at $0 and CAD converted at ${cadRateLine(store.policy)}).`,
         {
           usd: mkt.totalSpendUsd,
         },

@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 // TENACITY's s13 rows (VERDICT-S2-e8c291c) plus rewordings written at
 // 2026-10-31 04:47 CST against e8c291c, before any s13 fix ran
@@ -43,14 +47,14 @@ test('s13 finding 4: a three-way tie at 0.0% names every tied source', async () 
 });
 
 for (const [q, re] of [
-  ['Marketing spend in July 2026?', /\$35,592\.80/],
-  ['Marketing spend for Sep. 2026 only?', /\$38,591\.70/],
-  ['Cost per lead from Facebook Ads at Kedzie Works in Q3 2026?', /\$120\.45/],
-  ['Spend at Kedzie Works in Q3 2026?', /\$13,384\.50/],
+  ['Marketing spend in July 2026?', usdRe(spendUsd({from:'2026-07',to:'2026-07'}))],
+  ['Marketing spend for Sep. 2026 only?', usdRe(spendUsd({from:'2026-09',to:'2026-09'}))],
+  ['Cost per lead from Facebook Ads at Kedzie Works in Q3 2026?', usdRe(cpl(spendUsd({from:'2026-07',to:'2026-09',pid:'P06',sources:['Facebook Ads']}), 10))],
+  ['Spend at Kedzie Works in Q3 2026?', usdRe(spendUsd({from:'2026-07',to:'2026-09',pid:'P06'}))],
   ['Spend with Zillow at Kedzie Works in Q3 2026?', /\$3,500\.00/],
   ['Zillow spend at Kedzie Works in Q3 2026?', /\$3,500\.00/],
   ['Which source had the highest tour to lease rate at Kedzie Works in Q3 2026?', /Referral had the highest tour-to-lease rate at 62\.5%/],
-  ['Marketing spend in H2 2026?', /months after the data ends have no rows\), .*\$111,893\.30/],
+  ['Marketing spend in H2 2026?', new RegExp('months after the data ends have no rows\\), .*' + usdRe(spendUsd({from:'2026-07',to:'2026-09'})).source)],
 ] as const) {
   test(`s13: fully covered question still answers: ${q}`, async () => {
     const e = await ask(q);

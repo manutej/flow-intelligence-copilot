@@ -30,8 +30,8 @@ async function mutated(q: string, m: (det: any) => Record<string, unknown>) {
 
 test('F2: a model period swap is not answered (Q2 question, Q3 intent)', async () => {
   const { det, t } = await mutated('What was total marketing spend in Q2 2026?', () => ({ dateWindow: 'Q3_2026' }));
-  assert.match(det.answer, /112,706\.60/);
-  assert.doesNotMatch(t.envelope.answer, /111,893\.30/);
+  assert.match(det.answer, usdRe(spendUsd({from:'2026-04',to:'2026-06'})));
+  assert.doesNotMatch(t.envelope.answer, usdRe(spendUsd({from:'2026-07',to:'2026-09'})));
   assert.notEqual(t.parsePath, 'model');
 });
 
@@ -140,6 +140,10 @@ for (const citations of [undefined, null, 'units:U0001', {}]) {
 
 // TENACITY c082279 finding 3: non-answers are bound to their question.
 import { sealNonAnswer } from '../src/agent/envelope.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 test('c082279 F3: a true "I don\'t know" moved onto an answerable question is rejected', async () => {
   const idk = (await askFlowIqCopilot('What was total marketing spend in Q1 2025?', { store, parse: null }));
   assert.equal((idk.envelope.result as Record<string, unknown>).unknown, true);

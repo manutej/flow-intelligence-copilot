@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 // TENACITY's s17 rows (VERDICT-S2-3b34409, s17-probes.ts, s17-supp.ts) and
 // the set rows it named. The "own rewordings" rows were written after the
@@ -89,6 +93,6 @@ for (const [q, pct] of [['What is the renewal rate at the Commons this year?', '
 }
 
 // Controls: USD and plain questions still answer.
-test('s17 control: USD spend answers', async () => assert.match((await turn('Spend at Kedzie Works in Q3 2026 in USD please')).envelope.answer, /\$13,384\.50/));
+test('s17 control: USD spend answers', async () => assert.match((await turn('Spend at Kedzie Works in Q3 2026 in USD please')).envelope.answer, usdRe(spendUsd({from:'2026-07',to:'2026-09',pid:'P06'}))));
 test('s17 control: vacancy answers', async () => assert.match((await turn('Vacancy at Kedzie Works?')).envelope.answer, /14 vacant units/));
 test('s17 control: source names are not measures', async () => assert.ok(answered((await turn('Cost per lead from Zillow and Rent. at Marlowe Residences in Q2 2026?')).envelope)));

@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 // TENACITY's s10 rows (VERDICT-S2-b71b6e8) plus rewordings written at
 // 2026-10-31 02:11 CST against b71b6e8, before any s10 fix ran.
@@ -14,8 +18,8 @@ const refused = (e: { result: unknown }) => r(e).unknown === true || r(e).clarif
 for (const [q, want] of [
   ['Tour to lease rate at Kedzie Works in Q3 2026?', /33\.3%/],
   ['Tour to lease rate in Q3 2026?', /28\.7%/],
-  ['Cost per lead at Kedzie Works in Q3 2026?', /\$159\.34/],
-  ['Marketing spend July and August 2026?', /\$73,301\.60/],
+  ['Cost per lead at Kedzie Works in Q3 2026?', usdRe(cpl(spendUsd({from:'2026-07',to:'2026-09',pid:'P06'}), 84))],
+  ['Marketing spend July and August 2026?', usdRe(spendUsd({from:'2026-07',to:'2026-08'}))],
   ['How many leads in Q2 2026 at Marlowe Residences?', /\b139\b/],
   ['Spend at FY in Q2 2026?', /Fulton Yards \(P03\)/],
 ] as const) {

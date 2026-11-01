@@ -63,7 +63,7 @@ export function periodTotal(store: PortfolioStore, args: PeriodTotalArgs, fx?: F
     const rate = fx?.rate ?? store.policy.cadToUsdRate;
     const rows = store.spend.filter((s) => !s.isVoid && inProp(s.propertyId) && (!args.source || s.source === args.source) && s.month >= start.slice(0, 7) && s.month <= end.slice(0, 7));
     values = rows.map((s) => (s.currency === 'CAD' ? s.rawAmount * rate : s.rawAmount));
-    if (rows.some((s) => s.currency === 'CAD')) fxOut = fx ?? { applied: true, rate, rate_date: null, source: 'policy rate (FLOW_CAD_RATE)' };
+    if (rows.some((s) => s.currency === 'CAD')) fxOut = fx ?? { applied: true, rate, rate_date: store.policy.cadRateDate, source: store.policy.cadRateSource };
     cites = rows.slice(0, 8).map((s) => s.citationId);
   } else if (args.measure === 'leads') {
     const rows = uniqueLeads(store).filter((l) => inProp(l.propertyId) && (!args.source || l.source === args.source) && l.createdDate >= start && l.createdDate <= end);

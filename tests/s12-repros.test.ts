@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 // TENACITY's s12 rows (VERDICT-S2-d1091cb) plus rewordings written at
 // 2026-10-31 03:44 CST against d1091cb, before any s12 fix ran
@@ -48,22 +52,22 @@ for (const [q, want] of [
   ['How many leads wanted studio units at Fulton Yards?', /Fulton Yards.*\b28 leads that wanted a studio/],
   ['How many leads wanted studio units at the Point?', /Wabash Point.*\b28 leads that wanted a studio/],
   // Finding 1 and LOW: windows that do parse answer their own figure.
-  ['Marketing spend in H2 2026?', /2026-07-01 to 2026-12-31.*\$111,893\.30/],
-  ['Marketing spend in 2026-07?', /\$35,592\.80/],
-  ['Marketing spend in 09/2026?', /\$38,591\.70/],
-  ['Marketing spend from 2026-04 to 2026-06?', /\$112,706\.60/],
-  ['Marketing spend between 2026-07-01 and 2026-08-31?', /\$73,301\.60/],
-  ['Marketing spend in 2026-07 through 2026-08?', /\$73,301\.60/],
+  ['Marketing spend in H2 2026?', new RegExp('2026-07-01 to 2026-12-31.*' + usdRe(spendUsd({from:'2026-07',to:'2026-09'})).source)],
+  ['Marketing spend in 2026-07?', usdRe(spendUsd({from:'2026-07',to:'2026-07'}))],
+  ['Marketing spend in 09/2026?', usdRe(spendUsd({from:'2026-09',to:'2026-09'}))],
+  ['Marketing spend from 2026-04 to 2026-06?', usdRe(spendUsd({from:'2026-04',to:'2026-06'}))],
+  ['Marketing spend between 2026-07-01 and 2026-08-31?', usdRe(spendUsd({from:'2026-07',to:'2026-08'}))],
+  ['Marketing spend in 2026-07 through 2026-08?', usdRe(spendUsd({from:'2026-07',to:'2026-08'}))],
   // Finding 5: one resolver for every source measure.
   ['Cost per signed lease by source at Kedzie Works in Q3 2026?', /Kedzie Works.*by paid source:.*Apartments\.com \$2,150\.00.*Google Ads \$1,830\.00.*Zillow \$1,750\.00/],
-  ['Which channel had the lowest cost per lead at Kedzie Works in Q3 2026?', /Facebook Ads had the lowest cost per lead.*\$120\.45/],
+  ['Which channel had the lowest cost per lead at Kedzie Works in Q3 2026?', new RegExp('Facebook Ads had the lowest cost per lead.*' + usdRe(cpl(spendUsd({from:'2026-07',to:'2026-09',pid:'P06',sources:['Facebook Ads']}), 10)).source)],
   ['Which source had the highest cost per lead at Kedzie Works in Q3 2026?', /Apartments\.com had the highest cost per lead.*\$330\.77/],
   ['Which source had the lowest cost per tour at Kedzie Works in Q3 2026?', /Apartment List had the lowest cost per tour.*\$510\.00/],
   ['Which channel had the highest tour to lease rate at Kedzie Works in Q3 2026?', /Referral.*62\.5%/],
   // Controls (03:44 file).
-  ['Facebook Ads cost per lead at Kedzie Works in Q3 2026?', /Kedzie Works.*\$120\.45/],
+  ['Facebook Ads cost per lead at Kedzie Works in Q3 2026?', new RegExp('Kedzie Works.*' + usdRe(cpl(spendUsd({from:'2026-07',to:'2026-09',pid:'P06',sources:['Facebook Ads']}), 10)).source)],
   ['How many leads wanted studio apartments at Fulton Yards?', /\b28 leads that wanted a studio/],
-  ['Marketing spend in July 2026?', /\$35,592\.80/],
+  ['Marketing spend in July 2026?', usdRe(spendUsd({from:'2026-07',to:'2026-07'}))],
   ['Spend at FY in Q3 2026?', /Fulton Yards \(P03\).*\$13,640\.00/],
 ] as const) {
   test(`s12: answers: ${q}`, async () => {

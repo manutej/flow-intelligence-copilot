@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { askFlowIqCopilot } from '../src/agent/copilot.ts';
 import { loadPortfolioStore } from '../src/data/loader.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 // TENACITY's s15 rows (VERDICT-S2-b551a31, repros/s15b-probes.ts and
 // s15-lost.ts) plus own rewordings from /tmp/s15/own-rewordings.txt. That
@@ -67,7 +71,7 @@ test('s15 finding 3: P41-G039 keeps its Marlowe clarify through the bullet tail'
 for (const [q, re] of [
   ['Occupancy at the Tower?', /Printers Row Tower \(P07\), 95\.3%/],
   ['Occupancy at Kedzie Works? Show your math.', /87\.3%/],
-  ['Spend at Kedzie Works in Q3 2026 in USD?', /\$13,384\.50 USD/],
+  ['Spend at Kedzie Works in Q3 2026 in USD?', new RegExp(usdRe(spendUsd({from:'2026-07',to:'2026-09',pid:'P06'})).source + ' USD')],
   ['Across operating buildings, how many total units are there and how many are occupied?', /1100 total units/],
   ['renewal rate at kedzie works for new leases?', /Kedzie Works \(P06\)/],
 ] as const) {

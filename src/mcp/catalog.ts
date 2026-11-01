@@ -34,7 +34,7 @@ export const ASSUMPTIONS_SCHEMA = {
   description:
     'Optional what-if for this question only. Use when the user says "what if" or changes an assumption; leave out otherwise.',
   properties: {
-    cadToUsdRate: { type: 'number', minimum: 0.5, maximum: 1.5, description: 'USD per Canadian dollar for CAD invoices (default 0.73).' },
+    cadToUsdRate: { type: 'number', minimum: 0.5, maximum: 1.5, description: 'USD per Canadian dollar for CAD invoices (default: the pinned live rate with its date).' },
     occupiedIncludesNotice: { type: 'boolean', description: 'Count units on notice as occupied (default true).' },
     leaseBucketBy: { type: 'string', enum: ['lease_start_date', 'lead_created_date'], description: 'Which date puts a signed lease in a period (default lease_start_date).' },
     priorSpendUsdBeta0: { type: 'number', minimum: 500, maximum: 20000, description: 'Portfolio prior cost per signed lease used to shrink small samples (default 3250).' },

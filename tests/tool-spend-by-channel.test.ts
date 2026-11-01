@@ -2,13 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadPortfolioStore } from '../src/data/loader.ts';
 import { spendByChannel, SPEND_BY_CHANNEL_DESCRIPTION } from '../src/tools/spend-by-channel.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 const store = loadPortfolioStore();
 
 test('spend_by_channel: kit-rate totals match truth', () => {
   const r = spendByChannel(store);
-  assert.deepEqual(r.value?.by_source, { 'Apartment List': 8900, 'Apartments.com': 84560, 'Facebook Ads': 14939.9, 'Google Ads': 36550, 'Rent.': 22460, Zillow: 57190 });
-  assert.equal(r.value?.total_usd, 224599.9);
+  assert.deepEqual(r.value?.by_source, { 'Apartment List': 8900, 'Apartments.com': 84560, 'Facebook Ads': spendUsd({ sources: ['Facebook Ads'] }), 'Google Ads': 36550, 'Rent.': 22460, Zillow: 57190 });
+  assert.equal(r.value?.total_usd, YTD_USD);
   assert.equal(r.fx?.applied, true);
 });
 
