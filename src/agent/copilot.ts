@@ -88,6 +88,12 @@ export async function askFlowIqCopilot(
   options: CopilotRunOptions = {},
 ): Promise<CopilotTurnResult> {
   const question = typeof input === 'string' ? input : input.question;
+  const chartRest = stripChartAsk(question);
+  if (chartRest) {
+    const inner = await askFlowIqCopilot(typeof input === 'string' ? chartRest : { ...input, question: chartRest }, options);
+    if (nonAnswerKind(inner.envelope.result as Record<string, unknown>)) return inner;
+    return { ...inner, envelope: { ...inner.envelope, answer: withChartNote(inner.envelope.answer, inner.envelope.result as Record<string, unknown>) } };
+  }
   // A session refusal depends on earlier turns; note it before this turn sets state.
   const sessionRefused = !!sessionRefusal(options.session, question);
   const refusedQuestion = options.session?.refusedQuestion;
@@ -108,7 +114,40 @@ export async function askFlowIqCopilot(
 }
 
 /** The deterministic turn for a question: the model-off pipeline, with no session or frame model. */
+// Phase 1b item 2: a clear chart request gets the data table plus one line; no chart is drawn yet.
+const CHART_ASK_RE = /^\s*(?:(?:please\s+)?(?:show|give|make|draw|create|build|generate)\s+(?:me\s+)?(?:a|an)\s+(?:(?:bar|line|pie)\s+)?(?:chart|graph|plot|visuali[sz]ation)\s+(?:of|for|showing)\s+|(?:plot|chart|graph|visuali[sz]e)\s+)/i;
+const CHART_TAIL_RE = /\s+(?:as|in)\s+(?:a|an)\s+(?:(?:bar|line|pie)\s+)?(?:chart|graph|plot)\b/i;
+export const CHART_NOT_AVAILABLE = "A chart isn't available yet, so here is the data as a table.";
+/** The question with a clear chart ask removed, or null when it has none. */
+export function stripChartAsk(question: string): string | null {
+  if (!CHART_ASK_RE.test(question) && !CHART_TAIL_RE.test(question)) return null;
+  const rest = question.replace(CHART_ASK_RE, '').replace(CHART_TAIL_RE, '').trim();
+  return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : null;
+}
+
+/** An answer followed by its data table and the one-line chart note. */
+function withChartNote(answer: string, result: Record<string, unknown>): string {
+  const table = resultTable(result);
+  return `${answer}${table ? `\n\n${table}` : ''}\n\n${CHART_NOT_AVAILABLE}`;
+}
+
+/** The result as a Markdown table: its first list of rows, or the result itself as one row. */
+export function resultTable(result: Record<string, unknown>): string | null {
+  const list = Object.values(result).find((v): v is Record<string, unknown>[] => Array.isArray(v) && v.length > 0 && v.every((r) => r !== null && typeof r === 'object' && !Array.isArray(r)));
+  const rows = list ?? [result];
+  const cols = [...new Set(rows.flatMap((r) => Object.keys(r).filter((k) => ['string', 'number', 'boolean'].includes(typeof r[k]))))];
+  if (cols.length === 0) return null;
+  const cell = (v: unknown) => (v === undefined ? '' : String(v));
+  return [`| ${cols.join(' | ')} |`, `| ${cols.map(() => '---').join(' | ')} |`, ...rows.map((r) => `| ${cols.map((c) => cell(r[c])).join(' | ')} |`)].join('\n');
+}
+
 export function deterministicTurn(qRecord: QuestionRecord, store: PortfolioStore): AnswerEnvelope {
+  const chartRest = stripChartAsk(qRecord.question);
+  if (chartRest) {
+    const inner = deterministicTurn({ ...qRecord, question: chartRest }, store);
+    if (nonAnswerKind(inner.result as Record<string, unknown>)) return inner;
+    return { ...inner, answer: withChartNote(inner.answer, inner.result as Record<string, unknown>) };
+  }
   const fh = checkFairHousingGuard(qRecord.question, store);
   if (fh.refused) return { id: qRecord.id, answer: fh.reason ?? 'Refused under the Fair Housing Act.', result: { refused: true }, citations: fh.citations };
   const unknownCheck = checkUnknownDataGuard(qRecord.question, store);
