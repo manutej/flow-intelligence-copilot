@@ -1118,10 +1118,12 @@ function parseQueryIntentRaw(
         : undefined;
     // A renewal rate for a named period is over the leases ending in it.
     const isRenewalRateQuery = /\brenewal\s+rate\b|\brenew(?:ed|al)?\s+(?:share|percent|%)/i.test(question);
+    // FIX-FIQ-P1 (b): "leases renew this year" counts leases up for renewal, i.e. ending in that period.
+    const isRenewCountQuery = /\b(?:renew|renews|renewing|up\s+for\s+renewal)\b/i.test(question);
     // "this year" with no other date is the calendar year the data window lies in.
     const thisYear = !dateExplicit && /\bthis\s+year\b/i.test(question) ? calendarYearOf(dateWindow) : undefined;
     const leaseEndWindow =
-      (hasEndSignal || (isRenewalRateQuery && (dateExplicit || thisYear))) && !hasStartSignal ? thisYear ?? dateWindow : undefined;
+      (hasEndSignal || ((isRenewalRateQuery || isRenewCountQuery) && (dateExplicit || thisYear))) && !hasStartSignal ? thisYear ?? dateWindow : undefined;
 
     let measure: IntentMeasure = 'lease_count';
     if (
