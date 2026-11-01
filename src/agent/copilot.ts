@@ -722,7 +722,8 @@ const OWN_DATA_ACTION = /\b(?:upload|import|connect|integrate|hook\s+up|link|syn
 const OWN_DATA_OBJECT = /\b(?:rent\s*roll|yardi|realpage|entrata|appfolio|buildium|resman|mri|pms|crm|spreadsheet|csv|excel|my\s+(?:own\s+)?(?:data|portfolio|propert(?:y|ies)|buildings?|units?|file))\b/i;
 
 /** F-TSC-1: a question that explicitly asks about uploading. */
-export const EXPLICIT_UPLOAD = /\bupload(?:s|ed|ing)?\b/i;
+// F-TSC2-1 (Tau): connect, import and sign-up asks get the same handling.
+export const EXPLICIT_UPLOAD = /\b(?:upload(?:s|ed|ing)?|connect(?:s|ed|ing)?|import(?:s|ed|ing)?|sign\s*up|create\s+an?\s+account)\b/i;
 
 /** F-TSC-1: one short line of what the demo can do, appended after the demo-only reply. */
 export function capabilityLine(): string {

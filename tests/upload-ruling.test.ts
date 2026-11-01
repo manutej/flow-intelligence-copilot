@@ -25,3 +25,16 @@ test('non-upload capability question still gets the capability answer', async ()
   assert.equal((r.envelope.result as Record<string, unknown>).capability, true);
   assert.doesNotMatch(r.envelope.answer, /What you can do here:/);
 });
+
+// F-TSC2-1 (Tau): connect, import and sign-up asks get the same handling as upload.
+for (const q of ['Can I connect Yardi?', 'Can I import my data from a CSV?', 'Can I sign up and create an account?']) {
+  test(`"${q}" gets demo-only first, then a capability line`, async () => {
+    const r = await askFlowIqCopilot(q, { store, parse: null });
+    const a = r.envelope.answer;
+    const result = r.envelope.result as Record<string, unknown>;
+    assert.equal(result.demo_only, true);
+    assert.equal(result.capability, undefined);
+    assert.ok(a.startsWith('This is a demo.'), a);
+    assert.ok(a.indexOf('What you can do here:') > a.indexOf("You can't upload"), a);
+  });
+}
