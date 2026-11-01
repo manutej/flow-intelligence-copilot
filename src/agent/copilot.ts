@@ -213,6 +213,18 @@ async function askUnsealed(
     };
   }
 
+  // FLOWIQ-SITE-005: uploading, connecting a PMS or adding the asker's own
+  // building is not possible here; say so plainly, with no made-up steps.
+  const demoOnly = demoOnlyReply(question, store);
+  if (demoOnly) {
+    const envelope: AnswerEnvelope = { id: qRecord.id, answer: demoOnly, result: { unknown: true, demo_only: true }, citations: [] };
+    return {
+      envelope, toolCalls, clarificationNeeded: false, clarifyingQuestion: null,
+      modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
+      verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+    };
+  }
+
   const unknownCheck = checkUnknownDataGuard(question, store);
   if (unknownCheck.unknown) {
     const envelope: AnswerEnvelope = {
@@ -614,4 +626,19 @@ function sessionRefusal(session: FairHousingSession | undefined, question: strin
       'Refused: earlier in this conversation I refused a request to treat a group of people differently, and this refers back to those people. I can answer the same question without them, for example "How many studios are vacant at Kedzie Works?".',
     citations: [] as never[],
   };
+}
+
+const OWN_DATA_ACTION = /\b(?:upload|import|connect|integrate|hook\s+up|link|sync|plug\s+in|add|load|bring)\b/i;
+const OWN_DATA_OBJECT = /\b(?:rent\s*roll|yardi|realpage|entrata|appfolio|buildium|resman|mri|pms|crm|spreadsheet|csv|excel|my\s+(?:own\s+)?(?:data|portfolio|propert(?:y|ies)|buildings?|units?|file))\b/i;
+
+/** FLOWIQ-SITE-005: the demo-only reply for own-data / upload / connect asks, or null. */
+export function demoOnlyReply(question: string, store: PortfolioStore): string | null {
+  const ownData = (OWN_DATA_ACTION.test(question) && OWN_DATA_OBJECT.test(question))
+    || /\bmy\s+(?:own\s+)?(?:data|portfolio|buildings?)\b/i.test(question)
+    || /\bhere\s+(?:is|are)\s+my\b/i.test(question)
+    || /\b(?:sign\s*up|create\s+an?\s+account|log\s*in)\b/i.test(question);
+  if (!ownData) return null;
+  const operating = new Set(store.operatingProperties.map((p) => p.propertyId));
+  const units = store.units.filter((u) => operating.has(u.propertyId)).length;
+  return `This is a demo. FlowIQ here answers questions over a fixed demo portfolio: ${store.operatingProperties.length} Chicago buildings, ${units.toLocaleString('en-US')} units, data as of ${store.policy.asOfDate}. You can't upload a rent roll, connect a PMS such as Yardi, sign up, or add your own buildings on this site, and your data isn't uploaded here. Want this on your portfolio? Use the Contact link in the demo banner. Buildings you can ask about: ${store.operatingProperties.map((p) => p.name).join(', ')}.`;
 }

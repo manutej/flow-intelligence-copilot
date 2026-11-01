@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { askFlowIqCopilot } from "../src/agent/copilot.ts";
+import { applyDemoBanner } from "./demo-banner.ts";
 import { MODEL_PROVIDER_PROFILES } from "../src/agent/model-harness.ts";
 import {
   DISCOVERED_EASTER_EGGS,
@@ -331,7 +332,7 @@ export async function buildOrmusDashboard(): Promise<void> {
   };
 
   const rawHtml = renderDashboardHtml(initialState);
-  const html = rawHtml
+  let html = rawHtml
     .replace(/Cellular Sheaf/gi, "Cross-Table Integrity")
     .replace(/cellular sheaf/gi, "cross-table integrity")
     .replace(/sheaves/gi, "integrity graphs")
@@ -355,6 +356,8 @@ export async function buildOrmusDashboard(): Promise<void> {
   const publicIndexPath = path.join(publicDir, "index.html");
   const uiStudioPath = path.join(uiDir, "flowiq-visual-studio.html");
 
+  // FLOWIQ-SITE-005: demo banner (counts and as-of from the data).
+  html = applyDemoBanner(html, store);
   fs.writeFileSync(publicIndexPath, html, "utf-8");
   fs.writeFileSync(uiStudioPath, html, "utf-8");
 
