@@ -439,6 +439,20 @@ export function spellIsoMonths(text: string): string {
 }
 const ISO_RANGE_RE = /\b(20\d{2})-(0[1-9]|1[0-2])(?:-(\d{2}))?(?!\d)(\s*(?:[-\u2013\u2014]|\bto\b|\bthrough\b|\bthru\b|\buntil\b|\btill\b|\b(and)\b)\s*)(20\d{2})-(0[1-9]|1[0-2])(?:-(\d{2}))?(?!\d)/i;
 
+/**
+ * Year and month of an as-of date (YYYY-MM...). Rejects a month outside
+ * 1-12 instead of letting it roll over into the next or previous year.
+ */
+export function parseAsOfYearMonth(asOfDate: string): [number, number] {
+  const match = /^(\d{4})-(\d{2})/.exec(asOfDate);
+  const y = match ? Number.parseInt(match[1]!, 10) : Number.NaN;
+  const m = match ? Number.parseInt(match[2]!, 10) : Number.NaN;
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) {
+    throw new RangeError(`Invalid as-of date "${asOfDate}": month must be 01-12 (format YYYY-MM-DD).`);
+  }
+  return [y, m];
+}
+
 export function parseExplicitDateWindow(
   question: string,
   asOfDate = '2026-10-01',
@@ -461,8 +475,8 @@ export function parseExplicitDateWindow(
 
   // FLOWIQ-SITE-003: "next month" is the calendar month after the as-of date.
   if (/\bnext[-\s]+month\b/i.test(question)) {
-    let y = Number.parseInt(asOfDate.slice(0, 4), 10);
-    let m = Number.parseInt(asOfDate.slice(5, 7), 10) + 1;
+    let [y, m] = parseAsOfYearMonth(asOfDate);
+    m += 1;
     if (m > 12) { m = 1; y += 1; }
     return buildDynamicDateWindow(`${MONTH_FULL_NAMES[m].toUpperCase().slice(0, 3)}_${y}`, `${MONTH_FULL_NAMES[m]} ${y}`, y, m, y, m);
   }

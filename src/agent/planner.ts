@@ -18,7 +18,7 @@ import type {
   UnitQuerySummary,
 } from '../domain/metrics.ts';
 import type { PropertyResolutionResult } from '../domain/resolver.ts';
-import { droppedBreakdownOf, scalarLeftoverOf, parseQueryIntent, sourceModeOf, UNIT_STATUS_EXCLUSION_RE, type ParsedQueryIntent } from './intent.ts';
+import { droppedBreakdownOf, scalarLeftoverOf, parseQueryIntent, parseAsOfYearMonth, sourceModeOf, UNIT_STATUS_EXCLUSION_RE, type ParsedQueryIntent } from './intent.ts';
 import {
   dataCoverage,
   describeCoverage,
@@ -1613,7 +1613,7 @@ function unitFilterLabel(intent: ParsedQueryIntent): string {
 }
 
 function nextMonthLabel(asOf: string): string {
-  const [y, m] = asOf.split('-').map(Number);
-  const d = new Date(Date.UTC(y!, m!, 1));
+  const [y, m] = parseAsOfYearMonth(asOf);
+  const d = new Date(Date.UTC(y, m, 1));
   return d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
