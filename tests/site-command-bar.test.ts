@@ -83,8 +83,14 @@ test("command bar wiring (FLOWIQ-SITE-001)", async (t) => {
     await page.waitForFunction(() => typeof (window as any).runLiveAsk === "function");
     // A syntax error anywhere in the inline script is what killed the bar.
     assert.ok(!pageErrors.some((e) => /SyntaxError|is not defined|initializer/.test(e)), pageErrors.join("; "));
-    // Known, unrelated load-time error in renderLearnerTables (stale learner
-    // schema) is out of scope here; only errors raised by the bar count.
+    // FLOWIQ-SITE-009: the page loads with no script errors at all, and the
+    // learner tables (whose stale schema used to throw) render their rows.
+    await page.waitForTimeout(300);
+    assert.deepEqual(pageErrors, [], pageErrors.join("; "));
+    assert.equal(await page.locator("#tbl-learner tbody tr").count(), 10);
+    assert.equal(await page.locator("#tbl-proposed-decisions tbody tr").count(), 10);
+    assert.doesNotMatch((await page.textContent("#tbl-learner")) ?? "", /undefined|NaN/);
+    assert.match((await page.textContent("#tbl-learner")) ?? "", /X001[\s\S]*failed_increase_dead_spend/);
     pageErrors.length = 0;
 
     await t.test("typing a question and pressing Enter sends one POST and renders the answer", async () => {

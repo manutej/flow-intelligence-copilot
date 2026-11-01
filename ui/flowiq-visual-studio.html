@@ -1258,40 +1258,56 @@ function renderBenchmarkTable() {
 }
 
 function renderLearnerTables() {
-  const decs = activeState.learnerSummary.evaluatedDecisions || [];
+  // FLOWIQ-SITE-009: read the learner summary as build-dashboard emits it
+  // (decisionId, recommendation, deltaUsd, postOutcomeShrunkCpslUsd, verdict;
+  // proposed rows are decision_id / property_id / delta_usd). Missing fields
+  // render as an em dash instead of throwing on page load.
+  const ls = (activeState && activeState.learnerSummary) || {};
+  const money = function(v) { return typeof v === "number" && isFinite(v) ? "$" + v.toFixed(2) : "—"; };
+  const signed = function(v) { return typeof v === "number" && isFinite(v) ? (v > 0 ? "+$" : v < 0 ? "−$" : "$") + Math.abs(v).toFixed(0) : "—"; };
+  const txt = function(v) { return v === undefined || v === null || v === "" ? "—" : escapeLearnerHtml(String(v)); };
+  const decs = ls.evaluatedDecisions || [];
   const rows = decs.map(function(d) {
-    const cls = (d.outcomeVerdict.includes("positive") || d.outcomeVerdict.includes("small_sample")) ? "accept" : "gate";
+    const verdict = String(d.verdict || "");
+    const cls = /^(validated|correctly)/.test(verdict) ? "accept" : "gate";
+    const pz = typeof d.poissonZeroLeaseProbability === "number" ? (d.poissonZeroLeaseProbability * 100).toFixed(1) + "%" : "—";
     return "<tr>" +
-      "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('decisions:" + d.decisionId + "')\">" + d.decisionId + "</span><div style=\"color:var(--muted);font-size:10px;\">" + d.decisionMonth + "</div></td>" +
-      "<td class=\"mono\">" + d.propertyId + " · <b>" + d.source + "</b></td>" +
-      "<td class=\"mono\">" + d.action + " (" + (d.ChangePct > 0 ? "+" : "") + d.ChangePct + "%)<div style=\"color:var(--muted);font-size:10px;\">accepted: " + d.accepted + "</div></td>" +
-      "<td class=\"mono\">$" + d.postSpendUsd.toFixed(2) + " / " + d.postSignedLeases + " leases<div style=\"color:var(--muted);font-size:10px;\">" + d.postMonthsObserved + " mo · Pr(K=0)=" + (d.zeroLeasePoissonTailProb * 100).toFixed(1) + "%</div></td>" +
-      "<td class=\"mono\" style=\"color:var(--gold);\">$" + d.posteriorShrunkCpslUsd.toFixed(2) + "</td>" +
-      "<td><span class=\"stamp " + cls + "\">" + d.outcomeVerdict + "</span></td>" +
+      "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('decisions:" + txt(d.decisionId) + "')\">" + txt(d.decisionId) + "</span><div style=\"color:var(--muted);font-size:10px;\">" + txt(d.decisionMonth) + "</div></td>" +
+      "<td class=\"mono\">" + txt(d.propertyId) + " · <b>" + txt(d.source) + "</b></td>" +
+      "<td class=\"mono\">" + txt(d.recommendation) + " (" + signed(d.deltaUsd) + ")<div style=\"color:var(--muted);font-size:10px;\">accepted: " + txt(d.accepted) + "</div></td>" +
+      "<td class=\"mono\">" + money(d.postSpendUsd) + " / " + txt(d.postSignedLeases) + " leases<div style=\"color:var(--muted);font-size:10px;\">" + txt(d.postMonths) + " mo · Pr(K=0)=" + pz + "</div></td>" +
+      "<td class=\"mono\" style=\"color:var(--gold);\">" + money(d.postOutcomeShrunkCpslUsd) + "</td>" +
+      "<td><span class=\"stamp " + cls + "\">" + txt(verdict) + "</span></td>" +
     "</tr>";
   }).join("");
-
-  document.getElementById("tbl-learner").innerHTML =
+  const learnerEl = document.getElementById("tbl-learner");
+  if (learnerEl) learnerEl.innerHTML =
     "<table><thead><tr><th>Decision</th><th>Target Pair</th><th>Historical Action</th><th>Post Window &amp; Poisson Tail</th><th>Posterior CPSL</th><th>Closed-Loop Verdict</th></tr></thead><tbody>" + rows + "</tbody></table>";
 
-  const propRows = (activeState.learnerSummary.proposedNextDecisions || []).map(function(p) {
-    const cls = p.recommendedAction === "increase" ? "accept" : "gate";
+  const propRows = (ls.proposedNextDecisions || []).map(function(p) {
+    const cls = p.recommendation === "increase" ? "accept" : "gate";
     return "<tr>" +
-      "<td class=\"mono\" style=\"color:var(--gold);\">" + p.proposedDecisionId + "</td>" +
-      "<td class=\"mono\">" + p.propertyId + " (" + p.propertyName + ")</td>" +
-      "<td><b>" + p.source + "</b></td>" +
-      "<td><span class=\"stamp " + cls + "\">" + p.recommendedAction.toUpperCase() + " (" + (p.recommendedChangePct > 0 ? "+" : "") + p.recommendedChangePct + "%)</span></td>" +
-      "<td class=\"mono\">$" + p.posteriorCpslUsd.toFixed(2) + "</td>" +
-      "<td style=\"font-size:12px;color:var(--muted);\">" + p.rationale + "</td>" +
+      "<td class=\"mono\" style=\"color:var(--gold);\">" + txt(p.decision_id) + "<div style=\"color:var(--muted);font-size:10px;\">" + txt(p.month) + "</div></td>" +
+      "<td class=\"mono\">" + txt(p.property_id) + "</td>" +
+      "<td><b>" + txt(p.source) + "</b></td>" +
+      "<td><span class=\"stamp " + cls + "\">" + txt(String(p.recommendation || "").toUpperCase()) + " (" + signed(p.delta_usd) + ")</span></td>" +
+      "<td class=\"mono\">" + txt(p.accepted) + "</td>" +
+      "<td style=\"font-size:12px;color:var(--muted);\">" + txt(p.decided_by) + "</td>" +
     "</tr>";
   }).join("");
+  const propEl = document.getElementById("tbl-proposed-decisions");
+  if (propEl) propEl.innerHTML =
+    "<table><thead><tr><th>ID</th><th>Building</th><th>Source</th><th>Recommended Move</th><th>Status</th><th>Proposed By</th></tr></thead><tbody>" + propRows + "</tbody></table>";
+}
 
-  document.getElementById("tbl-proposed-decisions").innerHTML =
-    "<table><thead><tr><th>ID</th><th>Building</th><th>Source</th><th>Recommended Move</th><th>Posterior CPSL</th><th>Empirical-Bayes Rationale</th></tr></thead><tbody>" + propRows + "</tbody></table>";
+function escapeLearnerHtml(s) {
+  return s.replace(/[&<>"']/g, function(c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
 }
 
 function renderintegrityAndSecurityTables() {
-  const edges = activeState.integritySummary.edges || [];
+  // FLOWIQ-SITE-009: the dashboard state carries no integrity summary; render
+  // an empty table instead of throwing on page load.
+  const edges = ((activeState && activeState.integritySummary) || {}).edges || [];
   const edgeRows = edges.map(function(e) {
     return "<tr>" +
       "<td class=\"mono\" style=\"color:var(--gold);\"><b>" + e.edgeId + "</b></td>" +
@@ -1333,7 +1349,7 @@ function renderintegrityAndSecurityTables() {
       "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('" + v.citationId + "')\">" + v.spendId + "</span></td>" +
       "<td class=\"mono\">" + v.propertyId + " · " + v.source + "</td>" +
       "<td class=\"mono\">" + v.month + "</td>" +
-      "<td class=\"mono\" style=\"color:#fca5a5;\">$" + v.amountOriginal.toFixed(2) + " " + v.currency + "</td>" +
+      "<td class=\"mono\" style=\"color:#fca5a5;\">$" + Number(v.rawAmount != null ? v.rawAmount : v.amountOriginal).toFixed(2) + " " + v.currency + "</td>" +
     "</tr>";
   }).join("");
   document.getElementById("tbl-void-spend").innerHTML =
