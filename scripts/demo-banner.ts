@@ -28,7 +28,7 @@ export function demoBannerHtml(store: PortfolioStore): string {
   <div id="demo-banner" role="note" style="margin:0 0 12px;padding:10px 14px;border:1px solid #c9a227;border-radius:8px;background:#fff8e1;color:#3b2f00;font-size:14px;line-height:1.45">
     <strong>Demo portfolio:</strong> <span data-demo="buildings">${s.buildings}</span> buildings, <span data-demo="units">${s.units.toLocaleString("en-US")}</span> units, data as of <span data-demo="as-of">${asOfLabel(s.asOf)}</span>. Your data isn't uploaded here.
     <a id="demo-contact" href="${DEMO_CONTACT_HREF}" style="color:#5a4300;font-weight:600">Want this on your portfolio? Contact (coming soon)</a>
-    <div id="privacy-note" style="font-size:12px;margin-top:4px;opacity:.85">Privacy: questions you type are sent to FlowIQ to answer them over this demo data only. When an outside model provider is configured (FLOWIQ_API_ALLOWED_PROVIDERS), your question may also be sent to that provider. Nothing is stored to your account and no personal data is collected.</div>
+    <div id="privacy-note" style="font-size:12px;margin-top:4px;opacity:.85">Privacy: questions you type are sent to FlowIQ to answer them over this demo data only. When an outside provider is configured, your question may also be sent to that provider. Nothing is stored to your account and no personal data is collected.</div>
   </div>
   ${END}`;
 }

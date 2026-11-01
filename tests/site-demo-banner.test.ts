@@ -87,3 +87,11 @@ test('banner is on the first screen at desktop and mobile widths', async () => {
     }
   } finally { await browser.close(); server.close(); }
 });
+
+test('privacy note names no env var, only "when an outside provider is configured" (FIX-FIQ-P1 d)', () => {
+  for (const f of ['public/index.html', 'scripts/demo-banner.ts']) {
+    const note = fs.readFileSync(f, 'utf8').match(/id="privacy-note"[^>]*>([^<]*)</)?.[1] ?? '';
+    assert.match(note, /When an outside provider is configured/, f);
+    assert.doesNotMatch(note, /FLOWIQ_|[A-Z]+_[A-Z_]+/, f);
+  }
+});
