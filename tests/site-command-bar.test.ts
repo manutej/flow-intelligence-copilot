@@ -83,10 +83,9 @@ test("command bar wiring (FLOWIQ-SITE-001)", async (t) => {
     await page.waitForFunction(() => typeof (window as any).runLiveAsk === "function");
     // A syntax error anywhere in the inline script is what killed the bar.
     assert.ok(!pageErrors.some((e) => /SyntaxError|is not defined|initializer/.test(e)), pageErrors.join("; "));
-    // The learner and integrity tables are gone. One unrelated load-time error
-    // remains in the void-spend table (amountOriginal; fixed on
-    // feat/flowiq-site-009), so only errors raised by the bar count here.
-    pageErrors.length = 0;
+    // The learner and integrity tables are gone and void spend reads
+    // rawAmount, so the page must load with zero errors.
+    assert.deepEqual(pageErrors, [], pageErrors.join("; "));
 
     await t.test("typing a question and pressing Enter sends one POST and renders the answer", async () => {
       mode = "real";

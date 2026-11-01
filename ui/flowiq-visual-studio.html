@@ -1266,7 +1266,7 @@ function renderintegrityAndSecurityTables() {
       "<td class=\"mono\"><span class=\"stamp cite\" onclick=\"inspectCitation('" + v.citationId + "')\">" + v.spendId + "</span></td>" +
       "<td class=\"mono\">" + v.propertyId + " · " + v.source + "</td>" +
       "<td class=\"mono\">" + v.month + "</td>" +
-      "<td class=\"mono\" style=\"color:#fca5a5;\">$" + v.amountOriginal.toFixed(2) + " " + v.currency + "</td>" +
+      "<td class=\"mono\" style=\"color:#fca5a5;\">$" + Number(v.rawAmount != null ? v.rawAmount : v.amountOriginal).toFixed(2) + " " + v.currency + "</td>" +
     "</tr>";
   }).join("");
   document.getElementById("tbl-void-spend").innerHTML =
