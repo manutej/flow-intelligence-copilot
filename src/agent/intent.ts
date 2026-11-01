@@ -442,6 +442,20 @@ export function spellIsoMonths(text: string): string {
 }
 const ISO_RANGE_RE = /\b(20\d{2})-(0[1-9]|1[0-2])(?:-(\d{2}))?(?!\d)(\s*(?:[-\u2013\u2014]|\bto\b|\bthrough\b|\bthru\b|\buntil\b|\btill\b|\b(and)\b)\s*)(20\d{2})-(0[1-9]|1[0-2])(?:-(\d{2}))?(?!\d)/i;
 
+/**
+ * Year and month of an as-of date (YYYY-MM...). Rejects a month outside
+ * 1-12 instead of letting it roll over into the next or previous year.
+ */
+export function parseAsOfYearMonth(asOfDate: string): [number, number] {
+  const match = /^(\d{4})-(\d{2})/.exec(asOfDate);
+  const y = match ? Number.parseInt(match[1]!, 10) : Number.NaN;
+  const m = match ? Number.parseInt(match[2]!, 10) : Number.NaN;
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) {
+    throw new RangeError(`Invalid as-of date "${asOfDate}": month must be 01-12 (format YYYY-MM-DD).`);
+  }
+  return [y, m];
+}
+
 export function parseExplicitDateWindow(
   question: string,
   asOfDate = '2026-10-01',
@@ -460,6 +474,14 @@ export function parseExplicitDateWindow(
       return preset ?? buildDynamicDateWindow(`RANGE_${ys}_${ms}_${ye}_${me}`, `${MONTH_FULL_NAMES[ms]} ${ys} to ${MONTH_FULL_NAMES[me]} ${ye}`, ys, ms, ye, me);
     }
     return null;
+  }
+
+  // FLOWIQ-SITE-003: "next month" is the calendar month after the as-of date.
+  if (/\bnext[-\s]+month\b/i.test(question)) {
+    let [y, m] = parseAsOfYearMonth(asOfDate);
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+    return buildDynamicDateWindow(`${MONTH_FULL_NAMES[m].toUpperCase().slice(0, 3)}_${y}`, `${MONTH_FULL_NAMES[m]} ${y}`, y, m, y, m);
   }
 
   if (/\bthis\s+month\b/i.test(question)) {
@@ -1106,7 +1128,9 @@ function parseQueryIntentRaw(
     const hasEndSignal =
       /\b(end|ending|ends|endings|lease[-\s]ends|expir\w*|matur\w*)\b/i.test(
         question,
-      ) || /\bthis\s+month\b/i.test(question);
+      ) || /\b(?:this|next)[-\s]+month\b/i.test(question) ||
+      // FLOWIQ-SITE-003: leases that "renew" in a named month are the ones whose term ends then.
+      (dateExplicit && /\bleases?\s+(?:that\s+)?(?:renew|come\s+up\s+for\s+renewal|are\s+up\s+for\s+renewal)\b/i.test(question));
 
     // A concession question that names a period ("in Q3 2026") is about
     // leases that started in that period, even without the word "started".
@@ -1395,6 +1419,8 @@ function answerLayout(i: ParsedQueryIntent, question?: string): ReadonlySet<Dime
     case 'dead_spend_pairs': case 'dead_spend_building': case 'reallocation_leases': out.add('source').add('building'); break;
     case 'decision_outcome_learning': if (ranked) out.add('source'); break;
     case 'applied_without_tour': case 'signed_leases_ranking': out.add('building'); break;
+    // FLOWIQ-SITE-003: a windowed lease count lists every building.
+    case 'lease_count': if (i.leaseEndWindow && question !== undefined && /\b(?:this|next)\s+month\b/i.test(question)) out.add('building'); break;
     case 'cost_per_signed_lease': if (ranked) out.add('source'); break;
     case 'average_concession': case 'total_concession': case 'rent_at_risk': case 'vacancy_rate': case 'unit_count': if (ranked) out.add('building'); break;
     default: break;
@@ -1872,6 +1898,8 @@ const MEASURE_REPORTS: Readonly<Partial<Record<IntentMeasure, readonly string[]>
 
 const MEASURE_CONSUMES: Readonly<Partial<Record<IntentMeasure, readonly string[]>>> = {
   spend_total: ['spend'],
+  // FLOWIQ-SITE-003: a lease count filtered by renewal outcome ("how many already renewed").
+  lease_count: ['renewal'],
   lead_count: ['lead'],
   cost_per_lead: ['spend', 'lead'],
   cost_per_tour: ['spend', 'tour'],

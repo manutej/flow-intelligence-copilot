@@ -123,6 +123,8 @@ export function unknownWords(question: string, store: PortfolioStore): string[] 
   for (const re of COMPARATOR_PHRASES) text = text.replace(re, ' ');
   // A year-to-date phrasing is a period (M-9): "ytd", "year to date".
   text = text.replace(/\b(?:year[\s-]+to[\s-]+date|ytd)\b/gi, ' ');
+  // FLOWIQ-SITE-003: "next month" is a period the date parser reads; "next" alone is not.
+  text = text.replace(/\bnext[-\s]+month\b/g, ' month ');
   // Every letter, digit-free word or pictograph in any script is a token; one
   // outside the vocabulary (Cyrillic, Arabic, CJK, emoji alike) is unknown.
   for (const raw of text.normalize('NFKC').match(/[\p{L}\p{M}]+(?:['’][\p{L}]+)?|\p{Extended_Pictographic}|(?:(?![0-9])\p{N})+/gu) ?? []) {
