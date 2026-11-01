@@ -45,3 +45,10 @@ test('period_total: YTD spend at the pinned fixture rate reads $224,463.92 and n
   assert.equal(usd(YTD_USD), '$224,463.92');
   assert.equal(FX.rate_date, '2026-10-31');
 });
+
+test('period_total: YTD end is the one shared LATEST_DATA_DATE (FIX-FIQ-P1 c)', async () => {
+  const { DATE_WINDOWS, LATEST_DATA_DATE: L } = await import('../src/config/rules.ts');
+  const { resolvePeriod } = await import('../src/tools/period-total.ts');
+  assert.equal(DATE_WINDOWS.YTD_2026.endDate, L);
+  assert.equal(resolvePeriod({ preset: 'ytd' } as never)?.end, L);
+});

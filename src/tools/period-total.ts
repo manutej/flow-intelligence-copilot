@@ -10,7 +10,8 @@ import { uniqueLeads } from './cost-per-lead.ts';
 export const PERIOD_TOTAL_DESCRIPTION =
   "Sum or count a measure over a date window: spend, leads, signed leases, concessions. Use for 'total X in Q3', 'this year', 'year to date'. YTD is Jan 1 to the latest data date and labelled partial. Do NOT use for averages unless aggregate='mean' is given.";
 
-export const LATEST_DATA_DATE = '2026-09-28';
+export { LATEST_DATA_DATE } from '../config/rules.ts';
+import { LATEST_DATA_DATE } from '../config/rules.ts';
 export type Measure = 'spend_usd' | 'leads' | 'signed_leases' | 'concessions_usd';
 
 /** Resolve a period; an unrecognised one is null (the caller asks), never Apr–Sep. */

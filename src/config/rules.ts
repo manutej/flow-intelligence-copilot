@@ -1,4 +1,7 @@
 import { PINNED_CAD_RATE } from './fx-pinned.ts';
+
+/** Latest date with data rows; YTD windows end here (M-9). The single source for rules.ts and the tools. */
+export const LATEST_DATA_DATE = '2026-09-28';
 /**
  * Central domain configuration, runtime policy resolution, and canonical constants
  * from KIT_README.md & CHANGELOG.md (v2).
@@ -237,9 +240,9 @@ export const DATE_WINDOWS: Readonly<Record<string, DateWindowSpec>> = {
   // M-9: year to date runs Jan 1 to the latest data date and is partial.
   YTD_2026: {
     key: 'YTD_2026',
-    label: '2026-01-01 to 2026-09-28 (year to date, partial)',
+    label: `2026-01-01 to ${LATEST_DATA_DATE} (year to date, partial)`,
     startDate: '2026-01-01',
-    endDate: '2026-09-28',
+    endDate: LATEST_DATA_DATE,
     months: ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'],
   },
   YEAR_2026: {
