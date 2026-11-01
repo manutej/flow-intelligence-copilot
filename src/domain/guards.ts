@@ -1,5 +1,6 @@
 import { envelopeErrors, nonAnswerErrors } from '../agent/envelope.ts';
 import { ILS_UNKNOWN_REASON } from '../tools/spend-by-channel.ts';
+import { declineUnsupported } from '../tools/router.ts';
 const ILS_GROUP_RE = /\bILS(?:es)?\b|\blisting (?:sites?|services?|portals?)\b|\binternet listing services?\b/i;
 import type {
   AnswerEnvelope,
@@ -161,6 +162,12 @@ export function checkUnknownDataGuard(
       reason: null,
       citations: [],
     };
+  }
+
+  // FIQ-TOOLS-1 §4: a metric the kit has no data for names the missing source.
+  const declined = declineUnsupported(question);
+  if (declined) {
+    return { unknown: true, missingCategory: String(declined.result.reason), reason: declined.answer, citations: [] };
   }
 
   // M-10: "ILS" / "listing sites" as a spend group has no defined site list.
