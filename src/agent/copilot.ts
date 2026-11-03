@@ -542,7 +542,7 @@ export function runDeterministicToolRouter(
  * question, no two are the same, and each one FlowIQ runs to an answer, so
  * one click never lands on another unknown. A reading that fails is dropped.
  */
-function wellFormedOptions(options: readonly ClarifyOption[], qRecord: QuestionRecord, store: PortfolioStore): ClarifyOption[] {
+export function wellFormedOptions(options: readonly ClarifyOption[], qRecord: QuestionRecord, store: PortfolioStore): ClarifyOption[] {
   const seen = new Set<string>();
   // A reading keeps the measure the question asks for (S2-CL): a count in
   // place of an average is a different question.
@@ -551,9 +551,11 @@ function wellFormedOptions(options: readonly ClarifyOption[], qRecord: QuestionR
     if (asked !== 'unsupported' && o.query && o.query.measure !== asked) return false;
     const q = o.question.trim();
     if (q.length === 0 || o.label.trim().length === 0 || seen.has(q.toLowerCase()) || q === qRecord.question.trim()) return false;
-    seen.add(q.toLowerCase());
     const res = closedVocabulary(executeCompositionalPlan({ ...qRecord, question: q }, store), { ...qRecord, question: q }, store).envelope.result as Record<string, unknown>;
-    return res.unknown !== true && res.refused !== true && res.clarification_needed !== true;
+    if (res.unknown === true || res.refused === true || res.clarification_needed === true) return false;
+    // FIX-BEND-FLOWIQ-001: mark seen only once kept, so a rejected duplicate cannot block a valid one.
+    seen.add(q.toLowerCase());
+    return true;
   }).slice(0, 4);
 }
 
