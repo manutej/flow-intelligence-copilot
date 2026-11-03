@@ -316,8 +316,8 @@ export async function runParaphraseAnd10xSuite(): Promise<{
       category: 'unseen_source_tiktok',
       question:
         'What was the portfolio-wide cost per signed lease for TikTok Ads in Q3 2026 across the whole portfolio?',
-      check: (r) => r.source === 'TikTok Ads' && r.usd === 4679.65,
-      expectedDesc: 'TikTok Ads portfolio Q3 2026: $336,934.70 / 72 leases = $4,679.65',
+      check: (r) => r.source === 'TikTok Ads' && r.usd === 4667.3,
+      expectedDesc: 'TikTok Ads portfolio Q3 2026 (CAD at 0.71588 fixture, 2026-10-31): $336,045.60 / 72 leases = $4,667.30',
     },
     {
       id: '10X-16',

@@ -1,3 +1,13 @@
+import { DATE_WINDOWS } from '../config/rules.ts';
+import { routeToolQuestion } from '../tools/router.ts';
+import { nonAnswerKind, sealNonAnswer, setNonAnswerRenderer, type NonAnswerInput } from './envelope.ts';
+import { unboundNegators, unresolvedUnitWords } from './closed-world.ts';
+import { LOCATIVE_FY_RE, maskFiscalTokens } from '../domain/fiscal.ts';
+import type { ParsedQueryIntent } from './intent.ts';
+import { clarifyEnvelope, clarifyOptions, restate, type ClarifyOption } from './clarify.ts';
+import { META_INSTRUCTION_RE, UNSPECIFIED_PERIOD_RE, coordinatedMeasureLeftOut, parseQueryIntent } from './intent.ts';
+import { continuesPreviousTurn, refersBackToPeople, type FairHousingSession } from '../domain/fair-housing.ts';
+import { unknownWords } from '../domain/vocabulary.ts';
 import type { PortfolioPolicyConfig } from '../config/rules.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
 import type {
@@ -16,7 +26,13 @@ import {
   resolveModelHarnessConfig,
   runUniversalModelHarness,
 } from './model-harness.ts';
-import { executeCompositionalPlan } from './planner.ts';
+import { classifyFrame, composeFrame, frameModelConfig, PROTECTED_GROUPS, type FrameAnswers, type ProtectedGroup } from './frame-model.ts';
+import { executeCompositionalPlan, LEFTOVER_REASON_HEAD } from './planner.ts';
+import { resolvePropertiesFromText } from '../domain/resolver.ts';
+import { coverage, modelParse, parseConfigFromEnv, toIntent, type ModelParse, type ParseConfig } from './model-parse.ts';
+import type { RunStore } from './run-store.ts';
+import { canonicalQuestion } from './clarify.ts';
+import { hashOf } from './envelope.ts';
 import type { ToolCallTrace } from './tools.ts';
 
 export interface CopilotRunOptions {
@@ -27,6 +43,11 @@ export interface CopilotRunOptions {
   readonly harness?: Partial<ModelHarnessConfig>;
   readonly store?: PortfolioStore;
   readonly policy?: Partial<PortfolioPolicyConfig>;
+  /** Carries a refusal to later turns of the same conversation. */
+  readonly session?: FairHousingSession;
+  /** S2-L1 model parse; defaults to FLOWIQ_PARSE_* env (off when unset). */
+  readonly parse?: ParseConfig | null;
+  readonly parseDeps?: Parameters<typeof modelParse>[3];
 }
 
 export interface CopilotTurnResult {
@@ -34,6 +55,14 @@ export interface CopilotTurnResult {
   readonly toolCalls: readonly ToolCallTrace[];
   readonly clarificationNeeded: boolean;
   readonly clarifyingQuestion: string | null;
+  readonly clarifyOptions?: readonly ClarifyOption[];
+  /** The frame model's answers when it added a refusal (sealed for re-render). */
+  readonly frameAnswers?: { readonly group: string; readonly treatment: boolean };
+  readonly restatement?: string;
+  /** S2: which parser produced the executed query, and why the model was not used. */
+  readonly parsePath?: ModelParse['path'];
+  readonly parseFallbackReason?: string | null;
+  readonly parse?: ModelParse;
   readonly modeUsed: 'deterministic' | 'llm';
   readonly providerUsed?: ModelProviderId;
   readonly modelUsed?: string;
@@ -58,6 +87,143 @@ export async function askFlowIqCopilot(
   input: string | QuestionRecord,
   options: CopilotRunOptions = {},
 ): Promise<CopilotTurnResult> {
+  const question = typeof input === 'string' ? input : input.question;
+  const chartRest = stripChartAsk(question);
+  if (chartRest) {
+    const inner = await askFlowIqCopilot(typeof input === 'string' ? chartRest : { ...input, question: chartRest }, options);
+    if (nonAnswerKind(inner.envelope.result as Record<string, unknown>)) return inner;
+    return { ...inner, envelope: { ...inner.envelope, answer: withChartNote(inner.envelope.answer, inner.envelope.result as Record<string, unknown>) } };
+  }
+  // A session refusal depends on earlier turns; note it before this turn sets state.
+  const sessionRefused = !!sessionRefusal(options.session, question);
+  const refusedQuestion = options.session?.refusedQuestion;
+  const t = await askUnsealed(input, options);
+  const kind = nonAnswerKind(t.envelope.result as Record<string, unknown>);
+  if (!kind) return { ...t, envelope: { ...t.envelope, answer: withIlsLabel(question, t.envelope.answer) } };
+  // Seal every refusal, "I don't know" and clarify to what it was rendered from.
+  const store = options.store && !options.policy ? options.store : loadPortfolioStore(undefined, options.policy);
+  // A tool-calling harness non-answer has no re-render of its own: it is
+  // sealed as deterministic, so it verifies only if it is the model-off turn.
+  const origin: NonAnswerInput['origin'] = sessionRefused && kind === 'refused' ? 'session'
+    : t.parse && t.parsePath && t.parsePath !== 'deterministic' ? 'model'
+    : t.frameAnswers && kind === 'refused' ? 'frame'
+    : 'deterministic';
+  const sealInput: NonAnswerInput = { question, origin, ...(origin === 'model' ? { model_intent: t.parse!.intent } : {}), ...(origin === 'frame' ? { frame: t.frameAnswers! } : {}), ...(origin === 'session' ? { refused_question: refusedQuestion ?? '' } : {}) };
+  const envelope = { ...t.envelope, ...sealNonAnswer(sealInput, t.envelope) };
+  return { ...t, envelope, verification: verifyAnswerEnvelope(envelope, store) };
+}
+
+/** The deterministic turn for a question: the model-off pipeline, with no session or frame model. */
+// Phase 1b item 2: a clear chart request gets the data table plus one line; no chart is drawn yet.
+const CHART_ASK_RE = /^\s*(?:(?:please\s+)?(?:show|give|make|draw|create|build|generate)\s+(?:me\s+)?(?:a|an)\s+(?:(?:bar|line|pie)\s+)?(?:chart|graph|plot|visuali[sz]ation)\s+(?:of|for|showing)\s+|(?:plot|chart|graph|visuali[sz]e)\s+)/i;
+const CHART_TAIL_RE = /\s+(?:as|in)\s+(?:a|an)\s+(?:(?:bar|line|pie)\s+)?(?:chart|graph|plot)\b/i;
+export const CHART_NOT_AVAILABLE = "A chart isn't available yet, so here is the data as a table.";
+/** The question with a clear chart ask removed, or null when it has none. */
+export function stripChartAsk(question: string): string | null {
+  if (!CHART_ASK_RE.test(question) && !CHART_TAIL_RE.test(question)) return null;
+  const rest = question.replace(CHART_ASK_RE, '').replace(CHART_TAIL_RE, '').trim();
+  return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : null;
+}
+
+/** An answer followed by its data table and the one-line chart note. */
+function withChartNote(answer: string, result: Record<string, unknown>): string {
+  const table = resultTable(result);
+  return `${answer}${table ? `\n\n${table}` : ''}\n\n${CHART_NOT_AVAILABLE}`;
+}
+
+/** The result as a Markdown table: its first list of rows, or the result itself as one row. */
+export function resultTable(result: Record<string, unknown>): string | null {
+  const list = Object.values(result).find((v): v is Record<string, unknown>[] => Array.isArray(v) && v.length > 0 && v.every((r) => r !== null && typeof r === 'object' && !Array.isArray(r)));
+  const rows = list ?? [result];
+  const cols = [...new Set(rows.flatMap((r) => Object.keys(r).filter((k) => ['string', 'number', 'boolean'].includes(typeof r[k]))))];
+  if (cols.length === 0) return null;
+  const cell = (v: unknown) => (v === undefined ? '' : String(v));
+  return [`| ${cols.join(' | ')} |`, `| ${cols.map(() => '---').join(' | ')} |`, ...rows.map((r) => `| ${cols.map((c) => cell(r[c])).join(' | ')} |`)].join('\n');
+}
+
+export function deterministicTurn(qRecord: QuestionRecord, store: PortfolioStore): AnswerEnvelope {
+  const env = deterministicTurnInner(qRecord, store);
+  return nonAnswerKind(env.result as Record<string, unknown>) ? env : { ...env, answer: withIlsLabel(qRecord.question, env.answer) };
+}
+
+// Phase 1b item 3 (M-10): no ILS site list is defined, so a cost-per-lead
+// "from ILS" answers over all paid sources and says so.
+const ILS_CPL_RE = /\bILS(?:es)?\b/i;
+const CPL_RE = /\b(?:cost\s+per\s+lead|CPL)\b/i;
+export const ILS_LABEL = 'ILS sites not yet defined, showing all paid sources.';
+function withIlsLabel(question: string, answer: string): string {
+  return ILS_CPL_RE.test(question) && CPL_RE.test(question) && !answer.includes(ILS_LABEL) ? `${answer} (${ILS_LABEL.replace(/\.$/, '')})` : answer;
+}
+
+function deterministicTurnInner(qRecord: QuestionRecord, store: PortfolioStore): AnswerEnvelope {
+  const chartRest = stripChartAsk(qRecord.question);
+  if (chartRest) {
+    const inner = deterministicTurn({ ...qRecord, question: chartRest }, store);
+    if (nonAnswerKind(inner.result as Record<string, unknown>)) return inner;
+    return { ...inner, answer: withChartNote(inner.answer, inner.result as Record<string, unknown>) };
+  }
+  const fh = checkFairHousingGuard(qRecord.question, store);
+  if (fh.refused) return { id: qRecord.id, answer: fh.reason ?? 'Refused under the Fair Housing Act.', result: { refused: true }, citations: fh.citations };
+  const unknownCheck = checkUnknownDataGuard(qRecord.question, store);
+  if (unknownCheck.unknown) return { id: qRecord.id, answer: unknownCheck.reason ?? "I don't know — that field is not in the portfolio CSV exports.", result: unknownCheck.clarifyingQuestion ? { unknown: true, clarification_needed: true } : { unknown: true }, citations: unknownCheck.citations };
+  return runDeterministicToolRouter(qRecord, store).envelope;
+}
+
+/** The frame model's refusal, rendered from its sealed group answer. */
+function frameRefusal(group: string): Pick<AnswerEnvelope, 'answer' | 'result' | 'citations'> {
+  return {
+    answer: `Refused: this asks to treat people differently based on ${group.replace(/_/g, ' ')}, which the Fair Housing Act and the Illinois Human Rights Act prohibit. I can help with the same task without that criterion.`,
+    result: { refused: true },
+    citations: [],
+  };
+}
+
+setNonAnswerRenderer((input, store) => {
+  const qRecord: QuestionRecord = { id: 'RENDER', type: 'adhoc', question: input.question };
+  if (input.origin === 'session') {
+    // Re-run the session predicate: it holds only for a turn that refers
+    // back to the refused people or carries on from the refused turn.
+    // The sealed earlier question must itself be refused by the guard, and
+    // this question must refer back to it or carry on from it.
+    if (typeof input.refused_question !== 'string' || !checkFairHousingGuard(input.refused_question, store).refused) {
+      throw new Error('the sealed earlier question is not one the Fair Housing guard refuses');
+    }
+    const r = sessionRefusal({ refusedEarlier: true }, input.question);
+    if (!r) throw new Error('the question does not carry on from a refused turn');
+    return { answer: r.reason, result: { refused: true }, citations: r.citations };
+  }
+  if (input.origin === 'frame') {
+    const f = input.frame;
+    if (!f || typeof f.group !== 'string' || typeof f.treatment !== 'boolean' || !PROTECTED_GROUPS.includes(f.group as ProtectedGroup) || !composeFrame({ group: f.group, treatment: f.treatment } as FrameAnswers)) {
+      throw new Error('the sealed frame answers do not compose to a refusal');
+    }
+    return frameRefusal(f.group);
+  }
+  if (input.origin === 'model') {
+    const fh = checkFairHousingGuard(input.question, store);
+    if (fh.refused || checkUnknownDataGuard(input.question, store).unknown) return deterministicTurn(qRecord, store);
+    const intent = toIntent({ kind: 'query', question: input.question, intent: modelIntentKeys(input.model_intent) });
+    if (typeof intent === 'string') throw new Error(`model reading is not a TypedQuery: ${intent}`);
+    return modelReadingTurn(qRecord, store, intent).envelope;
+  }
+  return deterministicTurn(qRecord, store);
+});
+
+// A sealed model reading carries resolved date windows; toIntent takes keys.
+function modelIntentKeys(i: unknown): unknown {
+  if (!i || typeof i !== 'object') return i;
+  const o = { ...(i as Record<string, unknown>) };
+  for (const k of ['dateWindow', 'leaseStartWindow', 'leaseEndWindow']) {
+    const w = o[k] as { key?: string } | undefined;
+    if (w && typeof w === 'object' && typeof w.key === 'string') o[k] = w.key;
+  }
+  return o;
+}
+
+async function askUnsealed(
+  input: string | QuestionRecord,
+  options: CopilotRunOptions = {},
+): Promise<CopilotTurnResult> {
   const store =
     options.store && !options.policy
       ? options.store
@@ -71,7 +237,12 @@ export async function askFlowIqCopilot(
   const question = qRecord.question;
   const toolCalls: ToolCallTrace[] = [];
 
-  const fhCheck = checkFairHousingGuard(question, store);
+  const inherited = sessionRefusal(options.session, question);
+  const fhCheck = inherited ?? checkFairHousingGuard(question, store);
+  if (fhCheck.refused && options.session) {
+    options.session.refusedEarlier = true;
+    if (!inherited) options.session.refusedQuestion = question;
+  }
   if (fhCheck.refused) {
     const envelope: AnswerEnvelope = {
       id: qRecord.id,
@@ -96,6 +267,43 @@ export async function askFlowIqCopilot(
     };
   }
 
+  // F-TSC-1 (Tau): an explicit upload ask gets the honest demo-only reply
+  // first, then a short capability line; the more specific answer wins.
+  if (EXPLICIT_UPLOAD.test(question)) {
+    const demo = demoOnlyReply(question, store);
+    if (demo) {
+      const envelope: AnswerEnvelope = { id: qRecord.id, answer: `${demo} ${capabilityLine()}`, result: { unknown: true, demo_only: true }, citations: [] };
+      return {
+        envelope, toolCalls, clarificationNeeded: false, clarifyingQuestion: null,
+        modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
+        verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+      };
+    }
+  }
+
+  // FLOWIQ-SITE-007: first-visit orientation ("what can you do?").
+  const capability = capabilityReply(question, store);
+  if (capability) {
+    const envelope: AnswerEnvelope = { id: qRecord.id, answer: capability, result: { unknown: true, capability: true }, citations: [] };
+    return {
+      envelope, toolCalls, clarificationNeeded: false, clarifyingQuestion: null,
+      modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
+      verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+    };
+  }
+
+  // FLOWIQ-SITE-005: uploading, connecting a PMS or adding the asker's own
+  // building is not possible here; say so plainly, with no made-up steps.
+  const demoOnly = demoOnlyReply(question, store);
+  if (demoOnly) {
+    const envelope: AnswerEnvelope = { id: qRecord.id, answer: demoOnly, result: { unknown: true, demo_only: true }, citations: [] };
+    return {
+      envelope, toolCalls, clarificationNeeded: false, clarifyingQuestion: null,
+      modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
+      verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+    };
+  }
+
   const unknownCheck = checkUnknownDataGuard(question, store);
   if (unknownCheck.unknown) {
     const envelope: AnswerEnvelope = {
@@ -103,14 +311,14 @@ export async function askFlowIqCopilot(
       answer:
         unknownCheck.reason ??
         "I don't know — that field is not in the portfolio CSV exports.",
-      result: { unknown: true },
+      result: unknownCheck.clarifyingQuestion ? { unknown: true, clarification_needed: true } : { unknown: true },
       citations: unknownCheck.citations,
     };
     return {
       envelope,
       toolCalls,
-      clarificationNeeded: false,
-      clarifyingQuestion: null,
+      clarificationNeeded: unknownCheck.clarifyingQuestion !== undefined,
+      clarifyingQuestion: unknownCheck.clarifyingQuestion ?? null,
       modeUsed: 'deterministic',
       providerUsed: 'deterministic',
       modelUsed: 'flowiq-deterministic-v2.0',
@@ -121,6 +329,41 @@ export async function askFlowIqCopilot(
         qRecord.result_schema,
       ),
     };
+  }
+
+  // FIQ-TOOLS-1: calc tools the planner has no measure for (revenue).
+  const routed = routeToolQuestion(question, store);
+  if (routed) {
+    const envelope: AnswerEnvelope = { id: qRecord.id, answer: routed.answer, result: routed.result, citations: [...routed.citations] };
+    return {
+      envelope, toolCalls, clarificationNeeded: false, clarifyingQuestion: null,
+      modeUsed: 'deterministic', providerUsed: 'deterministic', modelUsed: 'flowiq-deterministic-v2.0', llmFallbackReason: null,
+      verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+    };
+  }
+
+  // L2 model layer: decomposed sub-questions that can only add a refusal to
+  // the deterministic check above. Off unless FLOWIQ_FRAME_MODEL is set.
+  const frameCfg = frameModelConfig();
+  let frameFallback: string | null = null;
+  if (frameCfg || process.env.FLOWIQ_FRAME_MODEL) {
+    const frame = await classifyFrame(question);
+    frameFallback = frame.fallbackReason;
+    if (frame.refuse && frame.answers) {
+      const envelope: AnswerEnvelope = { id: qRecord.id, ...frameRefusal(frame.answers.group) };
+      return {
+        frameAnswers: { group: frame.answers.group, treatment: frame.answers.treatment },
+        envelope,
+        toolCalls,
+        clarificationNeeded: false,
+        clarifyingQuestion: null,
+        modeUsed: 'llm',
+        providerUsed: 'openrouter',
+        modelUsed: frameCfg?.model,
+        llmFallbackReason: null,
+        verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+      };
+    }
   }
 
   if (options.mode === 'llm' || options.provider || options.harness) {
@@ -135,7 +378,7 @@ export async function askFlowIqCopilot(
       return runDeterministicToolRouter(
         qRecord,
         store,
-        'No external LLM provider configured (set OLLAMA_HOST, LOCAL_LLM_BASE_URL, OPENROUTER_API_KEY, XAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY); used local compositional planner',
+        [frameFallback, 'No external LLM provider configured (set OLLAMA_HOST, LOCAL_LLM_BASE_URL, OPENROUTER_API_KEY, XAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY); used local compositional planner'].filter(Boolean).join('. '),
       );
     }
 
@@ -153,12 +396,119 @@ export async function askFlowIqCopilot(
         harnessRes.providerUsed === 'deterministic' ? 'deterministic' : 'llm',
       providerUsed: harnessRes.providerUsed,
       modelUsed: harnessRes.modelUsed,
-      llmFallbackReason: harnessRes.fallbackReason,
+      llmFallbackReason: harnessRes.fallbackReason ?? frameFallback,
       verification: harnessRes.verification,
     };
   }
 
-  return runDeterministicToolRouter(qRecord, store, null);
+  const parseCfg = options.parse === undefined ? parseConfigFromEnv() : options.parse;
+  if (parseCfg) return runModelParseRouter(qRecord, store, parseCfg, options.parseDeps, frameFallback);
+  return runDeterministicToolRouter(qRecord, store, frameFallback);
+}
+
+/**
+ * S2-L1: the model's TypedQuery runs only when it validates and covers the
+ * question. A query that leaves a word or a stated filter unbound becomes a
+ * clarify between typed readings; a model that is off, down, slow or off
+ * schema hands the turn to the deterministic parser, and the turn says so.
+ */
+export async function runModelParseRouter(
+  qRecord: QuestionRecord,
+  store: PortfolioStore,
+  cfg: ParseConfig,
+  deps: CopilotRunOptions['parseDeps'],
+  frameFallback: string | null = null,
+): Promise<CopilotTurnResult> {
+  const mp = await modelParse(qRecord.question, store, cfg, deps);
+  const det = runDeterministicToolRouter(qRecord, store, frameFallback);
+  const tag = (t: CopilotTurnResult, path: ModelParse['path'] = mp.path): CopilotTurnResult => {
+    const r = { ...t, parsePath: path, parseFallbackReason: mp.fallbackReason, parse: mp };
+    noteTurn(deps?.runStore, mp, r);
+    return r;
+  };
+  if (mp.path === 'deterministic') return tag(det);
+  const t = modelReadingTurn(qRecord, store, mp.intent, det, cfg.model, frameFallback);
+  return tag(t, t.parsePath);
+}
+
+/**
+ * The turn for a valid model reading, as a pure function of the question
+ * and that reading (coverage and the lexicon parse are recomputed), so the
+ * verifier can re-render a model clarify or "I don't know" byte for byte.
+ */
+export function modelReadingTurn(
+  qRecord: QuestionRecord,
+  store: PortfolioStore,
+  intent: ParsedQueryIntent,
+  det: CopilotTurnResult = runDeterministicToolRouter(qRecord, store),
+  model = 'model',
+  frameFallback: string | null = null,
+): CopilotTurnResult {
+  const deterministic = parseQueryIntent(qRecord.question, store);
+  const cov = coverage(qRecord.question, intent, deterministic, store);
+  const mp = { intent, deterministic, coverage: cov, path: cov.ok ? 'model' as const : 'model-clarify' as const };
+  const cfg = { model };
+  const tag = (t: CopilotTurnResult, path: ModelParse['path'] = mp.path): CopilotTurnResult => ({ ...t, parsePath: path });
+  const isAnswer = (r: Record<string, unknown>) => r.unknown !== true && r.refused !== true && r.clarification_needed !== true;
+  if (mp.path === 'model') {
+    const out = closedVocabulary(executeCompositionalPlan(qRecord, store, { intent: mp.intent }), qRecord, store);
+    if (isAnswer(out.envelope.result as Record<string, unknown>)) {
+      return tag({ ...out, restatement: restate(mp.intent, qRecord.question, store), modeUsed: 'llm', providerUsed: 'local_openai', modelUsed: cfg.model, llmFallbackReason: frameFallback });
+    }
+    return tag(det, 'deterministic');
+  }
+  // model-clarify: model and lexicon disagree, or a word is unbound.
+  if (!isAnswer(det.envelope.result as Record<string, unknown>)) return tag(det);
+  // A model that only drops filters the lexicon bound from the question's
+  // words, adds filters no word states, or differs in fields the computation does not read (the reading
+  // restates the same), has not offered another reading; it failed to read
+  // the whole question. That is a model failure: the turn is the model-off turn.
+  if (mp.coverage.unbound.every((u) => u.includes(':'))) {
+    const filled = { ...mp.intent } as Record<string, unknown>;
+    const d0 = mp.deterministic as unknown as Record<string, unknown>;
+    // Every word is bound here, so a field the model sets that the lexicon
+    // left unset has no word behind it (unstated): an invented constraint.
+    for (const u of mp.coverage.unbound) {
+      const [k, how] = u.split(':');
+      if (how === 'dropped') filled[k] = d0[k];
+      if (how === 'unstated') delete filled[k];
+    }
+    if (restate(filled as unknown as ParsedQueryIntent, qRecord.question, store) === restate(mp.deterministic, qRecord.question, store)) return tag(det, 'deterministic');
+  }
+  const options: ClarifyOption[] = [
+    { label: restate(mp.deterministic, qRecord.question, store).replace(/^I computed: /, ''), question: qRecord.question, query: mp.deterministic },
+  ];
+  const mq = canonicalQuestion(mp.intent);
+  if (mq !== null && mq !== qRecord.question) options.push({ label: restate(mp.intent, mq, store).replace(/^I computed: /, ''), question: mq, query: mp.intent });
+  // A model reading that cannot be put as a distinct question offers the user
+  // nothing to choose: that is a model failure, so the turn is the model-off
+  // turn rather than a dead end over a valid lexicon answer.
+  if (options.length < 2) return tag(det, 'deterministic');
+  const restatement = `I could not bind ${mp.coverage.unbound.join(', ')}. I read: ${restate(mp.deterministic, qRecord.question, store).replace(/^I computed: /, '')}`;
+  const envelope: AnswerEnvelope = options.length >= 2
+    ? { id: qRecord.id, answer: `I am not sure which question you mean. Did you mean: ${options.map((o, k) => `(${k + 1}) ${o.label}`).join('; ')}?`, result: { unknown: true, clarification_needed: true }, citations: [] }
+    : { id: qRecord.id, answer: `I don't know — ${restatement}`, result: { unknown: true }, citations: [] };
+  return tag({
+    envelope, toolCalls: [], clarificationNeeded: options.length >= 2, clarifyingQuestion: options.length >= 2 ? options.map((o) => o.question).join(' / ') : null,
+    ...(options.length >= 2 ? { clarifyOptions: options } : {}), restatement,
+    modeUsed: 'llm', providerUsed: 'local_openai', modelUsed: cfg.model, llmFallbackReason: frameFallback,
+    verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+  });
+}
+
+// A negated status has no single-status field; the restatement must not
+// claim the inverted status was read.
+function negationNote(question: string): string {
+  const neg = unboundNegators(question);
+  return neg.length ? ` (${neg.map((w) => `"${w}"`).join(', ')} has no field: a typed query holds a status or a status set, never a negation)` : '';
+}
+function stripStatusIfNegated(i: ParsedQueryIntent, question: string): ParsedQueryIntent {
+  return unboundNegators(question).length ? { ...i, unitStatus: undefined } : i;
+}
+
+function noteTurn(runs: RunStore | null | undefined, mp: ModelParse, t: CopilotTurnResult): void {
+  if (!runs || !mp.runKey) return;
+  runs.append({ type: 'turn', key: mp.runKey, ts: new Date().toISOString(), path: t.parsePath, clarify_options: (t.clarifyOptions ?? []).map((o) => o.question), answer_hash: hashOf({ answer: t.envelope.answer, result: t.envelope.result }) });
 }
 
 export function runDeterministicToolRouter(
@@ -166,12 +516,266 @@ export function runDeterministicToolRouter(
   store: PortfolioStore,
   llmFallbackReason: string | null = null,
 ): CopilotTurnResult {
-  const out = executeCompositionalPlan(qRecord, store);
+  const out = closedVocabulary(executeCompositionalPlan(qRecord, store), qRecord, store);
+  const r = out.envelope.result as Record<string, unknown>;
+  const answered = r.unknown !== true && r.refused !== true && r.clarification_needed !== true;
+  const offered = answered || r.refused === true ? [] : out.clarifyOptions ?? periodClarify(qRecord.question, store) ?? unitClarify(qRecord.question, store).clarifyOptions ?? [];
+  const opts = wellFormedOptions(offered, qRecord, store);
   return {
-    ...out,
+    ...withClarify(out, opts, qRecord, store),
+    ...(answered
+      ? { restatement: restate(parseQueryIntent(qRecord.question, store), qRecord.question, store) }
+      : opts.length > 0
+        ? { restatement: `I could not bind every word${negationNote(qRecord.question)}. I read: ${restate(stripStatusIfNegated(parseQueryIntent(qRecord.question, store), qRecord.question), qRecord.question, store).replace(/^I computed: /, '')}` }
+        : r.refused === true ? {}
+          // A dead end still says what was read, so the user can rephrase.
+          : { restatement: `I did not answer${negationNote(qRecord.question)}. I read: ${restate(stripStatusIfNegated(parseQueryIntent(qRecord.question, store), qRecord.question), qRecord.question, store).replace(/^I computed: /, '')}` }),
     modeUsed: 'deterministic',
     providerUsed: 'deterministic',
     modelUsed: 'flowiq-deterministic-v2.0',
     llmFallbackReason,
   };
+}
+
+/**
+ * Clarify options are well-formed (S1R F-077): each carries a non-empty
+ * question, no two are the same, and each one FlowIQ runs to an answer, so
+ * one click never lands on another unknown. A reading that fails is dropped.
+ */
+export function wellFormedOptions(options: readonly ClarifyOption[], qRecord: QuestionRecord, store: PortfolioStore): ClarifyOption[] {
+  const seen = new Set<string>();
+  // A reading keeps the measure the question asks for (S2-CL): a count in
+  // place of an average is a different question.
+  const asked = parseQueryIntent(qRecord.question, store).measure;
+  return options.filter((o) => {
+    if (asked !== 'unsupported' && o.query && o.query.measure !== asked) return false;
+    const q = o.question.trim();
+    if (q.length === 0 || o.label.trim().length === 0 || seen.has(q.toLowerCase()) || q === qRecord.question.trim()) return false;
+    const res = closedVocabulary(executeCompositionalPlan({ ...qRecord, question: q }, store), { ...qRecord, question: q }, store).envelope.result as Record<string, unknown>;
+    if (res.unknown === true || res.refused === true || res.clarification_needed === true) return false;
+    // FIX-BEND-FLOWIQ-001: mark seen only once kept, so a rejected duplicate cannot block a valid one.
+    seen.add(q.toLowerCase());
+    return true;
+  }).slice(0, 4);
+}
+
+/** Options offered means clarification_needed is true, in the result and on the turn; none offered means none claimed. */
+function withClarify(
+  out: ReturnType<typeof executeCompositionalPlan>,
+  options: ClarifyOption[],
+  qRecord: QuestionRecord,
+  store: PortfolioStore,
+): ReturnType<typeof executeCompositionalPlan> {
+  const r = out.envelope.result as Record<string, unknown>;
+  if (options.length === 0) {
+    const { clarifyOptions: _drop, ...rest } = out;
+    return rest;
+  }
+  const head = out.envelope.answer.replace(/\s*Did you mean:[\s\S]*$/, '').trim();
+  const envelope: AnswerEnvelope = {
+    ...out.envelope,
+    answer: `${head} Did you mean: ${options.map((o, k) => `(${k + 1}) ${o.label}`).join('; ')}?`,
+    result: { ...r, unknown: true, clarification_needed: true },
+  };
+  return {
+    ...out,
+    envelope,
+    clarifyOptions: options,
+    clarificationNeeded: true,
+    clarifyingQuestion: out.clarifyingQuestion ?? options.map((o) => o.question).join(' / '),
+    verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema),
+  };
+}
+
+/**
+ * A period referred to but not named ("for the period") gets one typed
+ * reading per date window FlowIQ knows, each the user's question with that
+ * window named; wellFormedOptions keeps only the ones that answer.
+ */
+function periodClarify(question: string, store: PortfolioStore): ClarifyOption[] | undefined {
+  const m = UNSPECIFIED_PERIOD_RE.exec(question);
+  if (!m || parseQueryIntent(question, store).dateExplicit) return undefined;
+  return Object.values(DATE_WINDOWS).map((w) => {
+    const named = w.label.replace(/\s*\(.*\)$/, '');
+    // The phrase and its preposition become "in <window>", the form every window parses from.
+    const q = `${question.slice(0, m.index)} in ${named}${question.slice(m.index + m[0].length)}`.replace(/\s+/g, ' ').replace(/\s+([?.!,])/g, '$1').trim();
+    const query = parseQueryIntent(q, store);
+    return { label: `${named}: ${restate(query, q, store).replace(/^I computed: /, '').replace(/\.$/, '')}`, question: q, query };
+  });
+}
+
+/** A unit question left unknown by words no filter binds gets typed readings, not a dead end. */
+function unitClarify(question: string, store: PortfolioStore): { clarifyOptions?: readonly ClarifyOption[] } {
+  if (parseQueryIntent(question, store).domain !== 'units') return {};
+  const unbound = unresolvedUnitWords(question, store).filter((w) => /^\p{L}/u.test(w));
+  return unbound.length > 0 ? { clarifyOptions: clarifyOptions(question, unbound, store) } : {};
+}
+
+/**
+ * "at FY" binds the alias FY to its property; the answer says so, so a
+ * reader who meant a fiscal year sees the property figure for what it is.
+ */
+function namedAlias(out: ReturnType<typeof executeCompositionalPlan>, question: string, store: PortfolioStore): ReturnType<typeof executeCompositionalPlan> {
+  const masked = maskFiscalTokens(question);
+  if (!LOCATIVE_FY_RE.test(masked)) return out;
+  const fy = store.properties.find((p) => p.aka.some((a) => /^f\.?y\.?$/i.test(a.trim())));
+  if (!fy || out.envelope.answer.includes(`${fy.name} (${fy.propertyId})`)) return out;
+  // The note names the property the figure is for, so it is added only when that is FY alone.
+  const ids = resolvePropertiesFromText(store, question).matched.map((p) => p.propertyId);
+  if (ids.length !== 1 || ids[0] !== fy.propertyId) return out;
+  const envelope: AnswerEnvelope = { ...out.envelope, answer: `Reading "FY" as the property ${fy.name} (${fy.propertyId}), not a fiscal year: ${out.envelope.answer}` };
+  return { ...out, envelope };
+}
+
+/**
+ * L1 closed grammar: an answer stands only if every word of the question has a
+ * meaning. Refusals, unknowns and clarifications pass through untouched.
+ */
+function closedVocabulary(
+  out: ReturnType<typeof executeCompositionalPlan>,
+  qRecord: QuestionRecord,
+  store: PortfolioStore,
+): ReturnType<typeof executeCompositionalPlan> {
+  const r = out.envelope.result as Record<string, unknown>;
+  // A leftover-word refusal still lets an unknown word clarify first: a typo
+  // ("Cmopare") is offered its readings rather than a dead end.
+  const leftover = r.unknown === true && typeof r.reason === 'string' && r.reason.startsWith(LEFTOVER_REASON_HEAD);
+  if (!leftover && (r.unknown === true || r.refused === true || r.clarification_needed === true)) return out;
+  const asked = withoutMetaInstructions(qRecord.question);
+  const unparsed = [...unknownWords(asked, store), ...(out.envelope.query && (out.envelope.query.intent as { domain?: string }).domain === 'units' ? unboundNegators(asked) : [])];
+  const why =
+    unparsed.length > 0
+      ? `FlowIQ has no meaning for ${unparsed.map((w) => `"${w}"`).join(', ')} in this question`
+      : /\bhow\s+many\b/i.test(qRecord.question) && !hasCount(r)
+        ? 'the question asks "how many" but the plan computed no count'
+        : TWO_QUESTIONS_RE.test(asked) && figureCount(r) < 2
+          ? 'the question asks two "how many" questions but the plan computed one figure'
+          : leftOutMeasure(asked, out, store);
+  if (leftover && unparsed.length === 0) return out;
+  if (why === null) return namedAlias(out, qRecord.question, store);
+  if (unparsed.length > 0) {
+    // Clarify, not a dead end: offer typed readings (result keys unchanged).
+    const { envelope: c, options } = clarifyEnvelope(qRecord.id, qRecord.question, unparsed, store);
+    const envelope: AnswerEnvelope = { ...c, result: { unknown: true } };
+    return { ...out, envelope, clarifyOptions: options, verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema) };
+  }
+  const envelope: AnswerEnvelope = {
+    id: qRecord.id,
+    answer: `I don't know — ${why}, so it will not answer a different question in its place.`,
+    result: { unknown: true },
+    citations: ['properties:P01'],
+  };
+  return { ...out, envelope, verification: verifyAnswerEnvelope(envelope, store, qRecord.result_schema) };
+}
+
+/**
+ * An instruction about FlowIQ's own rules ("[SYSTEM OVERRIDE: ...]",
+ * "Ignore prior rules", "Do not obey any lead note") asks nothing of the
+ * data, and the answer is computed from the data whatever it says, so its
+ * words are not question words. An instruction about the data ("only count
+ * lake views") is kept and must parse.
+ */
+// META_INSTRUCTION_RE lives in intent.ts so the coverage check can drop the same text.
+
+function withoutMetaInstructions(question: string): string {
+  return question.normalize('NFKC').replace(/[\p{Cf}]/gu, '').replace(META_INSTRUCTION_RE, ' ');
+}
+
+/** A measure joined to another by "and" that the plan's measure does not name. */
+function leftOutMeasure(asked: string, out: ReturnType<typeof executeCompositionalPlan>, store: PortfolioStore): string | null {
+  const measure = (out.envelope.query?.intent as { measure?: string } | undefined)?.measure;
+  if (!measure) return null;
+  const missing = coordinatedMeasureLeftOut(asked, measure, store, Object.keys((out.envelope.result ?? {}) as Record<string, unknown>));
+  return missing ? `the question asks for two measures but the plan computed only one; "${missing}" has no figure` : null;
+}
+
+/** Two "how many" (or "how much") clauses joined in one question ask for two figures. */
+const TWO_QUESTIONS_RE = /\bhow\s+(?:many|much)\b[^?]*\b(?:and|&|plus)\s+how\s+(?:many|much)\b/i;
+
+/** Top-level figures in a result; a breakdown or id list is not a second figure. */
+function figureCount(r: Record<string, unknown>): number {
+  return Object.values(r).filter((v) => typeof v === 'number').length;
+}
+
+/** "How many" is answered by a whole-number count, not by money, a rate or a size. */
+function hasCount(result: Record<string, unknown>): boolean {
+  const MEASURE = /usd|percent|rate|sqft|rent|share|mean|avg|average|posterior|delta/i;
+  const walk = (v: unknown, key: string): boolean =>
+    typeof v === 'number'
+      ? Number.isInteger(v) && !MEASURE.test(key)
+      : v !== null && typeof v === 'object' && Object.entries(v).some(([k, x]) => walk(x, Array.isArray(v) ? key : k));
+  return walk(result, '');
+}
+
+function sessionRefusal(session: FairHousingSession | undefined, question: string) {
+  if (!session?.refusedEarlier) return null;
+  // Only a turn that points back at the people or carries on from the
+  // refused turn inherits it; a clean, self-contained question is answered.
+  if (!refersBackToPeople(question) && !continuesPreviousTurn(question)) return null;
+  return {
+    refused: true,
+    reason:
+      'Refused: earlier in this conversation I refused a request to treat a group of people differently, and this refers back to those people. I can answer the same question without them, for example "How many studios are vacant at Kedzie Works?".',
+    citations: [] as never[],
+  };
+}
+
+const OWN_DATA_ACTION = /\b(?:upload|import|connect|integrate|hook\s+up|link|sync|plug\s+in|add|load|bring)\b/i;
+const OWN_DATA_OBJECT = /\b(?:rent\s*roll|yardi|realpage|entrata|appfolio|buildium|resman|mri|pms|crm|spreadsheet|csv|excel|my\s+(?:own\s+)?(?:data|portfolio|propert(?:y|ies)|buildings?|units?|file))\b/i;
+
+/** F-TSC-1: a question that explicitly asks about uploading. */
+// F-TSC2-1 (Tau): connect, import and sign-up asks get the same handling.
+export const EXPLICIT_UPLOAD = /\b(?:upload(?:s|ed|ing)?|connect(?:s|ed|ing)?|import(?:s|ed|ing)?|sign\s*up|create\s+an?\s+account)\b/i;
+
+/** F-TSC-1: one short line of what the demo can do, appended after the demo-only reply. */
+export function capabilityLine(): string {
+  return 'What you can do here: ask about vacancy, leases and renewals, leads and cost per lead by source, and marketing spend across the demo buildings. More at /help.';
+}
+
+/** FLOWIQ-SITE-005: the demo-only reply for own-data / upload / connect asks, or null. */
+export function demoOnlyReply(question: string, store: PortfolioStore): string | null {
+  const ownData = (OWN_DATA_ACTION.test(question) && OWN_DATA_OBJECT.test(question))
+    || /\bmy\s+(?:own\s+)?(?:data|portfolio|buildings?)\b/i.test(question)
+    || /\bhere\s+(?:is|are)\s+my\b/i.test(question)
+    || /\b(?:sign\s*up|create\s+an?\s+account|log\s*in)\b/i.test(question);
+  if (!ownData) return null;
+  const operating = new Set(store.operatingProperties.map((p) => p.propertyId));
+  const units = store.units.filter((u) => operating.has(u.propertyId)).length;
+  return `This is a demo. FlowIQ here answers questions over a fixed demo portfolio: ${store.operatingProperties.length} buildings, ${units.toLocaleString('en-US')} units, data as of ${store.policy.asOfDate}. You can't upload a rent roll, connect a PMS such as Yardi, sign up, or add your own buildings on this site, and your data isn't uploaded here. Want this on your portfolio? Use the Contact link in the demo banner. Buildings you can ask about: ${store.operatingProperties.map((p) => p.name).join(', ')}.`;
+}
+
+const CAPABILITY_QUESTION = [
+  /^\s*(?:hi|hello|hey)?[\s,!.]*(?:what|which)\s+(?:data|information|info)\s+(?:do\s+you\s+have|is\s+(?:in\s+)?(?:here|this))\b/i,
+  /\bwhat\s+can\s+(?:you|i|flowiq)\s+(?:do|ask)\b/i,
+  /\bwhat\s+(?:buildings|properties)\s+(?:are\s+(?:in\s+)?(?:here|there|this)|do\s+you\s+have)\b/i,
+  /\bhow\s+(?:current|recent|fresh|up[-\s]to[-\s]date|old)\s+is\s+(?:this|the)\s+data\b/i,
+  /\bwhere\s+do\s+i\s+start\b|\bhow\s+do\s+i\s+(?:start|use\s+this)\b|^\s*help\s*[?!.]*\s*$/i,
+  /\bis\s+this\s+(?:my\s+data|real(?:\s+data)?|a\s+demo)\b/i,
+];
+
+/** The data domains FlowIQ reads, each named by the export file it comes from. */
+export function dataDomains(store: PortfolioStore): string[] {
+  return [
+    `properties and units (PMS: data/pms/properties.csv, data/pms/units.csv; ${store.units.length.toLocaleString('en-US')} unit rows)`,
+    `leases and renewals (PMS: data/pms/leases.csv; ${store.leases.length.toLocaleString('en-US')} leases)`,
+    `leads, tours, applications and signed leases by source (CRM: data/crm/leads.csv; ${store.leads.length.toLocaleString('en-US')} leads)`,
+    `marketing spend by source (ILS ad billing: data/ils/spend.csv; ${store.spend.length.toLocaleString('en-US')} rows)`,
+    `past budget decisions (data/ops/decisions.csv; ${store.decisions.length.toLocaleString('en-US')} rows)`,
+  ];
+}
+
+export const EXAMPLE_QUESTIONS = [
+  'How many vacant units are at Kedzie Works?',
+  'Which source has the highest cost per lead in Q3 2026?',
+  'What was total marketing spend in Q2 2026?',
+  'How many leases expire at Kedzie Works in 9/2026?',
+];
+
+/** FLOWIQ-SITE-007: orientation answer for first-visit questions, or null. */
+export function capabilityReply(question: string, store: PortfolioStore): string | null {
+  if (!CAPABILITY_QUESTION.some((re) => re.test(question))) return null;
+  const operating = new Set(store.operatingProperties.map((p) => p.propertyId));
+  const units = store.units.filter((u) => operating.has(u.propertyId)).length;
+  const buildings = store.operatingProperties.map((p) => `${p.name} [${p.propertyId}]`).join(', ');
+  return `This is a demo portfolio, not your data. It has ${store.operatingProperties.length} operating buildings (${buildings}) with ${units.toLocaleString('en-US')} units, and the data is as of ${store.policy.asOfDate}. FlowIQ answers questions over these exports: ${dataDomains(store).join('; ')}. Every figure cites the rows it came from. Try: ${EXAMPLE_QUESTIONS.map((q) => `"${q}"`).join(', ')}. More at /help.`;
 }

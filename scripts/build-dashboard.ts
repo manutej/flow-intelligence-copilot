@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { askFlowIqCopilot } from "../src/agent/copilot.ts";
+import { applyDemoBanner } from "./demo-banner.ts";
 import { MODEL_PROVIDER_PROFILES } from "../src/agent/model-harness.ts";
 import {
   DISCOVERED_EASTER_EGGS,
@@ -10,7 +12,6 @@ import {
   loadPortfolioStore,
   loadQuestionsFile,
 } from "../src/data/loader.ts";
-import { evaluateBudgetDecisionsAndLearn } from "../src/domain/learner.ts";
 import {
   queryDataQualityAudit,
   queryLeasesAndRenewals,
@@ -228,7 +229,6 @@ export async function buildOrmusDashboard(): Promise<void> {
     period: "APR_SEP_2026",
     paidOnly: false,
   });
-  const learner = evaluateBudgetDecisionsAndLearn(store);
   const dataQuality = queryDataQualityAudit(store);
 
   const swarmTracePath = path.join(repoRoot, ".toq", "flow-copilot", "temporal-llm-swarm-trace.json");
@@ -302,13 +302,6 @@ export async function buildOrmusDashboard(): Promise<void> {
       bySource: marketing.bySource,
       deadSpendReallocation: marketing.deadSpendReallocation,
     },
-    learnerSummary: {
-      priorAlpha0: learner.priorAlpha0,
-      priorBeta0Usd: learner.priorBeta0Usd,
-      windowInvarianceVerified: learner.windowInvarianceVerified,
-      evaluatedDecisions: learner.evaluatedDecisions,
-      proposedNextDecisions: learner.proposedNextDecisions,
-    },
     dataQuality,
     properties: store.properties,
     voidSpend: store.voidSpend,
@@ -331,7 +324,7 @@ export async function buildOrmusDashboard(): Promise<void> {
   };
 
   const rawHtml = renderDashboardHtml(initialState);
-  const html = rawHtml
+  let html = rawHtml
     .replace(/Cellular Sheaf/gi, "Cross-Table Integrity")
     .replace(/cellular sheaf/gi, "cross-table integrity")
     .replace(/sheaves/gi, "integrity graphs")
@@ -347,6 +340,8 @@ export async function buildOrmusDashboard(): Promise<void> {
     .replace(/production-grade/gi, "audit-verified")
     .replace(/production-ready/gi, "audit-verified");
 
+  assertInlineScriptsParse(html);
+
   const publicDir = path.join(repoRoot, "public");
   const uiDir = path.join(repoRoot, "ui");
   fs.mkdirSync(publicDir, { recursive: true });
@@ -355,6 +350,8 @@ export async function buildOrmusDashboard(): Promise<void> {
   const publicIndexPath = path.join(publicDir, "index.html");
   const uiStudioPath = path.join(uiDir, "flowiq-visual-studio.html");
 
+  // FLOWIQ-SITE-005: demo banner (counts and as-of from the data).
+  html = applyDemoBanner(html, store);
   fs.writeFileSync(publicIndexPath, html, "utf-8");
   fs.writeFileSync(uiStudioPath, html, "utf-8");
 
@@ -389,4 +386,22 @@ if (isMain) {
     console.error(err);
     process.exit(1);
   });
+}
+
+// The jargon rewrite above runs over the whole page, scripts included. A
+// rewrite that lands in an identifier (e.g. "operadicRuns" -> "multi-hopRuns")
+// is a syntax error that silently kills every handler on the page, so refuse
+// to write a page whose inline scripts do not parse.
+export function assertInlineScriptsParse(html: string): void {
+  const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = re.exec(html))) {
+    try {
+      new vm.Script(m[1], { filename: `inline-script-${i}.js` });
+    } catch (err) {
+      throw new Error(`dashboard inline script ${i} does not parse: ${(err as Error).message}`);
+    }
+    i++;
+  }
 }

@@ -565,14 +565,14 @@ export async function runUniversalModelHarness(
       answer:
         unknownCheck.reason ??
         "I don't know — that field is not in the portfolio CSV exports.",
-      result: { unknown: true },
+      result: unknownCheck.clarifyingQuestion ? { unknown: true, clarification_needed: true } : { unknown: true },
       citations: unknownCheck.citations,
     };
     return {
       envelope,
       toolCalls: [],
-      clarificationNeeded: false,
-      clarifyingQuestion: null,
+      clarificationNeeded: unknownCheck.clarifyingQuestion !== undefined,
+      clarifyingQuestion: unknownCheck.clarifyingQuestion ?? null,
       providerUsed: config.provider,
       modelUsed: config.model,
       wireModeUsed: config.wireMode,
@@ -1045,6 +1045,8 @@ function finalizeAndVerifyModelResponse(
             ? parsed.result
             : deterministicReference.envelope.result,
         citations: mergedCitations,
+        // The model's figures are recomputed from the planner's typed query.
+        ...(deterministicReference.envelope.query ? { query: deterministicReference.envelope.query } : {}),
       };
 
       const verification = verifyAnswerEnvelope(
@@ -1092,6 +1094,7 @@ function finalizeAndVerifyModelResponse(
         answer: deterministicReference.envelope.answer,
         result: deterministicReference.envelope.result,
         citations: deterministicReference.envelope.citations,
+        query: deterministicReference.envelope.query,
       };
       const repairedVerification = verifyAnswerEnvelope(
         repairedEnvelope,

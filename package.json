@@ -29,6 +29,7 @@
     "eval:operadic": "node --no-warnings src/operadic-eval.ts",
     "dashboard": "node --no-warnings src/dashboard-server.ts",
     "eval:adversarial-meta": "node --no-warnings scripts/run-adversarial-meta.ts",
+    "test:fuzz": "node --no-warnings --test tests/fuzz/*.fuzz.test.ts",
     "test:harness": "node --no-warnings scripts/test-model-harness.ts",
     "workflow:sim": "node --no-warnings scripts/run-temporal-sim.ts",
     "workflow": "node --no-warnings src/cli.ts workflow",

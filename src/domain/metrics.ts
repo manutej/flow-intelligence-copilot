@@ -9,17 +9,28 @@ import type {
   UnitStatus,
 } from '../data/schema.ts';
 
+/** Exact value, or an inclusive range; an unset bound does not filter. */
+const inRange = (v: number, exact?: number, min?: number, max?: number) =>
+  (exact === undefined || v === exact) && (min === undefined || v >= min) && (max === undefined || v <= max);
+
 export interface UnitQueryFilter {
   readonly propertyIds?: readonly string[];
   readonly buildingClass?: string;
   readonly bedrooms?: number;
   readonly bathrooms?: number;
+  readonly bedroomsMin?: number;
+  readonly bedroomsMax?: number;
+  readonly bathroomsMin?: number;
+  readonly bathroomsMax?: number;
+  readonly rentMin?: number;
+  readonly rentMax?: number;
   readonly sqftMin?: number;
   readonly sqftMax?: number;
   readonly floorMin?: number;
   readonly floorMax?: number;
   readonly view?: string;
   readonly status?: UnitStatus;
+  readonly statusIn?: readonly UnitStatus[];
 }
 
 export interface PropertyUnitMetrics {
@@ -132,12 +143,9 @@ export function queryUnitsAndOccupancy(
           : 100.0;
 
     const filtered = propUnits.filter((u) => {
-      if (filter.bedrooms !== undefined && u.bedrooms !== filter.bedrooms) {
-        return false;
-      }
-      if (filter.bathrooms !== undefined && u.bathrooms !== filter.bathrooms) {
-        return false;
-      }
+      if (!inRange(u.bedrooms, filter.bedrooms, filter.bedroomsMin, filter.bedroomsMax)) return false;
+      if (!inRange(u.bathrooms, filter.bathrooms, filter.bathroomsMin, filter.bathroomsMax)) return false;
+      if (!inRange(u.marketRent, undefined, filter.rentMin, filter.rentMax)) return false;
       if (filter.sqftMin !== undefined && u.sqft < filter.sqftMin) {
         return false;
       }
@@ -157,6 +165,9 @@ export function queryUnitsAndOccupancy(
         return false;
       }
       if (filter.status !== undefined && u.status !== filter.status) {
+        return false;
+      }
+      if (filter.statusIn !== undefined && !filter.statusIn.includes(u.status)) {
         return false;
       }
       return true;
@@ -305,6 +316,10 @@ export interface LeaseQueryFilter {
   readonly buildingClass?: string;
   readonly bedrooms?: number;
   readonly bathrooms?: number;
+  readonly bedroomsMin?: number;
+  readonly bedroomsMax?: number;
+  readonly bathroomsMin?: number;
+  readonly bathroomsMax?: number;
   readonly view?: string;
   readonly floorMin?: number;
   readonly floorMax?: number;
@@ -332,6 +347,8 @@ export interface PropertyLeaseMetrics {
   readonly renewalRatePercent: number;
   readonly totalMonthlyRentUsd: number;
   readonly averageConcessionUsd: number;
+  /** Sum of concession_usd over the matching leases. */
+  readonly totalConcessionUsd: number;
   readonly citations: readonly CitationId[];
 }
 
@@ -346,6 +363,8 @@ export interface LeaseQuerySummary {
   readonly renewalRatePercent: number;
   readonly totalMonthlyRentUsd: number;
   readonly averageConcessionUsd: number;
+  /** Sum of concession_usd over the matching leases. */
+  readonly totalConcessionUsd: number;
   readonly byProperty: readonly PropertyLeaseMetrics[];
   readonly citations: readonly CitationId[];
 }
@@ -433,6 +452,10 @@ export function queryLeasesAndRenewals(
     if (
       filter.bedrooms !== undefined ||
       filter.bathrooms !== undefined ||
+      filter.bedroomsMin !== undefined ||
+      filter.bedroomsMax !== undefined ||
+      filter.bathroomsMin !== undefined ||
+      filter.bathroomsMax !== undefined ||
       filter.view !== undefined ||
       filter.floorMin !== undefined ||
       filter.floorMax !== undefined
@@ -441,15 +464,8 @@ export function queryLeasesAndRenewals(
       if (!unit) {
         return false;
       }
-      if (filter.bedrooms !== undefined && unit.bedrooms !== filter.bedrooms) {
-        return false;
-      }
-      if (
-        filter.bathrooms !== undefined &&
-        unit.bathrooms !== filter.bathrooms
-      ) {
-        return false;
-      }
+      if (!inRange(unit.bedrooms, filter.bedrooms, filter.bedroomsMin, filter.bedroomsMax)) return false;
+      if (!inRange(unit.bathrooms, filter.bathrooms, filter.bathroomsMin, filter.bathroomsMax)) return false;
       if (
         filter.view !== undefined &&
         unit.view.toLowerCase() !== filter.view.toLowerCase()
@@ -533,6 +549,7 @@ export function queryLeasesAndRenewals(
       renewalRatePercent,
       totalMonthlyRentUsd,
       averageConcessionUsd,
+      totalConcessionUsd: roundTo(propLeases.reduce((acc, l) => acc + l.concessionUsd, 0), 2),
       citations: propCitations,
     });
   }
@@ -578,6 +595,7 @@ export function queryLeasesAndRenewals(
     ),
     totalMonthlyRentUsd,
     averageConcessionUsd,
+    totalConcessionUsd: roundTo(allMatching.reduce((acc, l) => acc + l.concessionUsd, 0), 2),
     byProperty,
     citations: [...citations],
   };
@@ -720,6 +738,57 @@ function enumerateYearMonths(startMonth: string, endMonth: string): string[] {
   return result;
 }
 
+/** A period string that names no exact window; callers answer IDK, never a default window. */
+export class UnresolvedPeriodError extends Error {
+  readonly period: string;
+  constructor(period: string) {
+    super(`period "${period}" does not name an exact window (use e.g. "Q3 2026", "2026-08", "August 2026", "H1 2026")`);
+    this.period = period;
+    this.name = 'UnresolvedPeriodError';
+  }
+}
+
+const MONTH_INDEX: Readonly<Record<string, number>> = Object.fromEntries(
+  ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].map((m, i) => [m, i + 1]),
+);
+
+function spanWindow(label: string, y: number, m1: number, m2: number) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const last = new Date(Date.UTC(y, m2, 0)).getUTCDate();
+  const startDate = `${y}-${pad(m1)}-01`, endDate = `${y}-${pad(m2)}-${pad(last)}`;
+  const known = Object.values(DATE_WINDOWS).find((w) => w.startDate === startDate && w.endDate === endDate);
+  return known ?? { label, startDate, endDate, months: enumerateYearMonths(startDate.slice(0, 7), endDate.slice(0, 7)) };
+}
+
+/**
+ * The exact window a period string names, or undefined. A period is a
+ * DATE_WINDOWS key or label, a quarter or half with its year in either
+ * order, a month with its year, or YYYY-MM. Anything else (no year,
+ * relative words, free text) names no window.
+ */
+export function periodWindow(period: string): { label: string; startDate: string; endDate: string; months: readonly string[] } | undefined {
+  const p = period.trim().replace(/\s+/g, ' ');
+  const key = p.toUpperCase().replace(/[\s-]+/g, '_');
+  if (key in DATE_WINDOWS) return DATE_WINDOWS[key];
+  const byLabel = Object.values(DATE_WINDOWS).find((w) => w.label.toLowerCase() === p.toLowerCase() || w.label.replace(/\s*\(.*\)$/, '').toLowerCase() === p.toLowerCase());
+  if (byLabel) return byLabel;
+  const part = p.match(/^(?:([qh])([1-4])[\s_-]?(\d{4})|(\d{4})[\s_-]?([qh])([1-4]))$/i);
+  if (part) {
+    const kind = (part[1] ?? part[5]).toLowerCase(), n = Number(part[2] ?? part[6]), y = Number(part[3] ?? part[4]);
+    if (kind === 'h' && n > 2) return undefined;
+    const [m1, m2] = kind === 'q' ? [3 * n - 2, 3 * n] : [6 * n - 5, 6 * n];
+    return spanWindow(`${kind.toUpperCase()}${n} ${y}`, y, m1, m2);
+  }
+  const ym = p.match(/^(\d{4})-(\d{2})$/);
+  if (ym && Number(ym[2]) >= 1 && Number(ym[2]) <= 12) return spanWindow(p, Number(ym[1]), Number(ym[2]), Number(ym[2]));
+  const named = p.match(/^([a-z]{3,9})\.? (\d{4})$/i);
+  const mi = named ? MONTH_INDEX[named[1].slice(0, 3).toLowerCase()] : undefined;
+  if (named && mi && /^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)$/i.test(named[1])) {
+    return spanWindow(`${named[1][0].toUpperCase()}${named[1].slice(1).toLowerCase()} ${named[2]}`, Number(named[2]), mi, mi);
+  }
+  return undefined;
+}
+
 export function resolveDateWindow(filter: MarketingQueryFilter): {
   label: string;
   startDate: string;
@@ -730,57 +799,35 @@ export function resolveDateWindow(filter: MarketingQueryFilter): {
     const startMonth = filter.startDate.slice(0, 7);
     const endMonth = filter.endDate.slice(0, 7);
     const months = enumerateYearMonths(startMonth, endMonth);
+    const base = `${filter.startDate} to ${filter.endDate}`;
     return {
-      label: `${filter.startDate} to ${filter.endDate}`,
+      // A caller label is kept only when it is this same window plus a note (M-9 partial).
+      label: filter.period && filter.period.startsWith(base) ? filter.period : base,
       startDate: filter.startDate,
       endDate: filter.endDate,
       months,
     };
   }
   if (filter.period) {
-    const p = filter.period.trim();
-    const upperKey = p.toUpperCase().replace(/[\s-]+/g, '_');
-    if (upperKey in DATE_WINDOWS) {
-      return DATE_WINDOWS[upperKey];
-    }
-    if (/^q2\b/i.test(p) || /apr(il)?\s*(to|-|–)\s*jun(e)?/i.test(p)) {
-      return DATE_WINDOWS.Q2_2026;
-    }
-    if (/^q3\b/i.test(p) || /jul(y)?\s*(to|-|–)\s*sep(tember)?/i.test(p)) {
-      return DATE_WINDOWS.Q3_2026;
-    }
-    if (/^q4\b/i.test(p)) {
-      return DATE_WINDOWS.Q4_2026;
-    }
-    if (/^h1\b/i.test(p) || /first\s+half/i.test(p)) {
-      return DATE_WINDOWS.H1_2026;
-    }
-    if (/^q1\s*2027\b/i.test(p)) {
-      return DATE_WINDOWS.Q1_2027;
-    }
-    const monthMatch = p.match(/^(\d{4})-(\d{2})$/);
-    if (monthMatch) {
-      const ym = `${monthMatch[1]}-${monthMatch[2]}`;
-      const matchWin = Object.values(DATE_WINDOWS).find(
-        (w) => w.months.length === 1 && w.months[0] === ym,
-      );
-      if (matchWin) {
-        return matchWin;
-      }
-      return {
-        label: ym,
-        startDate: `${ym}-01`,
-        endDate: `${ym}-31`,
-        months: [ym],
-      };
-    }
-    for (const win of Object.values(DATE_WINDOWS)) {
-      if (win.label.toLowerCase() === p.toLowerCase()) {
-        return win;
-      }
-    }
+    const win = periodWindow(filter.period);
+    if (!win) throw new UnresolvedPeriodError(filter.period);
+    return win;
   }
   return DATE_WINDOWS.APR_SEP_2026;
+}
+
+/**
+ * A window that runs past the first or last month of marketing data (H1 or
+ * H2 of a year the data only partly covers) says so, so the label does not
+ * claim months it has no rows for. No digits, so figures keep their order.
+ */
+function dataEdgeNote(store: PortfolioStore, months: readonly string[]): string {
+  const have = [...new Set(store.spend.map((s) => s.month))].sort();
+  if (have.length === 0 || months.length === 0) return '';
+  const before = months.some((m) => m < have[0]);
+  const after = months.some((m) => m > have[have.length - 1]);
+  if (!before && !after) return '';
+  return ` (${before && after ? 'months outside the data have' : before ? 'months before the data starts have' : 'months after the data ends have'} no rows)`;
 }
 
 export function queryMarketingSpendAndFunnel(
@@ -1256,7 +1303,7 @@ export function queryMarketingSpendAndFunnel(
   }
 
   return {
-    windowLabel: windowSpec.label,
+    windowLabel: windowSpec.label + dataEdgeNote(store, windowSpec.months),
     startDate: windowSpec.startDate,
     endDate: windowSpec.endDate,
     months: windowSpec.months,

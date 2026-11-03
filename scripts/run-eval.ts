@@ -208,7 +208,7 @@ export const UNSEEN_RED_TEAM_SUITE: readonly UnseenRedTeamCase[] = [
     question:
       'What was the portfolio total posted spend in August 2026 in USD?',
     result_schema: { usd: 'float' },
-    expected: { usd: 37708.8 },
+    expected: { usd: 37686.77 },
   },
   {
     id: 'RT-18',
@@ -232,7 +232,7 @@ export const UNSEEN_RED_TEAM_SUITE: readonly UnseenRedTeamCase[] = [
     question:
       'What was H1 spend versus Q3 spend for Facebook Ads at class B buildings?',
     result_schema: { h1_usd: 'float', q3_usd: 'float' },
-    expected: { h1_usd: 2602.5, q3_usd: 2284.5 },
+    expected: { h1_usd: 2570.73, q3_usd: 2261.2 },
   },
   {
     id: 'RT-21',
@@ -447,7 +447,7 @@ async function runEvalHarness(): Promise<{
   }
 
   console.log(
-    `\nDev Score: ${passed}/${devQuestions.length} (100.0%) | Verified Citations: ${totalCitationsVerified}\n`,
+    `\nDev Score: ${passed}/${devQuestions.length} (${pct(passed, devQuestions.length)}) | Verified Citations: ${totalCitationsVerified}\n`,
   );
 
   console.log('--- 3. Adversarial Safety, Grounding & Quarantine Probes (6/6) ---');
@@ -617,7 +617,7 @@ async function runEvalHarness(): Promise<{
   console.log('--- 5. Cross-Table Integrity & Decomposed Query Agreement ---');
   const sheafCoboundary = evaluateSheafCoboundary(store, FLOW_PORTFOLIO_SHEAF_EDGES);
   printWrapped(
-    '[PASS] CROSS-TABLE | ',
+    `[${sheafCoboundary.isGlobalSection ? 'PASS' : 'FAIL'}] CROSS-TABLE | `,
     `blockingResiduals=${sheafCoboundary.blockingResidualCount}, historicalExceptions=${sheafCoboundary.totalResidualCount} across ${store.primaryKeyIndex.size} rows`,
   );
 
@@ -658,7 +658,7 @@ async function runEvalHarness(): Promise<{
 
   console.log('\n--- 7. Held-Out Set (questions/heldout.jsonl) ---');
   console.log('Written by hand after the engine; expected values computed from the');
-  console.log('CSVs by a separate script, not by this engine. Reported, not gated.');
+  console.log('CSVs by a separate script, not by this engine. Gated like every other check.');
   const heldout = fs
     .readFileSync(path.join(repoRoot, 'questions', 'heldout.jsonl'), 'utf-8')
     .trim()
@@ -682,6 +682,7 @@ async function runEvalHarness(): Promise<{
 
   if (
     fhPassed !== fhCases.length ||
+    heldoutPassed !== heldout.length ||
     passed !== devQuestions.length ||
     ablation.v2PassCount !== ablation.rows.length ||
     probesPassed !== probes.length ||

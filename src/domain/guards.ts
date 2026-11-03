@@ -1,10 +1,15 @@
+import { envelopeErrors, nonAnswerErrors } from '../agent/envelope.ts';
+import { ILS_UNKNOWN_REASON } from '../tools/spend-by-channel.ts';
+import { declineUnsupported } from '../tools/router.ts';
+const ILS_GROUP_RE = /\bILS(?:es)?\b|\blisting (?:sites?|services?|portals?)\b|\binternet listing services?\b/i;
 import type {
   AnswerEnvelope,
   CitationId,
   PortfolioStore,
 } from '../data/schema.ts';
-import { classifyFairHousingRequest } from './fair-housing.ts';
+import { classifyFairHousingRequest, isVoucherQuestion } from './fair-housing.ts';
 import { resolvePropertiesFromText } from './resolver.ts';
+import { BARE_FISCAL_RE, BARE_FY_RE, CALENDAR_PERIOD_RE, FISCAL_TOKEN_RE, LOCATIVE_FY_RE, maskFiscalTokens, spellCalendarYear } from './fiscal.ts';
 
 export interface FairHousingCheckResult {
   readonly refused: boolean;
@@ -19,6 +24,8 @@ export interface UnknownDataCheckResult {
   readonly missingCategory: string | null;
   readonly reason: string | null;
   readonly citations: readonly CitationId[];
+  /** Set when the non-answer is a clarification: the question to ask back. */
+  readonly clarifyingQuestion?: string;
 }
 
 /**
@@ -41,6 +48,17 @@ export function checkFairHousingGuard(
 
   const classification = classifyFairHousingRequest(question);
   const matchedRules = classification.classes;
+  if (!classification.refused && isVoucherQuestion(question)) {
+    // HIGH-1 (TENACITY 2026-10-31): any voucher / HCV / Section 8 question is
+    // refused, even a neutral one, so no reply ranks or filters by it.
+    return {
+      refused: true,
+      protectedClass: 'source of income',
+      legalBasis: 'Chicago Human Rights Ordinance and Illinois Human Rights Act',
+      reason: 'Refused: I do not answer questions about housing vouchers (Section 8 / Housing Choice Vouchers). Source of income is a protected class under the Chicago Human Rights Ordinance and the Illinois Human Rights Act, and the portfolio exports do not record it. I can help with the same question asked about all applicants.',
+      citations: [],
+    };
+  }
   if (!classification.refused) {
     return {
       refused: false,
@@ -65,7 +83,10 @@ export function checkFairHousingGuard(
       : '';
 
   const classLabels = matchedRules.map((r) => r.protectedClass).join(' and ');
-  const legalBasisList = [...new Set(matchedRules.map((r) => r.legalBasis))];
+  // A refusal by the closed grammar may name no lexicon class; it still rests on both acts.
+  const legalBasisList = matchedRules.length > 0
+    ? [...new Set(matchedRules.map((r) => r.legalBasis))]
+    : ['Fair Housing Act', 'Illinois Human Rights Act'];
   const legalBases = legalBasisList.join(' and ');
   const prohibitVerb = legalBasisList.length === 1 ? 'prohibits' : 'prohibit';
 
@@ -73,7 +94,7 @@ export function checkFairHousingGuard(
     refused: true,
     protectedClass: classLabels,
     legalBasis: legalBases,
-    reason: `Refused: this asks for ${classification.actions.join(' and ')} based on ${classLabels}${propContext}. That would violate the ${legalBases}, which ${prohibitVerb} discriminatory advertising, steering, and exclusion in housing. I can help with the same task without that criterion, for example a listing that welcomes all applicants.`,
+    reason: `Refused: this asks for ${classification.actions.join(' and ')} based on ${classLabels || 'who the people are'}${propContext}. That would violate the ${legalBases}, which ${prohibitVerb} discriminatory advertising, steering, and exclusion in housing. I can help with the same task without that criterion, for example a listing that welcomes all applicants.`,
     citations,
   };
 }
@@ -83,6 +104,13 @@ const UNMODELED_DATA_RULES: ReadonlyArray<{
   readonly pattern: RegExp;
   readonly missingDetail: string;
 }> = [
+  // A fiscal period has no month mapping in the exports (calendar months
+  // only), so it is never read as the default window or a calendar year.
+  {
+    category: 'Fiscal-year period',
+    pattern: FISCAL_TOKEN_RE,
+    missingDetail: 'The exports carry calendar months only and define no fiscal-year calendar, so a fiscal period cannot be mapped to months. Ask for a calendar year or a month range instead, for example "in 2025" or "April to September 2026".',
+  },
   {
     category: 'Property Operating Expenses & Utilities (OpEx / Facilities / Landscaping)',
     pattern:
@@ -136,8 +164,40 @@ export function checkUnknownDataGuard(
     };
   }
 
+  // FIQ-TOOLS-1 §4: a metric the kit has no data for names the missing source.
+  const declined = declineUnsupported(question);
+  if (declined) {
+    return { unknown: true, missingCategory: String(declined.result.reason), reason: declined.answer, citations: [] };
+  }
+
+  // M-10: "ILS" / "listing sites" as a spend group has no defined site list.
+  // Scoped to spend questions (M-10's wording); CPL-from-ILS keeps the s11
+  // paid-sources reading until ruled otherwise.
+  if (ILS_GROUP_RE.test(question.normalize('NFKC')) && /\bspen[dt]/i.test(question)) {
+    return { unknown: true, missingCategory: 'ILS group', reason: `I don't know: ${ILS_UNKNOWN_REASON}.`, citations: ['spend:S0001'], clarifyingQuestion: 'Which listing sites should count as ILS?' };
+  }
+
+  // Bare "FY" is Fulton Yards only after "at" and only when the resolver
+  // binds it to that property ("at F.Y." it does not); otherwise ask.
+  const masked = maskFiscalTokens(question.normalize('NFKC'));
+  const fy = store.properties.find((p) => p.aka.some((a) => /^f\.?y\.?$/i.test(a.trim())));
+  if (BARE_FY_RE.test(masked) && (!LOCATIVE_FY_RE.test(masked) || !fy || !resolvePropertiesFromText(store, question).matched.some((p) => p.propertyId === fy.propertyId))) {
+    const place = fy ? `${fy.name} (${fy.propertyId})` : 'a property';
+    return {
+      unknown: true,
+      missingCategory: 'Ambiguous FY',
+      reason: `I don't know which FY you mean. "FY" here could be ${place} or a fiscal year, so FlowIQ will not pick one. Did you mean: (1) the figure at ${fy ? fy.name : 'that property'} (say "at ${fy ? fy.name : 'the property'}"); (2) a fiscal year, which the exports cannot map (they carry calendar months only; ask for a calendar year such as "in 2026")?`,
+      citations: fy ? [fy.citationId] : ['properties:P01'],
+      clarifyingQuestion: fy ? `Do you mean ${fy.name} or a fiscal year?` : 'Do you mean a property or a fiscal year?',
+    };
+  }
   for (const rule of UNMODELED_DATA_RULES) {
-    if (rule.pattern.test(question)) {
+    const fiscal = rule.pattern === FISCAL_TOKEN_RE;
+    // A fiscal period is never answered; only the bare adjective gives way
+    // to a calendar period the question states.
+    const bareFiscalOnly = fiscal && !rule.pattern.test(question) && BARE_FISCAL_RE.test(question);
+    if (bareFiscalOnly && CALENDAR_PERIOD_RE.test(spellCalendarYear(question))) continue;
+    if (rule.pattern.test(question) || bareFiscalOnly) {
       const mentionedProps = resolvePropertiesFromText(store, question, {
         includeOnboarding: true,
       });
@@ -146,27 +206,18 @@ export function checkUnknownDataGuard(
           ? mentionedProps.matched.map((p) => p.citationId)
           : ['properties:P01'];
 
+      // A fiscal non-answer names no property: the period is what is missing.
       const propName =
-        mentionedProps.matched.length === 1
+        mentionedProps.matched.length === 1 && rule.pattern !== FISCAL_TOKEN_RE
           ? ` at ${mentionedProps.matched[0].name} (${mentionedProps.matched[0].propertyId})`
           : '';
 
       let rentRollSuffix = "";
       if (/\b(profit\w*|revenue|grossing|noi\b|net\s+operating\s+income|net\s+income)\b/i.test(question)) {
-        const rentByProp = new Map<string, number>();
-        for (const l of store.leases) {
-          rentByProp.set(l.propertyId, (rentByProp.get(l.propertyId) ?? 0) + l.monthlyRent);
-        }
-        const topRentProps = [...store.operatingProperties]
-          .map((p) => ({
-            propertyId: p.propertyId,
-            name: p.name,
-            monthlyRent: Math.round(rentByProp.get(p.propertyId) ?? 0),
-          }))
-          .sort((a, b) => b.monthlyRent - a.monthlyRent)
-          .slice(0, 3);
-        if (topRentProps.length > 0) {
-          rentRollSuffix = ` (Note: while profit/NOI/OpEx ledgers are not in the exports, the top 3 operating buildings by active monthly contract lease rent roll in data/pms/leases.csv are: ${topRentProps.map((p, i) => `#${i + 1} ${p.name} [${p.propertyId}] at ${p.monthlyRent.toLocaleString("en-US")}/mo`).join(", ")}.)`;
+        if (store.leases.length > 0) {
+          // A non-answer states no figures (TENACITY c082279 finding 3); it
+          // points at the computable rent roll instead of quoting it.
+          rentRollSuffix = ` (Note: profit/NOI/OpEx ledgers are not in the exports; monthly contract lease rent by building is, in data/pms/leases.csv, if you want the rent roll instead.)`;
         }
       }
       return {
@@ -195,9 +246,32 @@ function stripZeroWidthAndNormalize(text: string): string {
   return text.replace(/[\u200B-\u200D\uFEFF]/g, '');
 }
 
+const NON_ANSWER_KEYS = new Set([
+  'unknown',
+  'refused',
+  'clarification_needed',
+  'candidates',
+  'reason',
+]);
+
+/** Properties the result makes a claim about. Prose may mention others as context. */
+function namedProperties(envelope: AnswerEnvelope): string[] {
+  const { property_id, property_ids } = envelope.result ?? {};
+  return [property_id, ...(Array.isArray(property_ids) ? property_ids : [])].filter(
+    (v): v is string => typeof v === 'string',
+  );
+}
+
+function figureErrors(envelope: AnswerEnvelope, store: PortfolioStore): string[] {
+  // S2-L3: the envelope check (re-execute, re-render, byte-equal) replaces
+  // the text-matching checks on figures, names, statuses and dates.
+  return envelopeErrors(envelope, store);
+}
+
 /**
  * Deterministic post-execution verifier (FLOW-103):
- * 1. Confirms every citation in `envelope.citations` exists in `store.primaryKeyIndex`.
+ * 1. Confirms every citation in `envelope.citations` exists in `store.primaryKeyIndex`,
+ *    and every property the result names owns at least one cited row.
  * 2. Confirms no untrusted prompt-injection watermark ("verified by analytics" or obfuscated variants)
  *    leaked into `answer` or `result`.
  * 3. Confirms `envelope.result` conforms to `resultSchema` with finite numbers.
@@ -233,9 +307,24 @@ export function verifyAnswerEnvelope(
     envelope.result?.unknown === true ||
     envelope.result?.refused === true ||
     envelope.result?.clarification_needed === true;
+  if (isNonAnswer) {
+    const figures = Object.keys(envelope.result ?? {}).filter(
+      (k) => !NON_ANSWER_KEYS.has(k),
+    );
+    if (figures.length > 0) {
+      errors.push(
+        `A refusal or "I don't know" must not carry figures (${figures.join(', ')})`,
+      );
+    }
+  }
   if (!Array.isArray(envelope.citations) || envelope.citations.length === 0) {
-    // A refusal or "I don't know" has no figure to source, so it may cite nothing.
-    if (!isNonAnswer) {
+    // A refusal or "I don't know" has no figure to source, so it may cite
+    // nothing. Neither does a sealed zero over an empty row set: the proof
+    // re-executes the typed query, so the empty set is checked, not trusted.
+    const provenEmptyZero =
+      Array.isArray(envelope.citations) && !!envelope.query && Array.isArray(envelope.proof?.row_ids) && envelope.proof.row_ids.length === 0 &&
+      Object.values(envelope.result ?? {}).every((v) => typeof v !== 'number' || v === 0);
+    if (!isNonAnswer && !provenEmptyZero) {
       errors.push('Answer must include at least one row citation');
     }
   } else {
@@ -246,7 +335,25 @@ export function verifyAnswerEnvelope(
         );
       }
     }
+    const citedOwners = new Set(
+      envelope.citations.map((c) => store.primaryKeyIndex.get(c)),
+    );
+    for (const propertyId of namedProperties(envelope)) {
+      if (!citedOwners.has(propertyId)) {
+        errors.push(
+          `Answer names ${propertyId} but cites no row belonging to it`,
+        );
+      }
+    }
   }
+
+  // TENACITY c082279 finding 1: every answer is re-executed, whatever the
+  // shape of its citations; a non-array citations field is itself an error.
+  if (!isNonAnswer) {
+    if (!Array.isArray(envelope.citations)) errors.push('Citations must be an array of row ids');
+    errors.push(...figureErrors(envelope, store));
+  }
+  errors.push(...nonAnswerErrors(envelope, store));
 
   if (resultSchema) {
     for (const [key, expectedType] of Object.entries(resultSchema)) {

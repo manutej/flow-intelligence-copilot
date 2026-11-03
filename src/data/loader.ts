@@ -1,3 +1,4 @@
+import { rowFactViolations } from './row-facts.ts';
 import { fileURLToPath } from "node:url";
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,6 +27,7 @@ import type {
   UnitRecord,
   UnitStatus,
 } from './schema.ts';
+import { convert, toolRate } from '../tools/currency.ts';
 
 const OPERATING_PMS_ADAPTERS = new Set(['Yardi', 'Entrata', 'RealPage', 'MRI']);
 
@@ -69,23 +71,64 @@ export function readCsvRecords(filePath: string): Array<Record<string, string>> 
   const content = fs.readFileSync(filePath, 'utf-8');
   const lines = content
     .split('\n')
-    .map((l) => l.replace(/\r$/, ''))
-    .filter((l) => l.trim().length > 0);
+    .map((text, i) => ({ text: text.replace(/\r$/, ''), lineNo: i + 1 }))
+    .filter((l) => l.text.trim().length > 0);
 
   if (lines.length === 0) {
     return [];
   }
 
-  const headers = parseCsvLine(lines[0]);
+  const headers = parseCsvLine(lines[0].text);
   const rows: Array<Record<string, string>> = [];
 
   for (let i = 1; i < lines.length; i += 1) {
-    const values = parseCsvLine(lines[i]);
+    const values = parseCsvLine(lines[i].text);
+    if (values.length !== headers.length) {
+      throw new DataLoadError(`${filePath} line ${lines[i].lineNo} has ${values.length} fields; the header has ${headers.length}`);
+    }
     const record: Record<string, string> = {};
     for (let h = 0; h < headers.length; h += 1) {
       record[headers[h]] = values[h] ?? '';
     }
     rows.push(record);
+  }
+  return rows;
+}
+
+/** A CSV export that is missing, empty, or lacks the columns the engine reads. */
+export class DataLoadError extends Error {
+  override readonly name = 'DataLoadError';
+}
+
+/** Columns each export must carry; the engine reads every one of them. */
+export const REQUIRED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  'pms/properties.csv': ['property_id', 'name', 'aka', 'address', 'neighborhood', 'year_built', 'class', 'amenities', 'pms', 'units'],
+  'pms/units.csv': ['unit_id', 'property_id', 'unit_number', 'bedrooms', 'bathrooms', 'sqft', 'floor', 'view', 'market_rent', 'status'],
+  'pms/leases.csv': ['lease_id', 'unit_id', 'resident_id', 'lease_type', 'start_date', 'end_date', 'monthly_rent', 'concession_usd', 'renewal_status'],
+  'crm/leads.csv': ['lead_id', 'property_id', 'created_date', 'source', 'bedrooms_wanted', 'toured', 'applied', 'leased', 'lease_id', 'notes'],
+  'ils/spend.csv': ['spend_id', 'month', 'property_id', 'source', 'amount', 'currency', 'status'],
+  'ops/decisions.csv': ['decision_id', 'month', 'property_id', 'source', 'recommendation', 'delta_usd', 'accepted', 'decided_by'],
+};
+
+/** Reads one export and fails with a DataLoadError naming the file and the problem. */
+export function readRequiredCsv(dataDir: string, relPath: string): Array<Record<string, string>> {
+  const filePath = path.join(dataDir, relPath);
+  if (!fs.existsSync(filePath)) {
+    throw new DataLoadError(`${filePath} does not exist`);
+  }
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const firstLine = content.split('\n').map((l) => l.replace(/\r$/, '')).find((l) => l.trim().length > 0);
+  if (!firstLine) {
+    throw new DataLoadError(`${filePath} is empty (expected a header row and data rows)`);
+  }
+  const headers = new Set(parseCsvLine(firstLine).map((h) => h.trim()));
+  const missing = (REQUIRED_COLUMNS[relPath] ?? []).filter((c) => !headers.has(c));
+  if (missing.length > 0) {
+    throw new DataLoadError(`${filePath} is missing column${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`);
+  }
+  const rows = readCsvRecords(filePath);
+  if (rows.length === 0) {
+    throw new DataLoadError(`${filePath} has a header but no data rows`);
   }
   return rows;
 }
@@ -131,23 +174,18 @@ export function detectPromptInjection(rawNote: string): {
   };
 }
 
-function tryDecodeBase64UrlToken(token: string): string | null {
-  if (
-    token.length < 20 ||
-    !/^[A-Za-z0-9+/=]+$/.test(token) ||
-    token.length % 4 !== 0
-  ) {
-    return null;
-  }
-  try {
-    const decoded = Buffer.from(token, 'base64').toString('utf-8');
-    if (/^[\x20-\x7E]+$/.test(decoded) && decoded.includes('.')) {
-      return decoded;
-    }
-  } catch {
-    return null;
-  }
-  return null;
+/**
+ * properties.csv is untrusted input. An alias is kept only when it reads as
+ * a display name: letters, digits, spaces and name punctuation, at least one
+ * space or a short single word. Anything else (an encoded blob, a URL) is
+ * withheld: it is never decoded, resolved against, or put in answer text.
+ */
+function isDisplayName(token: string): boolean {
+  if (!/^[\p{L}\p{N}][\p{L}\p{N} &'’.-]{0,59}$/u.test(token)) return false;
+  // One long unbroken token with mixed case and digits is an encoding, not a name.
+  if (!/\s/.test(token) && token.length >= 16) return false;
+  if (/\.[a-z]{2,}(?:\/|$)/i.test(token)) return false;
+  return true;
 }
 
 export function roundTo(value: number, decimals: number): number {
@@ -195,6 +233,103 @@ export function resolveDataDirectory(repoRootDir?: string): string {
   return path.join(REPO_ROOT_FALLBACK, "data");
 }
 
+type Rows = Array<Record<string, string>>;
+
+/**
+ * Every answer joins these tables, so a row whose key repeats or whose
+ * foreign key points nowhere would be counted, priced or cited wrongly.
+ * Refuse to load instead; the caller reports a data error.
+ */
+const SPEND_ROW_CEILING_USD = 1_000_000;
+
+function assertReferentialIntegrity(properties: Rows, units: Rows, leases: Rows, leads: Rows, spend: Rows, decisions: Rows): void {
+  const keys = (rows: Rows, file: string, key: string): Set<string> => {
+    const seen = new Set<string>();
+    // Ids are compared without case or padding: "U0101" and "u0101 " name one row (F-069).
+    const folded = new Set<string>();
+    for (const r of rows) {
+      const k = r[key].trim().toUpperCase();
+      if (folded.has(k)) throw new DataLoadError(`${file} repeats ${key} ${r[key]}`);
+      folded.add(k);
+      seen.add(r[key]);
+    }
+    return seen;
+  };
+  const refs = (rows: Rows, file: string, key: string, column: string, target: Set<string>, optional = false): void => {
+    for (const r of rows) {
+      const v = r[column].trim();
+      if (optional && v === '') continue;
+      if (!target.has(v)) throw new DataLoadError(`${file} row ${r[key]} has ${column} ${v || '(empty)'}, which does not exist`);
+    }
+  };
+  const propertyIds = keys(properties, 'pms/properties.csv', 'property_id');
+  const unitIds = keys(units, 'pms/units.csv', 'unit_id');
+  const leaseIds = keys(leases, 'pms/leases.csv', 'lease_id');
+  keys(leads, 'crm/leads.csv', 'lead_id');
+  keys(spend, 'ils/spend.csv', 'spend_id');
+  keys(decisions, 'ops/decisions.csv', 'decision_id');
+  refs(units, 'pms/units.csv', 'unit_id', 'property_id', propertyIds);
+  refs(leases, 'pms/leases.csv', 'lease_id', 'unit_id', unitIds);
+  refs(leads, 'crm/leads.csv', 'lead_id', 'property_id', propertyIds);
+  refs(leads, 'crm/leads.csv', 'lead_id', 'lease_id', leaseIds, true);
+  refs(spend, 'ils/spend.csv', 'spend_id', 'property_id', propertyIds);
+  refs(decisions, 'ops/decisions.csv', 'decision_id', 'property_id', propertyIds);
+  for (const r of spend) {
+    // Plain decimals only (no 1e9) and a ceiling one row of monthly spend can reach (F-069).
+    const amount = /^\d+(?:\.\d{1,2})?$/.test(r.amount.trim()) ? Number(r.amount) : NaN;
+    if (!Number.isFinite(amount) || amount > SPEND_ROW_CEILING_USD) {
+      throw new DataLoadError(`ils/spend.csv row ${r.spend_id} has amount ${r.amount}; spend must be a plain amount from 0 to ${SPEND_ROW_CEILING_USD}`);
+    }
+  }
+}
+
+/**
+ * The data dictionary's domains (S0b F-046). A value outside them would be
+ * counted, averaged or compared as if it were real: a 700.5 sq ft unit
+ * breaks whole-number bounds, a negative rent drags an average, and
+ * 2026-02-30 shifts a window. Refuse to load instead, as for a broken key.
+ */
+function assertFieldDomains(units: Rows, leases: Rows, spend: Rows): void {
+  const bad = (file: string, id: string, col: string, v: string, want: string) => {
+    throw new DataLoadError(`${file} row ${id} has ${col} ${JSON.stringify(v)}; ${col} must be ${want}`);
+  };
+  const int = (v: string, lo: number, hi: number) => /^-?\d+$/.test(v) && Number(v) >= lo && Number(v) <= hi;
+  const num = (v: string, lo: number, hi: number) => /^-?\d+(?:\.\d+)?$/.test(v) && Number(v) >= lo && Number(v) <= hi;
+  const day = (v: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (!m) return undefined;
+    const t = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+    return new Date(t).toISOString().slice(0, 10) === v ? t : undefined;
+  };
+  const rentOf = new Map<string, number>();
+  for (const u of units) {
+    const f = 'pms/units.csv', id = u.unit_id;
+    if (!int(u.bedrooms, 0, 10)) bad(f, id, 'bedrooms', u.bedrooms, 'a whole number from 0 to 10');
+    if (!num(u.bathrooms, 0.5, 10) || Number(u.bathrooms) % 0.5 !== 0) bad(f, id, 'bathrooms', u.bathrooms, 'a multiple of 0.5 from 0.5 to 10');
+    if (!int(u.sqft, 100, 20000)) bad(f, id, 'sqft', u.sqft, 'a whole number from 100 to 20000');
+    if (!int(u.floor, 0, 200)) bad(f, id, 'floor', u.floor, 'a whole number from 0 to 200');
+    if (!['vacant', 'occupied', 'notice'].includes(u.status)) bad(f, id, 'status', u.status, 'vacant, occupied or notice, exactly');
+    if (!num(u.market_rent, 1, 50000)) bad(f, id, 'market_rent', u.market_rent, 'a positive amount up to 50000');
+    rentOf.set(id, Number(u.market_rent));
+  }
+  for (const l of leases) {
+    const f = 'pms/leases.csv', id = l.lease_id;
+    const start = day(l.start_date), end = day(l.end_date);
+    if (start === undefined) bad(f, id, 'start_date', l.start_date, 'a real YYYY-MM-DD date');
+    if (end === undefined) bad(f, id, 'end_date', l.end_date, 'a real YYYY-MM-DD date');
+    const days = ((end as number) - (start as number)) / 864e5;
+    if (days < 28 || days > 1096) bad(f, id, 'end_date', l.end_date, 'from 28 days to 3 years after start_date');
+    const market = rentOf.get(l.unit_id);
+    if (!num(l.monthly_rent, 1, 50000) || (market !== undefined && (Number(l.monthly_rent) < market / 2 || Number(l.monthly_rent) > market * 2))) {
+      bad(f, id, 'monthly_rent', l.monthly_rent, "positive and within half to twice the unit's market_rent");
+    }
+    if (l.concession_usd !== '' && !num(l.concession_usd, 0, 50000)) bad(f, id, 'concession_usd', l.concession_usd, 'empty or an amount at least 0');
+  }
+  for (const r of spend) {
+    if (!/^\d{4}-(?:0[1-9]|1[0-2])$/.test(r.month)) bad('ils/spend.csv', r.spend_id, 'month', r.month, 'a real YYYY-MM month');
+  }
+}
+
 export function loadPortfolioStore(
   repoRootDir?: string,
   policyOverrides?: Partial<PortfolioPolicyConfig>,
@@ -208,18 +343,15 @@ export function loadPortfolioStore(
     return existing;
   }
 
-  const rawProperties = readCsvRecords(
-    path.join(dataDir, 'pms', 'properties.csv'),
-  );
-  const rawUnits = readCsvRecords(path.join(dataDir, 'pms', 'units.csv'));
-  const rawLeases = readCsvRecords(path.join(dataDir, 'pms', 'leases.csv'));
-  const rawLeads = readCsvRecords(path.join(dataDir, 'crm', 'leads.csv'));
-  const rawSpend = readCsvRecords(path.join(dataDir, 'ils', 'spend.csv'));
-  const rawDecisions = readCsvRecords(
-    path.join(dataDir, 'ops', 'decisions.csv'),
-  );
+  const rawProperties = readRequiredCsv(dataDir, 'pms/properties.csv');
+  const rawUnits = readRequiredCsv(dataDir, 'pms/units.csv');
+  const rawLeases = readRequiredCsv(dataDir, 'pms/leases.csv');
+  const rawLeads = readRequiredCsv(dataDir, 'crm/leads.csv');
+  const rawSpend = readRequiredCsv(dataDir, 'ils/spend.csv');
+  const rawDecisions = readRequiredCsv(dataDir, 'ops/decisions.csv');
 
-  const primaryKeyIndex = new Set<CitationId>();
+  assertReferentialIntegrity(rawProperties, rawUnits, rawLeases, rawLeads, rawSpend, rawDecisions);
+  const primaryKeyIndex = new Map<CitationId, string>();
 
   // 1. Load Units first so we can verify actual operating buildings (KIT_README rule: >= 1 unit in units.csv)
   const unitCountsByProperty = new Map<string, number>();
@@ -228,7 +360,7 @@ export function loadPortfolioStore(
     const unitId = r.unit_id;
     const propertyId = r.property_id;
     const citationId = `units:${unitId}` as const;
-    primaryKeyIndex.add(citationId);
+    primaryKeyIndex.set(citationId, propertyId);
     unitCountsByProperty.set(
       propertyId,
       (unitCountsByProperty.get(propertyId) ?? 0) + 1,
@@ -254,7 +386,7 @@ export function loadPortfolioStore(
   const properties: PropertyRecord[] = rawProperties.map((r) => {
     const propertyId = r.property_id;
     const citationId = `properties:${propertyId}` as const;
-    primaryKeyIndex.add(citationId);
+    primaryKeyIndex.set(citationId, propertyId);
 
     const rawAliases = r.aka
       ? r.aka
@@ -263,14 +395,10 @@ export function loadPortfolioStore(
           .filter(Boolean)
       : [];
     const aka: string[] = [];
-    const decodedEasterEggUrls: string[] = [];
+    let withheldAliasCount = 0;
     for (const token of rawAliases) {
-      const decoded = tryDecodeBase64UrlToken(token);
-      if (decoded) {
-        decodedEasterEggUrls.push(decoded);
-      } else {
-        aka.push(token);
-      }
+      if (isDisplayName(token)) aka.push(token);
+      else withheldAliasCount += 1;
     }
 
     const declaredUnits = Number.parseInt(r.units, 10);
@@ -278,7 +406,7 @@ export function loadPortfolioStore(
     const hasUnitsInUnitsCsv = actualUnitCount > 0;
     const unitCountMatchesDeclared =
       actualUnitCount > 0 && actualUnitCount === declaredUnits;
-    const noBase64TokensInAka = decodedEasterEggUrls.length === 0;
+    const noBase64TokensInAka = withheldAliasCount === 0;
     const pmsAdapterSupported = OPERATING_PMS_ADAPTERS.has(r.pms);
 
     const blockingReasons: string[] = [];
@@ -294,7 +422,7 @@ export function loadPortfolioStore(
     }
     if (!noBase64TokensInAka) {
       blockingReasons.push(
-        `encoded onboarding token present in aka (${decodedEasterEggUrls.join(', ')})`,
+        `${withheldAliasCount} aka value(s) in properties.csv are not display names (withheld, not decoded)`,
       );
     }
     if (!pmsAdapterSupported) {
@@ -319,7 +447,7 @@ export function loadPortfolioStore(
       propertyId,
       name: r.name,
       aka,
-      decodedEasterEggUrls,
+      withheldAliasCount,
       address: r.address,
       neighborhood: r.neighborhood,
       yearBuilt: Number.parseInt(r.year_built, 10),
@@ -355,8 +483,8 @@ export function loadPortfolioStore(
   const leases: LeaseRecord[] = rawLeases.map((r) => {
     const leaseId = r.lease_id;
     const citationId = `leases:${leaseId}` as const;
-    primaryKeyIndex.add(citationId);
     const propertyId = unitToProperty.get(r.unit_id) ?? '';
+    primaryKeyIndex.set(citationId, propertyId);
     const record: LeaseRecord = {
       citationId,
       leaseId,
@@ -413,7 +541,7 @@ export function loadPortfolioStore(
   const leads: SanitizedLeadRecord[] = rawLeads.map((r) => {
     const leadId = r.lead_id;
     const citationId = `leads:${leadId}` as const;
-    primaryKeyIndex.add(citationId);
+    primaryKeyIndex.set(citationId, r.property_id);
 
     const leaseId = r.lease_id ? r.lease_id.trim() : null;
     const duplicateOfLeadId = duplicateLeadToEarliest.get(leadId) ?? null;
@@ -510,7 +638,7 @@ export function loadPortfolioStore(
   const spend: SpendRecord[] = rawSpend.map((r) => {
     const spendId = r.spend_id;
     const citationId = `spend:${spendId}` as const;
-    primaryKeyIndex.add(citationId);
+    primaryKeyIndex.set(citationId, r.property_id);
 
     const rawAmount = Number.parseFloat(r.amount);
     const currency = r.currency as SpendCurrency;
@@ -521,14 +649,9 @@ export function loadPortfolioStore(
     }
     const status = r.status as SpendStatus;
     const isVoid = status === VOID_INVOICE_STATUS;
-    const rate =
-      currency === 'CAD'
-        ? policy.convertCadToUsd
-          ? policy.cadToUsdRate
-          : 1.0
-        : 1.0;
-    const effectiveUsd =
-      isVoid && policy.excludeVoidSpend ? 0 : roundTo(rawAmount * rate, 4);
+    // FIQ-CURRENCY-1 Q2: conversion goes through currency.ts.
+    const usd = policy.convertCadToUsd ? convert(rawAmount, currency, 'USD', undefined, toolRate(policy)).amount : rawAmount;
+    const effectiveUsd = isVoid && policy.excludeVoidSpend ? 0 : roundTo(usd, 4);
 
     paidSourceSet.add(r.source);
 
@@ -561,7 +684,7 @@ export function loadPortfolioStore(
   const decisions: DecisionRecord[] = rawDecisions.map((r) => {
     const decisionId = r.decision_id;
     const citationId = `decisions:${decisionId}` as const;
-    primaryKeyIndex.add(citationId);
+    primaryKeyIndex.set(citationId, r.property_id);
 
     return {
       citationId,
@@ -599,6 +722,13 @@ export function loadPortfolioStore(
     primaryKeyIndex,
   };
 
+  // A store that breaks a row fact never answers: the CLI exits 10 and the
+  // MCP server reports the load error, before any question is read.
+  const violations = rowFactViolations(store);
+  if (violations.length > 0) {
+    throw new DataLoadError(`${violations.length} row${violations.length > 1 ? 's break' : ' breaks'} the data contract: ${violations.slice(0, 3).map((v) => v.description).join('; ')}`);
+  }
+  assertFieldDomains(rawUnits, rawLeases, rawSpend);
   storeCache.set(cacheKey, store);
   while (storeCache.size > MAX_CACHED_STORES) {
     const oldest = storeCache.keys().next().value;

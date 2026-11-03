@@ -52,6 +52,10 @@ declare module "node:fs" {
   export function chmodSync(path: string, mode: number): void;
   export function copyFileSync(src: string, dest: string): void;
   export function realpathSync(path: string): string;
+  export function mkdtempSync(prefix: string): string;
+  export function cpSync(src: string, dest: string, options?: { recursive?: boolean }): void;
+  export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
+  export function appendFileSync(path: string, data: string): void;
   const fsDefault: {
     readFileSync: typeof readFileSync;
     writeFileSync: typeof writeFileSync;
@@ -61,6 +65,10 @@ declare module "node:fs" {
     chmodSync: typeof chmodSync;
     copyFileSync: typeof copyFileSync;
     realpathSync: typeof realpathSync;
+    mkdtempSync: typeof mkdtempSync;
+    cpSync: typeof cpSync;
+    rmSync: typeof rmSync;
+    appendFileSync: typeof appendFileSync;
   };
   export default fsDefault;
 }
@@ -100,6 +108,7 @@ declare module "node:crypto" {
     update(data: string | Buffer): { digest(encoding: "hex" | "base64"): string };
   };
   export function randomBytes(size: number): Buffer;
+  export function randomUUID(): string;
   export function scryptSync(password: string | Buffer, salt: string | Buffer, keylen: number): Buffer;
   export function createCipheriv(algorithm: string, key: Buffer, iv: Buffer): {
     update(data: string | Buffer, inputEncoding?: string): Buffer;
@@ -122,6 +131,7 @@ declare module "node:crypto" {
 }
 
 declare module "node:child_process" {
+  export function execFileSync(file: string, args?: readonly string[], options?: Record<string, unknown>): string | Buffer;
   export function execFile(
     file: string,
     args: readonly string[],
@@ -160,6 +170,7 @@ declare module "node:http" {
     method?: string;
     headers: Record<string, string | string[] | undefined>;
     body?: unknown;
+    socket: { destroy(): void };
     [Symbol.asyncIterator](): AsyncIterator<Buffer | string>;
     on(event: "data", listener: (chunk: Buffer) => void): this;
     on(event: "end", listener: () => void): this;
@@ -174,7 +185,7 @@ declare module "node:http" {
     listen(port: number, cb?: () => void): this;
     listen(port: number, host: string, cb?: () => void): this;
     address(): import("node:net").AddressInfo | string | null;
-    close(cb?: () => void): this;
+    close(cb?: (err?: Error) => void): this;
   }
   export function createServer(
     handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>,
@@ -231,22 +242,34 @@ declare module "node:assert/strict" {
     expected: unknown,
     message?: string,
   ): void;
+  export function notEqual(actual: unknown, expected: unknown, message?: string): void;
   export function ok(value: unknown, message?: string): asserts value;
   export function match(value: string, pattern: RegExp, message?: string): void;
+  export function doesNotMatch(value: string, pattern: RegExp, message?: string): void;
   export function throws(fn: () => unknown, error?: unknown, message?: string): void;
   const assertDefault: {
     equal: typeof equal;
     deepEqual: typeof deepEqual;
+    notEqual: typeof notEqual;
     ok: typeof ok;
     match: typeof match;
+    doesNotMatch: typeof doesNotMatch;
     throws: typeof throws;
   };
   export default assertDefault;
 }
 
 declare module "node:test" {
+  export interface TestContext {
+    test(name: string, fn: (t: TestContext) => void | Promise<void>): Promise<void>;
+    skip(message?: string): void;
+  }
   export function describe(name: string, fn: () => void | Promise<void>): void;
   export function it(name: string, fn: () => void | Promise<void>): void;
+  export function test(name: string, fn: (t: TestContext) => void | Promise<void>): void;
+  export default test;
+  export function after(fn: () => void | Promise<void>): void;
+  export function afterEach(fn: () => void | Promise<void>): void;
 }
 
 declare module "node:url" {
@@ -260,4 +283,12 @@ declare module "node:net" {
     family: string;
     port: number;
   }
+}
+
+declare module "node:vm" {
+  export class Script {
+    constructor(code: string, options?: { filename?: string });
+  }
+  const vmDefault: { Script: typeof Script };
+  export default vmDefault;
 }

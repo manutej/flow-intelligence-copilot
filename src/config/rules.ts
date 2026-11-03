@@ -1,3 +1,7 @@
+import { PINNED_CAD_RATE } from './fx-pinned.ts';
+
+/** Latest date with data rows; YTD windows end here (M-9). The single source for rules.ts and the tools. */
+export const LATEST_DATA_DATE = '2026-09-28';
 /**
  * Central domain configuration, runtime policy resolution, and canonical constants
  * from KIT_README.md & CHANGELOG.md (v2).
@@ -7,7 +11,7 @@
  *    or passing a policy override (`POLICY_RULES_OFF`, `POLICY_DATA_RULES_ONLY`, `POLICY_ALL_RULES`)
  *    recomputes all metrics and explanations inside a single Node process without stale caches.
  * 2. Live-session overrides for Diego's 30-minute walkthrough:
- *    - FLOW_CAD_RATE (default: 0.73)
+ *    - FLOW_CAD_RATE (default: pinned live rate, src/config/fx-pinned.ts; FLOW_CAD_RATE_DATE dates an override)
  *    - FLOW_OCCUPIED_INCLUDES_NOTICE (default: 'true')
  *    - FLOW_LEASE_BUCKET_BY (default: 'lease_start_date' | 'lead_created_date')
  *    - FLOW_PRIOR_BETA0 (default: 3250)
@@ -20,6 +24,9 @@ export interface PortfolioPolicyConfig {
   readonly profileName: string;
   readonly asOfDate: string;
   readonly cadToUsdRate: number;
+  /** Date of the CAD rate (M-3). */
+  readonly cadRateDate: string;
+  readonly cadRateSource: string;
   readonly convertCadToUsd: boolean;
   readonly occupiedIncludesNotice: boolean;
   readonly leaseBucketBy: LeaseBucketField;
@@ -75,9 +82,15 @@ export function resolvePolicyConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): PortfolioPolicyConfig {
   const asOfDate = overrides.asOfDate ?? env.FLOW_TODAY ?? '2026-10-01';
+  // M-3: the default is the pinned, dated live-provider rate. An override
+  // (what-if or FLOW_CAD_RATE) is labelled as such, with FLOW_CAD_RATE_DATE if set.
+  const envRate = env.FLOW_CAD_RATE !== undefined && env.FLOW_CAD_RATE !== '';
   const cadToUsdRate =
     overrides.cadToUsdRate ??
-    parsePositiveFloatEnv(env.FLOW_CAD_RATE, 0.73, 'FLOW_CAD_RATE');
+    parsePositiveFloatEnv(env.FLOW_CAD_RATE, PINNED_CAD_RATE.rate, 'FLOW_CAD_RATE');
+  const pinned = overrides.cadToUsdRate === undefined && !envRate;
+  const cadRateDate = overrides.cadRateDate ?? (pinned ? PINNED_CAD_RATE.rate_date : env.FLOW_CAD_RATE_DATE ?? 'undated');
+  const cadRateSource = overrides.cadRateSource ?? (pinned ? PINNED_CAD_RATE.source : overrides.cadToUsdRate !== undefined ? `what-if rate ${overrides.cadToUsdRate}` : 'FLOW_CAD_RATE');
   const occupiedIncludesNotice =
     overrides.occupiedIncludesNotice ??
     parseBooleanEnv(env.FLOW_OCCUPIED_INCLUDES_NOTICE, true);
@@ -94,6 +107,8 @@ export function resolvePolicyConfig(
     profileName: overrides.profileName ?? 'all_rules',
     asOfDate,
     cadToUsdRate,
+    cadRateDate,
+    cadRateSource,
     convertCadToUsd: overrides.convertCadToUsd ?? true,
     occupiedIncludesNotice,
     leaseBucketBy,
@@ -130,7 +145,7 @@ export const POLICY_RULES_OFF: PortfolioPolicyConfig = resolvePolicyConfig({
   leaseBucketBy: 'lead_created_date',
   excludeVoidSpend: false,
   convertCadToUsd: false,
-  deduplicateLeads: false,
+  // M-2: lead dedup by lease_id is unconditional; no preset turns it off.
   includeZeroConcessions: false,
   quarantineZeroUnitProperties: false,
   requireSupportedPmsForOperating: false,
@@ -221,6 +236,14 @@ export const DATE_WINDOWS: Readonly<Record<string, DateWindowSpec>> = {
     startDate: '2026-04-01',
     endDate: '2026-09-30',
     months: ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'],
+  },
+  // M-9: year to date runs Jan 1 to the latest data date and is partial.
+  YTD_2026: {
+    key: 'YTD_2026',
+    label: `2026-01-01 to ${LATEST_DATA_DATE} (year to date, partial)`,
+    startDate: '2026-01-01',
+    endDate: LATEST_DATA_DATE,
+    months: ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'],
   },
   YEAR_2026: {
     key: 'YEAR_2026',

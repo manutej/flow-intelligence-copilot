@@ -83,7 +83,7 @@ npm test          # unit tests
 npm run flow-106  # P09 onboarding check
 ```
 
-- **Rule ablation:** one engine on `questions/dev.jsonl` with rules switched off (3/10), data rules only (8/10), and all rules (10/10).
+- **Rule ablation:** one engine on `questions/dev.jsonl` with rules switched off (4/10), data rules only (9/10), and all rules (10/10).
 - **Probes (6), red-team questions (25) and the Fair Housing set (54 cases, 34 refuse and 20 allow):** written alongside the code, so they are regression checks, not accuracy estimates.
 - **Held-out set:** `questions/heldout.jsonl`, 16 questions written after the engine, with answers computed by a separate script from the CSVs. Currently 15/16; the miss is "average square footage", which the parser reads as a unit count.
 - **600-question bank:** a snapshot of this engine's own past outputs. It catches drift, not errors.
@@ -121,6 +121,10 @@ npm run flow-106  # P09 onboarding check
 ### Audit view (dashboard)
 
 [repo-sigma-one-80.vercel.app](https://repo-sigma-one-80.vercel.app), or `npm run dashboard` for http://localhost:4310. Shows every building, the held-out P09, the dead-spend reallocation, the four assumption controls (CAD rate, notice counted as occupied, lease date bucket, prior cost per lease), and the tool trace and cited rows behind each answer. The [field notebook](https://repo-sigma-one-80.vercel.app/field-notebook.html) walks through the pipeline and the data traps.
+
+#### Frozen dashboard state
+
+Never rerun `build-dashboard` (`npm run build-dashboard`, `build:dashboard`, `build-ui`). The `INITIAL_STATE` embedded in `public/index.html`, `ui/flowiq-visual-studio.html` and `docs/index.html` is a frozen artifact: the builder cannot reproduce it (wall-clock timings, a missing `.toq` swarm trace, later code changes). `tests/initial-state-drift.test.ts` pins its sha256 and fails on any change. Changing it needs a reviewed ticket that updates the pinned hashes. Making the builder reproducible is deferred (F-BI-1).
 
 ### CLI
 

@@ -1,5 +1,11 @@
+import { sealProof } from './envelope.ts';
+import { cadRateLine } from '../config/fx-pinned.ts';
+import { occupancy as occupancyTool } from '../tools/occupancy.ts';
+import { costPerLead } from '../tools/cost-per-lead.ts';
+import type { ClarifyOption } from './clarify.ts';
 import { fmtUsd, plural } from '../domain/format.ts';
 import { roundTo } from '../data/loader.ts';
+import { ratePercent1 } from '../data/rate.ts';
 import type {
   AnswerEnvelope,
   CitationId,
@@ -7,6 +13,7 @@ import type {
   QuestionRecord,
 } from '../data/schema.ts';
 import { verifyAnswerEnvelope } from '../domain/guards.ts';
+import { unknownWords } from '../domain/vocabulary.ts';
 import type { OutcomeLearningReport } from '../domain/learner.ts';
 import type {
   DataQualityAuditSummary,
@@ -15,11 +22,11 @@ import type {
   UnitQuerySummary,
 } from '../domain/metrics.ts';
 import type { PropertyResolutionResult } from '../domain/resolver.ts';
-import { parseQueryIntent } from './intent.ts';
+import { BUILDING_BREAKDOWN_MEASURES, cplRankDimension, droppedBreakdownOf, parseAsOfYearMonth, parseQueryIntent, requestedBreakdowns, scalarLeftoverOf, sourceModeOf, UNIT_STATUS_EXCLUSION_RE, type ParsedQueryIntent } from './intent.ts';
 import {
   dataCoverage,
   describeCoverage,
-  findUnknownBuildingReference,
+  findUnresolvedPlace,
   findUntrackedChannel,
   hasUnitSignal,
   UNKNOWN_HINT,
@@ -27,11 +34,18 @@ import {
 } from './recognition.ts';
 import { executeAgentTool, type ToolCallTrace } from './tools.ts';
 
+/** How a leftover-word refusal starts, so the vocabulary check can still clarify a typo first. */
+export const LEFTOVER_REASON_HEAD = 'FlowIQ would answer this with one overall figure';
+
 export interface PlannerTurnOutput {
   readonly envelope: AnswerEnvelope;
   readonly toolCalls: readonly ToolCallTrace[];
   readonly clarificationNeeded: boolean;
   readonly clarifyingQuestion: string | null;
+  /** 2-4 typed readings offered when the question has unbound words (S1R-L1-5). */
+  readonly clarifyOptions?: readonly ClarifyOption[];
+  /** What the typed query computed, in plain language (S1R-L1-6). */
+  readonly restatement?: string;
   readonly verification: {
     readonly valid: boolean;
     readonly errors: readonly string[];
@@ -61,13 +75,25 @@ function buildExcludedOnboardingSuffix(store: PortfolioStore): string {
  * - Zero hardcoded prose numbers: every figure in `answer` is dynamically interpolated
  *   from the tool outputs and `store.policy`.
  */
+/** Every row tied with the first (already sorted) row on `key`. */
+function tiedAtTop<T>(sorted: readonly T[], key: (r: T) => number): T[] {
+  if (sorted.length === 0) return [];
+  const top = key(sorted[0]);
+  return sorted.filter((r) => Math.abs(key(r) - top) < 1e-9);
+}
+function listNames(names: readonly string[]): string {
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
 export function executeCompositionalPlan(
   qRecord: QuestionRecord,
   store: PortfolioStore,
+  { verify = true, intent: given }: { readonly verify?: boolean; readonly intent?: ParsedQueryIntent } = {},
 ): PlannerTurnOutput {
   const question = qRecord.question;
   const schema = qRecord.result_schema ?? {};
-  const intent = parseQueryIntent(question, store);
+  // S2-L1: a validated TypedQuery from the model path replaces the parse.
+  const intent = given ?? parseQueryIntent(question, store);
   const toolCalls: ToolCallTrace[] = [];
 
   const finalize = (
@@ -77,31 +103,33 @@ export function executeCompositionalPlan(
     clarificationNeeded = false,
     clarifyingQuestion: string | null = null,
   ): PlannerTurnOutput => {
-    const isNonAnswer =
-      result.unknown === true || result.clarification_needed === true;
-    const safeCitations: CitationId[] =
-      citations.length > 0 || isNonAnswer
-        ? [...new Set(citations)]
-        : ['properties:P01'];
+    const query = { question, intent, ...(qRecord.result_schema ? { result_schema: qRecord.result_schema } : {}) };
+    const rows = [...new Set(citations)];
     const envelope: AnswerEnvelope = {
       id: qRecord.id,
       answer,
       result,
-      citations: safeCitations,
+      citations: rows,
+      query,
+      proof: sealProof(query, result, rows),
     };
     return {
       envelope,
       toolCalls,
       clarificationNeeded,
       clarifyingQuestion,
-      verification: verifyAnswerEnvelope(
-        envelope,
-        store,
-        qRecord.result_schema,
-      ),
+      verification: verify
+        ? verifyAnswerEnvelope(envelope, store, qRecord.result_schema)
+        : { valid: true, errors: [] },
     };
   };
 
+  // FLOWIQ-SITE-003: upcoming renewals/expirations with no window: ask for one.
+  if (/\b(?:renewals?|leases?|expirations?)\b[^?]*\b(?:coming\s+up|upcoming|due\s+soon)\b|\bupcoming\s+(?:renewals?|lease\s+expirations?)\b/i.test(question)
+    && !/\b(?:this|next|last)\s+(?:month|quarter|year)\b|\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b|\bq[1-4]\b|\b20\d\d\b|\bwithin\b|\bdays?\b/i.test(question)) {
+    const ask = `Which window do you mean? For example "next month" (November 2026 from the data's as-of date ${store.policy.asOfDate}), "in December", or "next quarter".`.replace('November 2026', nextMonthLabel(store.policy.asOfDate));
+    return finalize(`I need a window to count upcoming renewals. ${ask}`, { clarification_needed: true, clarifying_question: ask }, [], true, ask);
+  }
   // Honest "I don't know" (FLOW-103): answer only what the exports can answer.
   const unknown = (
     reason: string,
@@ -120,10 +148,16 @@ export function executeCompositionalPlan(
     const p = store.properties.find((x) => x.propertyId === ids[0]);
     return p ? `${p.name} (${p.propertyId})` : ids[0];
   };
+  // A restatement before the figure carries no digits, so the figure stays
+  // the first number in the answer.
+  const buildingName = (ids: readonly string[] | undefined): string => {
+    if (!ids || ids.length !== 1) return 'the matching buildings';
+    return store.properties.find((x) => x.propertyId === ids[0])?.name ?? ids[0];
+  };
   const isFreeSource = (src: string): boolean =>
     store.organicSources.includes(src) && !store.paidSources.includes(src);
 
-  const unknownBuilding = findUnknownBuildingReference(question, store);
+  const unknownBuilding = findUnresolvedPlace(question, store);
   if (unknownBuilding) {
     return unknown(
       `no building called "${unknownBuilding}" is in data/pms/properties.csv (known buildings: ${store.properties.map((p) => `${p.propertyId} ${p.name}`).join(', ')}).`,
@@ -168,6 +202,28 @@ export function executeCompositionalPlan(
     }
   }
 
+  if (intent.measure === 'unsupported') {
+    const dropped = droppedBreakdownOf(intent);
+    if (dropped) {
+      // The measure may be computable; the breakdown is what is missing.
+      const what = dropped.dim === 'time' ? 'a figure per period' : `a figure for each ${dropped.dim === 'other' ? 'group' : dropped.dim}`;
+      // Keep the more specific unbound-word note too (TENACITY 2899192 F9).
+      const unbound = unknownWords(question, store);
+      return unknown(
+        `the question asks for ${what} ("${dropped.words}"), and FlowIQ has no answer laid out that way for this measure, so it will not give one overall figure in its place.${unbound.length > 0 ? ` FlowIQ also has no meaning for ${unbound.map((w) => `"${w}"`).join(', ')} in this question.` : ''}`,
+      );
+    }
+    const leftover = scalarLeftoverOf(intent);
+    if (leftover) {
+      return unknown(
+        `${LEFTOVER_REASON_HEAD}, but the question also asks for ${leftover}, which one figure cannot carry, so it will not answer a different question in its place.`,
+      );
+    }
+    return unknown(
+      `the ${intent.domain} exports cannot compute the measure asked for in "${question.trim()}".`,
+    );
+  }
+
   // 1. Domain: Data Quality Audit (void spend rows + duplicate leads)
   if (intent.domain === 'data_quality') {
     const trace = executeAgentTool(
@@ -175,6 +231,9 @@ export function executeCompositionalPlan(
       'query_marketing_spend_and_funnel',
       {
         period: intent.dateWindow.label,
+        // The window's own dates, so its label is never re-parsed into another window.
+        startDate: intent.dateWindow.startDate,
+        endDate: intent.dateWindow.endDate,
         includeDataQualityAudit: true,
       },
     );
@@ -413,7 +472,7 @@ export function executeCompositionalPlan(
       const h1Mkt = h1Trace.rawOutput as MarketingQuerySummary;
       const q3Mkt = q3Trace.rawOutput as MarketingQuerySummary;
       return finalize(
-        `For the filtered buildings and sources, H1 2026 posted spend was ${fmtUsd(h1Mkt.totalSpendUsd)} USD vs. Q3 2026 posted spend of ${fmtUsd(q3Mkt.totalSpendUsd)} USD (CAD converted at ${store.policy.cadToUsdRate} USD, void invoices excluded).`,
+        `For the filtered buildings and sources, H1 2026 posted spend was ${fmtUsd(h1Mkt.totalSpendUsd)} USD vs. Q3 2026 posted spend of ${fmtUsd(q3Mkt.totalSpendUsd)} USD (CAD converted at ${cadRateLine(store.policy)}, void invoices excluded).`,
         {
           h1_usd: h1Mkt.totalSpendUsd,
           q3_usd: q3Mkt.totalSpendUsd,
@@ -444,6 +503,33 @@ export function executeCompositionalPlan(
     );
     toolCalls.push(mktTrace);
     const mkt = mktTrace.rawOutput as MarketingQuerySummary;
+    // A per-source answer names one source. It answers only a question that
+    // ranks, names a source, or asks for a source breakdown; any other reads
+    // as the overall ratio for the matched scope.
+    // One source resolver for every source measure (intent.sourceModeOf).
+    const sourceMode = sourceModeOf(question, intent);
+    const sourceShaped = sourceMode !== 'overall';
+    const scope = !matchedPropIds || matchedPropIds.length === 0 ? 'Across the operating portfolio' : matchedPropIds.length === 1 ? `At ${buildingName(matchedPropIds)}` : `Across the ${matchedPropIds.length} matching buildings`;
+    const noOverall = (what: string) =>
+      unknown(`FlowIQ reports ${what} by listing source; it does not carry one overall ${what} for "${question.trim()}", so it will not answer a different question in its place.`);
+    // Which sources the figure covers, said as the filter actually applied.
+    const sourceSet = intent.mentionedSources.length > 0
+      ? intent.mentionedSources.join(' and ')
+      : intent.paidOnly ? 'paid sources' : 'all sources';
+    const unrankedWhich = (what: string) =>
+      unknown(`"${question.trim()}" asks which source but not by what ranking, so FlowIQ will not name one source's ${what} in its place. Ask for the lowest or highest ${what}, or for ${what} by source.`);
+    // Per-source tour and lease counts over every matched building.
+    const funnelBySource = () => {
+      const m = new Map<string, { source: string; isPaid: boolean; toured: number; leased: number; citations: CitationId[] }>();
+      for (const r of mkt.byPropertySource) {
+        const g = m.get(r.source) ?? { source: r.source, isPaid: r.isPaidSource, toured: 0, leased: 0, citations: [] };
+        g.toured += r.touredCount;
+        g.leased += r.leasedFromCreatedLeadsCount;
+        g.citations.push(...r.citations.slice(0, 2));
+        m.set(r.source, g);
+      }
+      return [...m.values()];
+    };
 
     if (intent.measure === 'reallocation_leases') {
       const realloc = mkt.deadSpendReallocation;
@@ -508,21 +594,68 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'tour_to_lease_rate') {
-      const row = mkt.byPropertySource[0];
-      if (!row) {
-        const src = intent.mentionedSources[0] ?? 'the requested source';
+      const groups = funnelBySource();
+      const rateOf = (toured: number, leased: number) => Math.round((leased / toured) * 1000) / 10;
+      if (!sourceShaped || sourceMode === 'pooled') {
+        const toured = groups.reduce((a, r) => a + r.toured, 0);
+        const leased = groups.reduce((a, r) => a + r.leased, 0);
+        if (toured === 0) return noOverall('tour-to-lease rate');
+        const pct = rateOf(toured, leased);
+        return finalize(
+          `${scope} in ${mkt.windowLabel}, ${leased} of ${plural(toured, 'toured deduplicated lead')} from ${sourceSet} signed a lease, ${sourceSet === 'all sources' ? 'an overall' : 'a pooled'} tour-to-lease rate of ${pct.toFixed(1)}%.`,
+          sourceMode === 'pooled' ? { sources: [...intent.mentionedSources], percent: pct } : { percent: pct },
+          mkt.citations.slice(0, 12),
+        );
+      }
+      if (sourceMode === 'which') return unrankedWhich('tour-to-lease rate');
+      if (sourceMode === 'list' || sourceMode === 'ranked') {
+        const rows = groups.filter((g) => g.toured > 0).map((g) => ({ ...g, pct: rateOf(g.toured, g.leased) }));
+        if (rows.length === 0) return noOverall('tour-to-lease rate');
+        if (sourceMode === 'list') {
+          return finalize(
+            `${scope} in ${mkt.windowLabel}, tour-to-lease rate by source: ${rows.map((r) => `${r.source} ${r.pct.toFixed(1)}% (${r.leased}/${r.toured})`).join(', ')}.`,
+            { by_source: rows.map((r) => ({ source: r.source, percent: r.pct })) },
+            rows.flatMap((r) => r.citations).slice(0, 12),
+          );
+        }
+        const sortedT2l = [...rows].sort((x, y) => (intent.aggregation === 'argmin' ? x.pct - y.pct : y.pct - x.pct) || x.source.localeCompare(y.source));
+        const best = sortedT2l[0];
+        const tiedT2l = tiedAtTop(sortedT2l, (r) => r.pct);
+        if (tiedT2l.length > 1) {
+          return finalize(
+            `${scope} in ${mkt.windowLabel}, ${listNames(tiedT2l.map((r) => r.source))} tied for the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} tour-to-lease rate at ${best.pct.toFixed(1)}% (${tiedT2l.map((r) => `${r.source} ${r.leased} of ${r.toured}`).join(', ')} toured leads).`,
+            { source: best.source, tied_sources: tiedT2l.map((r) => r.source), percent: best.pct },
+            tiedT2l.flatMap((r) => r.citations).slice(0, 12),
+          );
+        }
+        return finalize(
+          `${scope} in ${mkt.windowLabel}, ${best.source} had the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} tour-to-lease rate at ${best.pct.toFixed(1)}% (${best.leased} of ${best.toured} toured leads).`,
+          { source: best.source, percent: best.pct },
+          best.citations.slice(0, 12),
+        );
+      }
+      const row = mkt.byPropertySource.length === 1 ? mkt.byPropertySource[0] : undefined;
+      const g = groups.find((x) => x.source === intent.mentionedSources[0]);
+      if (!g || g.toured === 0) {
+        const src = intent.mentionedSources[0];
         return finalize(
           `At ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, ${src} had no tours, so a tour-to-lease rate is not defined.`,
           { percent: null },
           propRes?.citations ?? [],
         );
       }
+      if (row) {
+        return finalize(
+          `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${row.source} generated ${plural(row.leadsCreatedCount, 'deduplicated lead')}, of which ${row.touredCount} toured and ${row.leasedFromCreatedLeadsCount} signed a lease, giving a tour-to-lease conversion rate of ${row.tourToLeaseConversionPercent.toFixed(1)}%.`,
+          { percent: row.tourToLeaseConversionPercent },
+          row.citations.slice(0, 12),
+        );
+      }
+      const pct = rateOf(g.toured, g.leased);
       return finalize(
-        `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${row.source} generated ${plural(row.leadsCreatedCount, 'deduplicated lead')}, of which ${row.touredCount} toured and ${row.leasedFromCreatedLeadsCount} signed a lease, giving a tour-to-lease conversion rate of ${row.tourToLeaseConversionPercent.toFixed(1)}%.`,
-        {
-          percent: row.tourToLeaseConversionPercent,
-        },
-        row.citations.slice(0, 12),
+        `${scope} in ${mkt.windowLabel}, ${g.leased} of ${plural(g.toured, 'toured deduplicated lead')} from ${g.source} signed a lease, a tour-to-lease rate of ${pct.toFixed(1)}%.`,
+        { percent: pct },
+        g.citations.slice(0, 12),
       );
     }
 
@@ -532,7 +665,7 @@ export function executeCompositionalPlan(
         .sort((a, b) => b.applyRatePercent - a.applyRatePercent);
       const top = ranked[0];
       return finalize(
-        `In ${mkt.windowLabel}, paid source apply rates (applied / deduplicated leads) ranked: ${ranked.map((s) => `${s.source} ${s.applyRatePercent.toFixed(1)}% (${s.appliedCount}/${s.leadsCreatedCount})`).join(', ')}.`,
+        `${matchedPropIds && matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)} in` : 'In'} ${mkt.windowLabel}, paid source apply rates (applied / deduplicated leads) ranked: ${ranked.map((s) => `${s.source} ${s.applyRatePercent.toFixed(1)}% (${s.appliedCount}/${s.leadsCreatedCount})`).join(', ')}.`,
         {
           source: top.source,
           percent: top.applyRatePercent,
@@ -566,7 +699,8 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_lead_and_tour') {
-      const srcRow = mkt.bySource[0];
+      if (sourceMode !== 'one') return noOverall('cost per lead and per tour');
+      const srcRow = mkt.bySource.find((r) => r.source === intent.mentionedSources[0]);
       if (!srcRow) {
         return finalize(
           `No matching source had spend or leads in ${mkt.windowLabel}, so cost per lead and per tour are not defined.`,
@@ -588,10 +722,90 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_lead') {
-      const row =
-        matchedPropIds && matchedPropIds.length === 1
-          ? mkt.byPropertySource[0]
-          : mkt.bySource[0];
+      // FLOWIQ-SITE-002: rank buildings when the question names a building,
+      // sources when it names a source, and give both, labelled, when it
+      // names neither (inside one named building, the ranking is over sources).
+      const cplDim = cplRankDimension(question, intent);
+      const oneBuilding = !!matchedPropIds && matchedPropIds.length === 1;
+      if (cplDim === 'building' || (cplDim === 'both' && !oneBuilding)) {
+        const wantMin = intent.aggregation === 'argmin';
+        const word = wantMin ? 'lowest' : 'highest';
+        const bRows = mkt.byProperty
+          .filter((r) => r.leadsCreatedCount > 0)
+          .map((r) => ({ r, usd: Math.round((r.spendUsd / r.leadsCreatedCount) * 100) / 100 }))
+          .sort((x, y) => (wantMin ? x.usd - y.usd : y.usd - x.usd) || x.r.propertyId.localeCompare(y.r.propertyId));
+        if (bRows.length === 0) return noOverall('cost per lead');
+        const tiedB = tiedAtTop(bRows, (x) => x.usd);
+        const bText = `${listNames(tiedB.map((x) => `${x.r.propertyName} (${x.r.propertyId})`))} ${tiedB.length > 1 ? 'tied for' : 'had'} the ${word} cost per lead among buildings at ${fmtUsd(bRows[0].usd)} (${tiedB.map((x) => `${fmtUsd(x.r.spendUsd)} spend / ${plural(x.r.leadsCreatedCount, 'deduplicated lead')}`).join(', ')})`;
+        const bResult = { property_id: bRows[0].r.propertyId, ...(tiedB.length > 1 ? { tied_property_ids: tiedB.map((x) => x.r.propertyId) } : {}), usd: bRows[0].usd };
+        const bCites = tiedB.flatMap((x) => x.r.citations.slice(0, 4));
+        if (cplDim === 'building') {
+          return finalize(`${scope} in ${mkt.windowLabel}, ${bText}.`, bResult, bCites.slice(0, 12));
+        }
+        const paidRows = mkt.bySource.filter((r) => r.isPaidSource && r.costPerLeadUsd !== null)
+          .sort((x, y) => (wantMin ? x.costPerLeadUsd! - y.costPerLeadUsd! : y.costPerLeadUsd! - x.costPerLeadUsd!) || x.source.localeCompare(y.source));
+        const tiedS = paidRows.length > 0 ? tiedAtTop(paidRows, (r) => r.costPerLeadUsd!) : [];
+        const sText = paidRows.length > 0
+          ? `${listNames(tiedS.map((r) => r.source))} ${tiedS.length > 1 ? 'tied for' : 'had'} the ${word} cost per lead among paid sources at ${fmtUsd(paidRows[0].costPerLeadUsd!)} (${tiedS.map((r) => `${fmtUsd(r.spendUsd)} spend / ${plural(r.leadsCreatedCount, 'deduplicated lead')}`).join(', ')})`
+          : 'no paid source had leads';
+        return finalize(
+          `"${word[0].toUpperCase()}${word.slice(1)} cost per lead" can mean a building or an ad source, so here are both. ${scope} in ${mkt.windowLabel}: by building, ${bText}; by source, ${sText}.`,
+          { building: bResult, source: paidRows.length > 0 ? { source: paidRows[0].source, usd: paidRows[0].costPerLeadUsd } : null },
+          [...bCites, ...tiedS.flatMap((r) => r.citations.slice(0, 4))].slice(0, 16),
+        );
+      }
+      if (!sourceShaped || sourceMode === 'pooled') {
+        // Phase 1b item 4: every pooled / overall CPL (paid-only, multi-building,
+        // bedroom-filtered too) is the cost_per_lead tool's figure; no second formula.
+        const classIds = intent.buildingClass && (!matchedPropIds || matchedPropIds.length === 0)
+          ? store.operatingProperties.filter((p) => p.buildingClass.toUpperCase() === String(intent.buildingClass).toUpperCase()).map((p) => p.propertyId)
+          : undefined;
+        const t = costPerLead(store, {
+          property_ids: matchedPropIds && matchedPropIds.length > 0 ? matchedPropIds : classIds,
+          sources: intent.mentionedSources.length > 0 ? [...intent.mentionedSources] : intent.paidOnly ? store.paidSources : undefined,
+          paid_leads_only: intent.paidOnly,
+          bedrooms_wanted: intent.bedrooms ?? undefined,
+          start_date: intent.dateWindow.startDate,
+          end_date: intent.dateWindow.endDate,
+        });
+        if (!t.value || t.value.cpl_usd == null) return noOverall('cost per lead');
+        const usd = t.value.cpl_usd;
+        return finalize(
+          `${scope} in ${mkt.windowLabel}, the ${sourceSet === 'all sources' ? 'overall' : 'pooled'} cost per lead was ${fmtUsd(usd)} (${fmtUsd(t.value.spend_usd)} posted spend / ${plural(t.value.unique_leads, 'deduplicated lead')} from ${sourceSet}).`,
+          sourceMode === 'pooled' ? { sources: [...intent.mentionedSources], usd } : { usd },
+          mkt.citations.slice(0, 8),
+        );
+      }
+      if (sourceMode === 'which') return unrankedWhich('cost per lead');
+      if (sourceMode === 'list' || sourceMode === 'ranked') {
+        const rows = mkt.bySource.filter((r) => r.costPerLeadUsd !== null);
+        if (rows.length === 0) return noOverall('cost per lead');
+        if (sourceMode === 'list') {
+          return finalize(
+            `${scope} in ${mkt.windowLabel}, cost per lead by paid source: ${rows.map((r) => `${r.source} ${fmtUsd(r.costPerLeadUsd!)} (${fmtUsd(r.spendUsd)} / ${plural(r.leadsCreatedCount, 'lead')})`).join(', ')}.`,
+            { by_source: rows.map((r) => ({ source: r.source, usd: r.costPerLeadUsd })) },
+            rows.flatMap((r) => r.citations.slice(0, 2)).slice(0, 12),
+          );
+        }
+        const paid = rows.filter((r) => r.isPaidSource);
+        const sortedCpl = [...paid].sort((x, y) => (intent.aggregation === 'argmin' ? x.costPerLeadUsd! - y.costPerLeadUsd! : y.costPerLeadUsd! - x.costPerLeadUsd!) || x.source.localeCompare(y.source));
+        const best = sortedCpl[0];
+        if (!best) return noOverall('cost per lead');
+        const tiedCpl = tiedAtTop(sortedCpl, (r) => r.costPerLeadUsd!);
+        if (tiedCpl.length > 1) {
+          return finalize(
+            `${scope} in ${mkt.windowLabel}, ${listNames(tiedCpl.map((r) => r.source))} tied for the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} cost per lead among paid sources at ${fmtUsd(best.costPerLeadUsd!)} (${tiedCpl.map((r) => `${r.source} ${fmtUsd(r.spendUsd)} spend / ${plural(r.leadsCreatedCount, 'deduplicated lead')}`).join(', ')}).`,
+            { source: best.source, tied_sources: tiedCpl.map((r) => r.source), usd: best.costPerLeadUsd },
+            tiedCpl.flatMap((r) => r.citations.slice(0, 4)).slice(0, 12),
+          );
+        }
+        return finalize(
+          `${scope} in ${mkt.windowLabel}, ${best.source} had the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} cost per lead among paid sources at ${fmtUsd(best.costPerLeadUsd!)} (${fmtUsd(best.spendUsd)} spend / ${plural(best.leadsCreatedCount, 'deduplicated lead')}).`,
+          { source: best.source, usd: best.costPerLeadUsd },
+          best.citations.slice(0, 8),
+        );
+      }
+      const row = mkt.bySource.find((r) => r.source === intent.mentionedSources[0]);
       if (!row) {
         const src = intent.mentionedSources[0] ?? null;
         return finalize(
@@ -610,7 +824,7 @@ export function executeCompositionalPlan(
         );
       }
       return finalize(
-        `In ${mkt.windowLabel}, ${row.source} had a cost per lead of ${fmtUsd(row.costPerLeadUsd)} (${fmtUsd(row.spendUsd)} spend / ${plural(row.leadsCreatedCount, 'deduplicated lead')}).`,
+        `${scope} in ${mkt.windowLabel}, ${row.source} had a cost per lead of ${fmtUsd(row.costPerLeadUsd)} (${fmtUsd(row.spendUsd)} spend / ${plural(row.leadsCreatedCount, 'deduplicated lead')}).`,
         {
           source: row.source,
           usd: row.costPerLeadUsd,
@@ -620,19 +834,39 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'cost_per_tour') {
-      const eligible = mkt.byPropertySource.filter(
+      if (!sourceShaped || sourceMode === 'pooled') return noOverall('cost per tour');
+      if (sourceMode === 'which') return unrankedWhich('cost per tour');
+      // Per source over every matched building; one building's rows are never shown unlabelled.
+      const eligible = mkt.bySource.filter(
         (r) => r.isPaidSource && r.costPerTourUsd !== null,
       );
       const top = eligible[0];
       if (!top) {
         return finalize(
-          `No paid source had tours in ${mkt.windowLabel}, so cost per tour is not defined.`,
+          `${scope}, no paid source had tours in ${mkt.windowLabel}, so cost per tour is not defined.`,
           { source: null, usd: null },
           propRes?.citations ?? [],
         );
       }
+      if (sourceMode === 'ranked') {
+        const sortedCpt = [...eligible].sort((x, y) => (intent.aggregation === 'argmin' ? x.costPerTourUsd! - y.costPerTourUsd! : y.costPerTourUsd! - x.costPerTourUsd!) || x.source.localeCompare(y.source));
+        const best = sortedCpt[0];
+        const tiedCpt = tiedAtTop(sortedCpt, (r) => r.costPerTourUsd!);
+        if (tiedCpt.length > 1) {
+          return finalize(
+            `${scope} in ${mkt.windowLabel}, ${listNames(tiedCpt.map((r) => r.source))} tied for the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} cost per tour among paid sources at ${fmtUsd(best.costPerTourUsd!)} (${tiedCpt.map((r) => `${r.source} ${fmtUsd(r.spendUsd)} spend / ${plural(r.touredCount, 'tour')}`).join(', ')}).`,
+            { source: best.source, tied_sources: tiedCpt.map((r) => r.source), usd: best.costPerTourUsd },
+            tiedCpt.flatMap((r) => r.citations.slice(0, 4)).slice(0, 12),
+          );
+        }
+        return finalize(
+          `${scope} in ${mkt.windowLabel}, ${best.source} had the ${intent.aggregation === 'argmin' ? 'lowest' : 'highest'} cost per tour among paid sources at ${fmtUsd(best.costPerTourUsd!)} (${fmtUsd(best.spendUsd)} spend / ${plural(best.touredCount, 'tour')}).`,
+          { source: best.source, usd: best.costPerTourUsd },
+          best.citations.slice(0, 8),
+        );
+      }
       return finalize(
-        `In ${mkt.windowLabel}, cost per tour by source: ${eligible.map((r) => `${r.source} ${fmtUsd(r.costPerTourUsd!)} (${fmtUsd(r.spendUsd)} / ${plural(r.touredCount, 'tour')})`).join(', ')}.`,
+        `${scope} in ${mkt.windowLabel}, cost per tour by paid source: ${eligible.map((r) => `${r.source} ${fmtUsd(r.costPerTourUsd!)} (${fmtUsd(r.spendUsd)} / ${plural(r.touredCount, 'tour')})`).join(', ')}.`,
         {
           source: top.source,
           usd: top.costPerTourUsd,
@@ -643,7 +877,7 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'lead_count') {
       return finalize(
-        `In ${mkt.windowLabel}${intent.dateExplicit ? '' : ' (the full data window, since no period was named)'}, there were ${plural(mkt.totalLeadsCreated, 'lead')} after merging phone re-entry duplicates.`,
+        `${scope} in ${mkt.windowLabel}${intent.dateExplicit ? '' : ' (the full data window, since no period was named)'}, there were ${plural(mkt.totalLeadsCreated, 'lead')}${intent.bedrooms === undefined ? '' : intent.bedrooms === 0 ? ' that wanted a studio' : ` that wanted a ${intent.bedrooms}-bedroom unit`}${intent.mentionedSources.length > 0 ? ` from ${sourceSet}` : intent.paidOnly ? ' from paid sources' : ''} after merging phone re-entry duplicates.${new RegExp(UNIT_STATUS_EXCLUSION_RE.source, 'i').test(question) ? ' Unit status (such as down units) does not apply to leads, so no lead was set aside for it.' : ''}`,
         { count: mkt.totalLeadsCreated },
         mkt.citations.slice(0, 8),
       );
@@ -651,7 +885,7 @@ export function executeCompositionalPlan(
 
     if (intent.measure === 'spend_total') {
       return finalize(
-        `In ${mkt.windowLabel}, total posted marketing spend across the matching operating buildings was ${fmtUsd(mkt.totalSpendUsd)} USD (with void invoices at $0 and CAD converted at ${store.policy.cadToUsdRate} USD).`,
+        `In ${mkt.windowLabel}, total posted marketing spend${intent.mentionedSources.length > 0 ? ` from ${sourceSet}` : intent.paidOnly ? ' from paid sources' : ''} ${matchedPropIds && matchedPropIds.length === 1 ? `at ${buildingName(matchedPropIds)}` : 'across the matching operating buildings'} was ${fmtUsd(mkt.totalSpendUsd)} USD (with void invoices at $0 and CAD converted at ${cadRateLine(store.policy)}).`,
         {
           usd: mkt.totalSpendUsd,
         },
@@ -687,117 +921,118 @@ export function executeCompositionalPlan(
       );
     }
 
-    // Default Marketing Measure: Cost Per Signed Lease (CPSL)
+    // Default Marketing Measure: Cost Per Signed Lease (CPSL), through the same source resolver.
     const wantHighest = intent.aggregation === 'argmax';
     const isSingleBuilding =
       Boolean(matchedPropIds && matchedPropIds.length === 1);
-
-    if (isSingleBuilding) {
-      const eligible = mkt.byPropertySource
-        .filter(
-          (r) =>
-            r.isPaidSource &&
-            r.signedLeasesInPeriod > 0 &&
-            r.costPerSignedLeaseUsd !== null,
-        )
-        .sort((a, b) =>
-          wantHighest
-            ? (b.exactCostPerSignedLeaseUsd ?? 0) -
-              (a.exactCostPerSignedLeaseUsd ?? 0)
-            : (a.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY) -
-              (b.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY),
-        );
-      const asksLeaseCount =
-        /\bhow\s+many\s+(?:signed\s+)?leases\b/i.test(question) &&
-        !/\bcost\b/i.test(question);
-      if (asksLeaseCount || (qRecord.result_schema && ("count" in qRecord.result_schema || "leases" in qRecord.result_schema) && !("source" in qRecord.result_schema))) {
-        return finalize(
-          `In ${mkt.windowLabel}, matching sources produced ${plural(mkt.totalSignedLeases, 'signed lease')} across ${mkt.totalSpendUsd.toFixed(2)} USD posted spend (any untrusted CRM free-text notes are quarantined).`,
-          { count: mkt.totalSignedLeases, leases: mkt.totalSignedLeases },
-          mkt.citations.slice(0, 8),
-        );
-      }
-      const named = intent.mentionedSources;
-      if (named.length === 1 && !wantHighest) {
-        // A question about one named source gets that source's figure, or
-        // an honest "not defined"; it is never re-labelled the cheapest.
-        const src = named[0];
-        const row = mkt.byPropertySource.find((r) => r.source === src);
-        if (isFreeSource(src)) {
-          return finalize(
-            `${src} is a free source with no spend, so cost per signed lease is not applicable at ${buildingLabel(matchedPropIds)} (${plural(row?.signedLeasesInPeriod ?? 0, 'signed lease')} in ${mkt.windowLabel}).`,
-            { source: src, usd: null, applicable: false },
-            row ? row.citations.slice(0, 8) : propRes?.citations ?? [],
-          );
-        }
-        if (!row || row.costPerSignedLeaseUsd === null) {
-          return finalize(
-            `${src} at ${buildingLabel(matchedPropIds)} had ${fmtUsd((row?.spendUsd ?? 0))} spend and no signed leases in ${mkt.windowLabel}, so its cost per signed lease is not defined (no signed leases). Any CRM note claiming a figure for it is quarantined.`,
-            { source: src, usd: null, leases: 0 },
-            row ? row.citations.slice(0, 8) : propRes?.citations ?? [],
-          );
-        }
-        return finalize(
-          `At ${row.propertyName} (${row.propertyId}) in ${mkt.windowLabel}, ${src} cost ${fmtUsd(row.costPerSignedLeaseUsd)} per signed lease (${fmtUsd(row.spendUsd)} spend across ${plural(row.signedLeasesInPeriod, 'signed lease')}).`,
-          { source: src, usd: row.costPerSignedLeaseUsd },
-          row.citations.slice(0, 8),
-        );
-      }
-      const best = eligible[0];
-      const zeroLeasePaid = mkt.byPropertySource
-        .filter((r) => r.isPaidSource && r.signedLeasesInPeriod === 0)
-        .map((r) => r.source);
-      if (!best) {
-        return finalize(
-          `No paid source signed a lease at ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, so no source has a defined cost per signed lease${zeroLeasePaid.length > 0 ? ` (${zeroLeasePaid.join(', ')} spent without a signed lease)` : ''}.`,
-          { source: null, usd: null },
-          propRes?.citations ?? [],
-        );
-      }
-      const zeroNote =
-        zeroLeasePaid.length > 0
-          ? ` (Note: ${zeroLeasePaid.join(', ')} signed 0 leases and therefore has no defined cost per signed lease; any untrusted CRM free-text notes claiming otherwise are quarantined.)`
-          : '';
-
+    const asksLeaseCount =
+      /\bhow\s+many\s+(?:signed\s+)?leases\b/i.test(question) &&
+      !/\bcost\b/i.test(question);
+    if (isSingleBuilding && (asksLeaseCount || (qRecord.result_schema && ("count" in qRecord.result_schema || "leases" in qRecord.result_schema) && !("source" in qRecord.result_schema)))) {
       return finalize(
-        `At ${best.propertyName} (${best.propertyId}) in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${fmtUsd(best.spendUsd)} spend across ${plural(best.signedLeasesInPeriod, 'signed lease')}).${zeroNote}`,
-        {
-          source: best.source,
-          usd: best.costPerSignedLeaseUsd!,
-        },
-        best.citations.slice(0, 8),
-      );
-    }
-
-    const eligible = mkt.bySource
-      .filter(
-        (s) =>
-          s.isPaidSource &&
-          s.signedLeasesInPeriod > 0 &&
-          s.costPerSignedLeaseUsd !== null,
-      )
-      .sort((a, b) =>
-        wantHighest
-          ? (b.exactCostPerSignedLeaseUsd ?? 0) -
-            (a.exactCostPerSignedLeaseUsd ?? 0)
-          : (a.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY) -
-            (b.exactCostPerSignedLeaseUsd ?? Number.POSITIVE_INFINITY),
-      );
-    const winner = eligible[0];
-    if (!winner) {
-      return finalize(
-        `No paid source signed a lease across the matching buildings in ${mkt.windowLabel}, so no source has a defined cost per signed lease.`,
-        { source: null, usd: null },
+        `In ${mkt.windowLabel}, matching sources produced ${plural(mkt.totalSignedLeases, 'signed lease')} across ${mkt.totalSpendUsd.toFixed(2)} USD posted spend (any untrusted CRM free-text notes are quarantined).`,
+        { count: mkt.totalSignedLeases, leases: mkt.totalSignedLeases },
         mkt.citations.slice(0, 8),
       );
     }
+    if (!sourceShaped) return noOverall('cost per signed lease');
+    if (sourceMode === 'which') return unrankedWhich('cost per signed lease');
+    // Per source over every matched building (one building: that building's rows).
+    const cpslRows = mkt.bySource;
+    if (sourceMode === 'one') {
+      // A question about one named source gets that source's figure, or
+      // an honest "not defined"; it is never re-labelled the cheapest.
+      const src = intent.mentionedSources[0];
+      const row = cpslRows.find((r) => r.source === src);
+      if (isFreeSource(src)) {
+        return finalize(
+          `${src} is a free source with no spend, so cost per signed lease is not applicable ${isSingleBuilding ? `at ${buildingLabel(matchedPropIds)}` : 'across the matching buildings'} (${plural(row?.signedLeasesInPeriod ?? 0, 'signed lease')} in ${mkt.windowLabel}).`,
+          { source: src, usd: null, applicable: false },
+          row ? row.citations.slice(0, 8) : propRes?.citations ?? [],
+        );
+      }
+      if (!row || row.costPerSignedLeaseUsd === null) {
+        return finalize(
+          `${src} ${isSingleBuilding ? `at ${buildingLabel(matchedPropIds)}` : 'across the matching buildings'} had ${fmtUsd(row?.spendUsd ?? 0)} spend and no signed leases in ${mkt.windowLabel}, so its cost per signed lease is not defined (no signed leases). Any CRM note claiming a figure for it is quarantined.`,
+          { source: src, usd: null, leases: 0 },
+          row ? row.citations.slice(0, 8) : propRes?.citations ?? [],
+        );
+      }
+      return finalize(
+        `${scope} in ${mkt.windowLabel}, ${src} cost ${fmtUsd(row.costPerSignedLeaseUsd)} per signed lease (${fmtUsd(row.spendUsd)} spend across ${plural(row.signedLeasesInPeriod, 'signed lease')}).`,
+        { source: src, usd: row.costPerSignedLeaseUsd },
+        row.citations.slice(0, 8),
+      );
+    }
+    if (sourceMode === 'pooled') {
+      const rows = cpslRows.filter((r) => intent.mentionedSources.includes(r.source));
+      const spend = rows.reduce((x, r) => x + r.spendUsd, 0);
+      const leases = rows.reduce((x, r) => x + r.signedLeasesInPeriod, 0);
+      if (leases === 0) {
+        return finalize(
+          `${scope} in ${mkt.windowLabel}, ${sourceSet} signed no leases (${fmtUsd(spend)} spend), so their pooled cost per signed lease is not defined.`,
+          { sources: [...intent.mentionedSources], usd: null, leases: 0 },
+          rows.flatMap((r) => r.citations.slice(0, 2)).slice(0, 8),
+        );
+      }
+      const usd = Math.round((spend / leases) * 100) / 100;
+      return finalize(
+        `${scope} in ${mkt.windowLabel}, the pooled cost per signed lease was ${fmtUsd(usd)} (${fmtUsd(spend)} spend / ${plural(leases, 'signed lease')} from ${sourceSet}).`,
+        { sources: [...intent.mentionedSources], usd },
+        rows.flatMap((r) => r.citations.slice(0, 2)).slice(0, 8),
+      );
+    }
+    const zeroLeasePaid = cpslRows.filter((r) => r.isPaidSource && r.spendUsd > 0 && r.signedLeasesInPeriod === 0).map((r) => r.source);
+    if (sourceMode === 'list') {
+      const rows = cpslRows.filter((r) => r.isPaidSource);
+      if (rows.length === 0) return noOverall('cost per signed lease');
+      return finalize(
+        `${scope} in ${mkt.windowLabel}, cost per signed lease by paid source: ${rows.map((r) => r.costPerSignedLeaseUsd === null ? `${r.source} not defined (${fmtUsd(r.spendUsd)} spend, 0 signed leases)` : `${r.source} ${fmtUsd(r.costPerSignedLeaseUsd)} (${fmtUsd(r.spendUsd)} / ${plural(r.signedLeasesInPeriod, 'signed lease')})`).join(', ')}.`,
+        { by_source: rows.map((r) => ({ source: r.source, usd: r.costPerSignedLeaseUsd })) },
+        rows.flatMap((r) => r.citations.slice(0, 2)).slice(0, 12),
+      );
+    }
+    // Ranked. One key for the sort and the tie test, so they cannot disagree.
+    const cpslKey = (r: (typeof cpslRows)[number]): number =>
+      r.exactCostPerSignedLeaseUsd ?? r.costPerSignedLeaseUsd ?? Number.NaN;
+    const zeroNote =
+      isSingleBuilding && zeroLeasePaid.length > 0
+        ? ` (Note: ${zeroLeasePaid.join(', ')} signed 0 leases and therefore has no defined cost per signed lease; any untrusted CRM free-text notes claiming otherwise are quarantined.)`
+        : '';
+    const eligible = cpslRows
+      .filter((r) => r.isPaidSource && r.signedLeasesInPeriod > 0 && r.costPerSignedLeaseUsd !== null)
+      .sort((a, b) =>
+        (wantHighest ? cpslKey(b) - cpslKey(a) : cpslKey(a) - cpslKey(b)) || a.source.localeCompare(b.source),
+      );
+    const best = eligible[0];
+    if (!best) {
+      return finalize(
+        isSingleBuilding
+          ? `No paid source signed a lease at ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, so no source has a defined cost per signed lease${zeroLeasePaid.length > 0 ? ` (${zeroLeasePaid.join(', ')} spent without a signed lease)` : ''}.`
+          : `No paid source signed a lease across the matching buildings in ${mkt.windowLabel}, so no source has a defined cost per signed lease.`,
+        { source: null, usd: null },
+        isSingleBuilding ? propRes?.citations ?? [] : mkt.citations.slice(0, 8),
+      );
+    }
+    const tiedCpsl = tiedAtTop(eligible, cpslKey);
+    if (tiedCpsl.length > 1) {
+      return finalize(
+        `${isSingleBuilding ? `At ${buildingLabel(matchedPropIds)}` : scope} in ${mkt.windowLabel}, ${listNames(tiedCpsl.map((r) => r.source))} tied for the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${tiedCpsl.map((r) => `${r.source} ${fmtUsd(r.spendUsd)} spend / ${plural(r.signedLeasesInPeriod, 'signed lease')}`).join(', ')}).${zeroNote}`,
+        { source: best.source, tied_sources: tiedCpsl.map((r) => r.source), usd: best.costPerSignedLeaseUsd! },
+        tiedCpsl.flatMap((r) => r.citations.slice(0, 4)).slice(0, 12),
+      );
+    }
+    if (isSingleBuilding) {
+      return finalize(
+        `At ${buildingLabel(matchedPropIds)} in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease among paid sources at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${fmtUsd(best.spendUsd)} spend across ${plural(best.signedLeasesInPeriod, 'signed lease')}).${zeroNote}`,
+        { source: best.source, usd: best.costPerSignedLeaseUsd! },
+        best.citations.slice(0, 8),
+      );
+    }
     return finalize(
-      `Across the operating portfolio in ${mkt.windowLabel}, ${winner.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease at ${fmtUsd(winner.costPerSignedLeaseUsd!)} (${fmtUsd(winner.spendUsd)} spend / ${plural(winner.signedLeasesInPeriod, 'signed lease')} after deduplicating phone re-entry leads and excluding void invoices).`,
-      {
-        source: winner.source,
-        usd: winner.costPerSignedLeaseUsd!,
-      },
-      winner.citations.slice(0, 10),
+      `${scope} in ${mkt.windowLabel}, ${best.source} had the ${wantHighest ? 'highest' : 'lowest'} cost per signed lease at ${fmtUsd(best.costPerSignedLeaseUsd!)} (${fmtUsd(best.spendUsd)} spend / ${plural(best.signedLeasesInPeriod, 'signed lease')} after deduplicating phone re-entry leads and excluding void invoices).`,
+      { source: best.source, usd: best.costPerSignedLeaseUsd! },
+      best.citations.slice(0, 10),
     );
   }
 
@@ -835,6 +1070,10 @@ export function executeCompositionalPlan(
       buildingClass: intent.buildingClass,
       bedrooms: intent.bedrooms,
       bathrooms: intent.bathrooms,
+      bedroomsMin: intent.bedroomsMin,
+      bedroomsMax: intent.bedroomsMax,
+      bathroomsMin: intent.bathroomsMin,
+      bathroomsMax: intent.bathroomsMax,
       view: intent.view,
       floorMin: intent.floorMin,
       floorMax: intent.floorMax,
@@ -861,8 +1100,18 @@ export function executeCompositionalPlan(
     }
 
     if (intent.measure === 'renewal_rate') {
+      // The rate is renewed / (renewed + pending + notice given); leases not
+      // yet due are outside it. Say that denominator, and the window applied.
+      const decided = leaseSummary.renewedCount + leaseSummary.pendingCount + leaseSummary.noticeGivenCount;
+      const scopeLabel = intent.leaseEndWindow
+        ? `ending in ${intent.leaseEndWindow.label}`
+        : 'on file (all end dates)';
+      const where = matchedPropIds && matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)}, f` : 'F';
+      if (decided === 0) {
+        return unknown(`no lease ${scopeLabel}${matchedPropIds && matchedPropIds.length === 1 ? ` at ${buildingLabel(matchedPropIds)}` : ''} has a renewal outcome (renewed, pending or notice given) in data/pms/leases.csv, so there is no renewal rate for it.`, leaseSummary.citations.slice(0, 4));
+      }
       return finalize(
-        `For the ${plural(leaseSummary.totalMatchingLeases, 'matching lease')} ending in ${intent.dateWindow.label}, ${leaseSummary.renewedCount} have renewed, giving a renewal rate of ${leaseSummary.renewalRatePercent.toFixed(1)}%.`,
+        `${where}or the ${plural(leaseSummary.totalMatchingLeases, 'matching lease')} ${scopeLabel}, ${leaseSummary.renewedCount} of the ${decided} with a renewal outcome have renewed (${leaseSummary.pendingCount} pending, ${leaseSummary.noticeGivenCount} notice given; ${leaseSummary.notDueCount} not yet due are excluded), giving a renewal rate of ${leaseSummary.renewalRatePercent.toFixed(1)}%.`,
         {
           percent: leaseSummary.renewalRatePercent,
           renewed: leaseSummary.renewedCount,
@@ -880,6 +1129,18 @@ export function executeCompositionalPlan(
           renewal_leases: leaseSummary.renewalLeaseCount,
           usd: leaseSummary.averageConcessionUsd,
         },
+        leaseSummary.citations.slice(0, 8),
+      );
+    }
+
+    if (intent.measure === 'total_concession') {
+      // One building is named only when the question resolved to exactly one.
+      const one = propRes?.matched.length === 1 ? propRes.matched[0] : undefined;
+      const where = one ? `At ${one.name} (${one.propertyId})` : 'Across the operating portfolio';
+      const leases = `${plural(leaseSummary.totalMatchingLeases, `${intent.leaseType ?? 'matching'} lease`)}${intent.leaseStartWindow ? ` starting in ${intent.dateWindow.label}` : ` in ${intent.dateWindow.label}`}`;
+      return finalize(
+        `${where}, concessions totalled ${fmtUsd(leaseSummary.totalConcessionUsd)} on the ${leases}.`,
+        { usd: leaseSummary.totalConcessionUsd, leases: leaseSummary.totalMatchingLeases },
         leaseSummary.citations.slice(0, 8),
       );
     }
@@ -928,7 +1189,7 @@ export function executeCompositionalPlan(
         );
       }
       return finalize(
-        `At ${propRow?.propertyName ?? 'the matching buildings'} (${propRow?.propertyId ?? ''}), the average concession on the ${leaseSummary.totalMatchingLeases} ${intent.leaseType ?? 'matching'} leases in ${intent.dateWindow.label} was ${fmtUsd(leaseSummary.averageConcessionUsd)} (${store.policy.includeZeroConcessions ? 'zeros included' : 'non-zero only'}).`,
+        `${propRes?.matched.length === 1 ? `At ${propRow?.propertyName} (${propRow?.propertyId})` : 'Across the operating portfolio'}, the average concession on the ${leaseSummary.totalMatchingLeases} ${intent.leaseType ?? 'matching'} leases in ${intent.dateWindow.label} was ${fmtUsd(leaseSummary.averageConcessionUsd)} (${store.policy.includeZeroConcessions ? 'zeros included' : 'non-zero only'}).`,
         {
           usd: leaseSummary.averageConcessionUsd,
         },
@@ -993,6 +1254,29 @@ export function executeCompositionalPlan(
     const nonZeroProps = leaseSummary.byProperty.filter(
       (p) => p.matchingLeaseCount > 0,
     );
+    // FLOWIQ-SITE-003: name the lease-end window the count covers, and give a
+    // renewal-status breakdown when asked.
+    const relativeWindow = /\b(?:this|next)\s+month\b/i.test(question)
+      || (/\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/i.test(question) && !/\b20\d\d\b/.test(question));
+    const endWin = intent.leaseEndWindow && relativeWindow ? ` with a lease end date in ${intent.leaseEndWindow.label}` : '';
+    if (endWin && !intent.renewalStatus && /\b(?:by|per)\s+(?:renewal[-\s]+)?status\b|\brenewal[-\s]+status\s+breakdown\b/i.test(question)) {
+      const parts: Array<[string, number]> = [['renewed', leaseSummary.renewedCount], ['pending', leaseSummary.pendingCount], ['notice_given', leaseSummary.noticeGivenCount], ['not_due', leaseSummary.notDueCount]];
+      return finalize(
+        `Of the ${plural(leaseSummary.totalMatchingLeases, 'lease')}${endWin}, by renewal status: ${parts.map(([k, n]) => `${k} ${n}`).join(', ')}.`,
+        { count: leaseSummary.totalMatchingLeases, by_renewal_status: Object.fromEntries(parts) },
+        leaseSummary.citations.slice(0, 12),
+      );
+    }
+    if (endWin) {
+      const statusNote = intent.renewalStatus ? ` and renewal status ${intent.renewalStatus}` : '';
+      return finalize(
+        `${leaseSummary.totalMatchingLeases} ${leaseSummary.totalMatchingLeases === 1 ? 'lease' : 'leases'}${endWin}${statusNote} (window resolved from the data's as-of date ${store.policy.asOfDate}). By building: ${nonZeroProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.matchingLeaseCount}`).join(', ') || 'none'}.`,
+        'property_ids' in schema
+          ? { count: leaseSummary.totalMatchingLeases, property_ids: nonZeroProps.map((p) => p.propertyId) }
+          : { count: leaseSummary.totalMatchingLeases, window: intent.leaseEndWindow!.label },
+        leaseSummary.citations.slice(0, 12),
+      );
+    }
     return finalize(
       `Across the matching operating buildings (${nonZeroProps.map((p) => `${p.propertyName} [${p.propertyId}]: ${p.matchingLeaseCount}`).join(', ') || 'none'}), there are ${plural(leaseSummary.totalMatchingLeases, 'lease')} matching the criteria.`,
       'property_ids' in schema
@@ -1013,12 +1297,19 @@ export function executeCompositionalPlan(
     buildingClass: intent.buildingClass,
     bedrooms: intent.bedrooms,
     bathrooms: intent.bathrooms,
+    bedroomsMin: intent.bedroomsMin,
+    bedroomsMax: intent.bedroomsMax,
+    bathroomsMin: intent.bathroomsMin,
+    bathroomsMax: intent.bathroomsMax,
+    rentMin: intent.rentMin,
+    rentMax: intent.rentMax,
     sqftMin: intent.sqftMin,
     sqftMax: intent.sqftMax,
     floorMin: intent.floorMin,
     floorMax: intent.floorMax,
     view: intent.view,
     status: intent.unitStatus,
+    ...(intent.unitStatusIn ? { statusIn: intent.unitStatusIn } : {}),
   });
   toolCalls.push(unitTrace);
   const unitSummary = unitTrace.rawOutput as UnitQuerySummary;
@@ -1026,11 +1317,102 @@ export function executeCompositionalPlan(
   const hasUnitSubsetFilter =
     intent.bedrooms !== undefined ||
     intent.bathrooms !== undefined ||
+    intent.bedroomsMin !== undefined ||
+    intent.bedroomsMax !== undefined ||
+    intent.bathroomsMin !== undefined ||
+    intent.bathroomsMax !== undefined ||
+    intent.rentMin !== undefined ||
+    intent.rentMax !== undefined ||
     intent.sqftMin !== undefined ||
     intent.sqftMax !== undefined ||
     intent.floorMin !== undefined ||
     intent.floorMax !== undefined ||
-    intent.view !== undefined;
+    intent.view !== undefined ||
+    intent.unitStatusIn !== undefined;
+
+  // A unit filter no unit in scope meets (4-bedroom where none exist) has no
+  // rate and no ranking: 0 of 0 is not 0.0%, and a tie at 0 is not a winner.
+  // A count of zero is a true count and stays.
+  if (hasUnitSubsetFilter && (!/count/.test(intent.measure) || intent.aggregation === 'argmax' || intent.aggregation === 'argmin') && (intent.unitStatus !== undefined || intent.unitStatusIn !== undefined || unitSummary.totalFilteredUnits === 0)) {
+    const subset = (executeAgentTool(store, 'query_units_and_occupancy', {
+      propertyIds: matchedPropIds, buildingClass: intent.buildingClass, bedrooms: intent.bedrooms, bathrooms: intent.bathrooms,
+      bedroomsMin: intent.bedroomsMin, bedroomsMax: intent.bedroomsMax, bathroomsMin: intent.bathroomsMin, bathroomsMax: intent.bathroomsMax,
+      rentMin: intent.rentMin, rentMax: intent.rentMax, sqftMin: intent.sqftMin, sqftMax: intent.sqftMax, floorMin: intent.floorMin, floorMax: intent.floorMax, view: intent.view,
+    }).rawOutput as UnitQuerySummary);
+    if (subset.totalFilteredUnits === 0) {
+      return unknown(`no unit at ${matchedPropIds && matchedPropIds.length > 0 ? buildingName(matchedPropIds) : 'any operating building'} matches the unit filter in "${question.trim()}" (data/pms/units.csv), so there is no figure to give for it.`, propRes?.citations ?? []);
+    }
+  }
+
+  // FLOWIQ-SITE-004: "occupancy at each building", "vacancies by property",
+  // "units in each building" list one row per building, total last.
+  // Occupancy follows the active policy; on-notice units are shown as their
+  // own figure on every row. Counting notice as occupied is the CURRENT
+  // DEFAULT (Tau's default, not yet confirmed by Manu).
+  if (
+    BUILDING_BREAKDOWN_MEASURES.has(intent.measure) &&
+    intent.aggregation !== 'argmax' && intent.aggregation !== 'argmin' &&
+    requestedBreakdowns(question).some((b) => b.dim === 'building' && !b.ranked) &&
+    unitSummary.byProperty.length > 1
+  ) {
+    const filtered = hasUnitSubsetFilter || intent.unitStatus !== undefined;
+    const notice = store.policy.occupiedIncludesNotice;
+    const pick = (p: {
+      totalUnits: number; occupiedUnits: number; noticeUnits: number; vacantUnits: number;
+      filteredUnitCount: number; filteredOccupiedUnits: number; filteredNoticeUnits: number; filteredVacantUnits: number;
+    }) => {
+      const units = filtered ? p.filteredUnitCount : p.totalUnits;
+      const occ = filtered ? p.filteredOccupiedUnits : p.occupiedUnits;
+      const ntc = filtered ? p.filteredNoticeUnits : p.noticeUnits;
+      const vac = filtered ? p.filteredVacantUnits : p.vacantUnits;
+      return { units, occ, ntc, vac, occupiedCount: notice ? occ + ntc : occ };
+    };
+    const pct = ratePercent1;
+    const rows = unitSummary.byProperty.map((p) => ({ id: p.propertyId, name: p.propertyName, ...pick(p) }));
+    const total = pick({
+      totalUnits: unitSummary.portfolioTotalUnits, occupiedUnits: unitSummary.portfolioOccupiedUnits,
+      noticeUnits: unitSummary.portfolioNoticeUnits, vacantUnits: unitSummary.portfolioVacantUnits,
+      filteredUnitCount: unitSummary.totalFilteredUnits, filteredOccupiedUnits: unitSummary.filteredOccupiedUnits,
+      filteredNoticeUnits: unitSummary.filteredNoticeUnits, filteredVacantUnits: unitSummary.filteredVacantUnits,
+    });
+    const noticeNote = notice
+      ? 'current default: occupied includes units on notice, shown separately'
+      : 'units on notice are not counted as occupied under the active policy';
+    let lines: string[];
+    let header: string;
+    let result: Record<string, unknown>;
+    if (intent.measure === 'occupied_share') {
+      header = `Occupancy by building (${noticeNote}):`;
+      const line = (label: string, r: typeof total) =>
+        `${label}: ${pct(r.occupiedCount, r.units).toFixed(1)}% (${r.occupiedCount}/${r.units} units; ${r.ntc} on notice)`;
+      lines = [...rows.map((r) => line(`${r.name} [${r.id}]`, r)), line('Portfolio total', total)];
+      result = {
+        by_property: rows.map((r) => ({ property_id: r.id, percent: pct(r.occupiedCount, r.units), occupied: r.occupiedCount, notice: r.ntc, units: r.units })),
+        total: { percent: pct(total.occupiedCount, total.units), occupied: total.occupiedCount, notice: total.ntc, units: total.units },
+      };
+    } else if (intent.measure === 'vacancy_rate') {
+      header = 'Vacancy rate by building:';
+      const line = (label: string, r: typeof total) => `${label}: ${pct(r.vac, r.units).toFixed(1)}% (${r.vac}/${r.units} units vacant)`;
+      lines = [...rows.map((r) => line(`${r.name} [${r.id}]`, r)), line('Portfolio total', total)];
+      result = {
+        by_property: rows.map((r) => ({ property_id: r.id, percent: pct(r.vac, r.units), vacant: r.vac, units: r.units })),
+        total: { percent: pct(total.vac, total.units), vacant: total.vac, units: total.units },
+      };
+    } else {
+      const what = intent.unitStatus === 'vacant' ? 'Vacant units' : intent.unitStatus ? `Units (${intent.unitStatus})` : 'Units';
+      header = `${what} by building:`;
+      lines = [...rows.map((r) => `${r.name} [${r.id}]: ${r.units}`), `Portfolio total: ${total.units}`];
+      result = {
+        by_property: rows.map((r) => ({ property_id: r.id, count: r.units })),
+        total: { count: total.units },
+      };
+    }
+    return finalize(
+      `${header}\n${lines.map((l) => `- ${l}`).join('\n')}${buildExcludedOnboardingSuffix(store)}`,
+      result,
+      [...new Set(unitSummary.byProperty.flatMap((p) => p.citations.slice(0, 2)))].slice(0, 16),
+    );
+  }
 
   if (intent.measure === 'vacancy_rate') {
     if (intent.aggregation === 'argmax' || intent.aggregation === 'argmin') {
@@ -1091,11 +1473,14 @@ export function executeCompositionalPlan(
       const formulaNote = store.policy.occupiedIncludesNotice
         ? `${propRow.occupiedUnits} occupied + ${propRow.noticeUnits} on notice, with ${propRow.vacantUnits} vacant`
         : `${propRow.occupiedUnits} occupied only (notice=${propRow.noticeUnits} excluded by active policy), with ${propRow.vacantUnits} vacant`;
+      // FIQ-TOOLS-1 tool 5: the shipped-policy figure comes from the occupancy tool.
+      const occTool = store.policy.occupiedIncludesNotice ? occupancyTool(store, { property_id: propRow.propertyId }).value : null;
+      const pctOcc = occTool?.occupied_share_pct ?? propRow.occupiedSharePercent;
       return finalize(
-        `At ${propRow.propertyName} (${propRow.propertyId}), ${propRow.occupiedSharePercent.toFixed(1)}% of units are occupied (${numerator} of ${plural(propRow.totalUnits, 'unit')}, comprising ${formulaNote}).`,
+        `At ${propRow.propertyName} (${propRow.propertyId}), ${pctOcc.toFixed(1)}% of units are occupied (${numerator} of ${plural(propRow.totalUnits, 'unit')}, comprising ${formulaNote}).`,
         {
           property_id: propRow.propertyId,
-          percent: propRow.occupiedSharePercent,
+          percent: pctOcc,
         },
         propRow.citations.slice(0, 8),
       );
@@ -1103,7 +1488,9 @@ export function executeCompositionalPlan(
 
     const share = hasUnitSubsetFilter
       ? unitSummary.filteredOccupiedSharePercent
-      : unitSummary.portfolioOccupiedSharePercent;
+      : (!matchedPropIds || matchedPropIds.length === 0) && store.policy.occupiedIncludesNotice
+        ? occupancyTool(store).value!.occupied_share_pct
+        : unitSummary.portfolioOccupiedSharePercent;
     const num = hasUnitSubsetFilter
       ? store.policy.occupiedIncludesNotice
         ? unitSummary.filteredOccupiedUnits + unitSummary.filteredNoticeUnits
@@ -1116,12 +1503,20 @@ export function executeCompositionalPlan(
       : unitSummary.portfolioTotalUnits;
 
     return finalize(
-      `Across the matching units and operating buildings, the occupied share is ${share.toFixed(1)}% (${num} of ${plural(den, 'unit')}).`,
+      `${matchedPropIds && matchedPropIds.length === 1 ? `At ${buildingLabel(matchedPropIds)}, across the matching units` : 'Across the matching units and operating buildings'}, the occupied share is ${share.toFixed(1)}% (${num} of ${plural(den, 'unit')}).`,
       {
         percent: share,
       },
       unitSummary.citations.slice(0, 8),
     );
+  }
+
+  // An average over no units has no value; zero would be a fabricated figure.
+  if (
+    ['avg_market_rent_and_sqft', 'avg_market_rent', 'avg_sqft', 'rent_per_sqft'].includes(intent.measure) &&
+    unitSummary.totalFilteredUnits === 0
+  ) {
+    return unknown('no units match the filter, so there is no average to report.');
   }
 
   if (intent.measure === 'avg_market_rent_and_sqft') {
@@ -1204,6 +1599,7 @@ export function executeCompositionalPlan(
     !('property_ids' in schema) &&
     !hasUnitSubsetFilter &&
     intent.unitStatus === undefined &&
+    intent.unitStatusIn === undefined &&
     !hasUnitSignal(question)
   ) {
     return unknown(
@@ -1226,11 +1622,15 @@ export function executeCompositionalPlan(
     const tied = ranked.filter(
       (p) => p.filteredUnitCount === top.filteredUnitCount,
     );
-    const statusLabel = intent.unitStatus ?? 'matching';
+    const statusLabel = `${intent.unitStatus ?? 'matching'}${unitFilterLabel(intent)}`;
+    // Every building at the runner-up count is named, so a tie for second is not hidden.
+    const next = ranked.filter((p) => p !== top && p.filteredUnitCount === ranked[1].filteredUnitCount);
+    const nextNames = next.map((p) => p.propertyName);
+    const nextLabel = `${nextNames.length > 1 ? `${nextNames.slice(0, -1).join(', ')} and ${nextNames[nextNames.length - 1]}` : nextNames[0]}${next.length > 1 ? ' tie' : ''} with ${ranked[1].filteredUnitCount}${next.length > 1 ? ' each' : ''}`;
     return finalize(
       tied.length > 1
         ? `${tied.map((p) => `${p.propertyName} (${p.propertyId})`).join(' and ')} tie for the ${wantMax ? 'most' : 'fewest'} ${statusLabel} units at ${top.filteredUnitCount} each.`
-        : `${top.propertyName} (${top.propertyId}) has the ${wantMax ? 'most' : 'fewest'} ${statusLabel} units at ${top.filteredUnitCount} (next: ${ranked[1].propertyName} with ${ranked[1].filteredUnitCount})${buildExcludedOnboardingSuffix(store)}.`,
+        : `${top.propertyName} (${top.propertyId}) has the ${wantMax ? 'most' : 'fewest'} ${statusLabel} units at ${top.filteredUnitCount} (next: ${nextLabel})${buildExcludedOnboardingSuffix(store)}.`,
       { property_id: top.propertyId, count: top.filteredUnitCount },
       [...new Set(ranked.slice(0, 2).flatMap((p) => p.citations.slice(0, 4)))],
     );
@@ -1242,7 +1642,7 @@ export function executeCompositionalPlan(
       {
         property_ids: ids,
       },
-      unitSummary.citations.slice(0, 8),
+      nonZeroProps.flatMap((p) => p.citations.slice(0, 2)),
     );
   }
   if (asksHowManyBuildings) {
@@ -1253,7 +1653,7 @@ export function executeCompositionalPlan(
         count: ids.length,
         property_ids: ids,
       },
-      unitSummary.citations.slice(0, 8),
+      nonZeroProps.flatMap((p) => p.citations.slice(0, 2)),
     );
   }
   if (asksTotalAndOccupied) {
@@ -1274,7 +1674,7 @@ export function executeCompositionalPlan(
         total_units: totalUnits,
         occupied_units: occupiedUnits,
       },
-      unitSummary.citations.slice(0, 8),
+      nonZeroProps.flatMap((p) => p.citations.slice(0, 2)),
     );
   }
   if ('property_ids' in schema && !('count' in schema)) {
@@ -1284,7 +1684,7 @@ export function executeCompositionalPlan(
       {
         property_ids: ids,
       },
-      unitSummary.citations.slice(0, 8),
+      nonZeroProps.flatMap((p) => p.citations.slice(0, 2)),
     );
   }
   if (
@@ -1297,7 +1697,7 @@ export function executeCompositionalPlan(
         : nonZeroProps[0];
     const statusLabel = intent.unitStatus ?? 'matching';
     return finalize(
-      `${propRow.propertyName} (${propRow.propertyId}) has ${propRow.filteredUnitCount} ${statusLabel} units (out of ${propRow.totalUnits} total units).`,
+      `${propRow.propertyName} (${propRow.propertyId}) has ${propRow.filteredUnitCount} ${statusLabel} units (${unitFilterLabel(intent).trim() ? `${unitFilterLabel(intent).trim()}; ` : ''}out of ${propRow.totalUnits} total units).`,
       'property_id' in schema || /\bwhich\s+building\b/i.test(question)
         ? {
             property_id: propRow.propertyId,
@@ -1317,4 +1717,27 @@ export function executeCompositionalPlan(
     },
     unitSummary.citations.slice(0, 8),
   );
+}
+
+/**
+ * The unit filters a ranking applied, read off the parsed fields, so the
+ * text names the subset it ranked (" 2-bedroom", " studio, rent under $2,000").
+ */
+function unitFilterLabel(intent: ParsedQueryIntent): string {
+  const parts: string[] = [];
+  const range = (lo: number | undefined, hi: number | undefined, unit: string, fmt = (n: number) => String(n)) =>
+    lo !== undefined && hi !== undefined ? `${unit} ${fmt(lo)} to ${fmt(hi)}` : lo !== undefined ? `${unit} ${fmt(lo)} or more` : hi !== undefined ? `${unit} up to ${fmt(hi)}` : null;
+  if (intent.bedrooms !== undefined) parts.push(intent.bedrooms === 0 ? 'studio' : `${intent.bedrooms}-bedroom`);
+  if (intent.bathrooms !== undefined) parts.push(`${intent.bathrooms}-bath`);
+  const usd = (n: number) => `$${n.toLocaleString('en-US')}`;
+  for (const r of [range(intent.bedroomsMin, intent.bedroomsMax, 'bedrooms'), range(intent.bathroomsMin, intent.bathroomsMax, 'baths'), range(intent.rentMin, intent.rentMax, 'rent', usd), range(intent.sqftMin, intent.sqftMax, 'sq ft'), range(intent.floorMin, intent.floorMax, 'floor')]) if (r) parts.push(r);
+  if (intent.view) parts.push(`${intent.view} view`);
+  if (intent.buildingClass) parts.push(`class ${intent.buildingClass}`);
+  return parts.length > 0 ? ` ${parts.join(', ')}` : '';
+}
+
+function nextMonthLabel(asOf: string): string {
+  const [y, m] = parseAsOfYearMonth(asOf);
+  const d = new Date(Date.UTC(y, m, 1));
+  return d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }

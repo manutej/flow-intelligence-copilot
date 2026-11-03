@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readlinePromises from "node:readline/promises";
 import { askFlowIqCopilot } from "./agent/copilot.ts";
+import type { FairHousingSession } from "./domain/fair-housing.ts";
 import {
   MODEL_PROVIDER_PROFILES,
   type ModelProviderId,
@@ -64,6 +65,8 @@ const LIVE_URL = "https://repo-sigma-one-80.vercel.app";
 
 /** What every command needs: the style, the repo, and the global switches. */
 interface Ctx {
+  /** Set by the REPL so a refusal carries to later turns. */
+  readonly session?: FairHousingSession;
   readonly s: Style;
   readonly repoRoot: string;
   readonly json: boolean;
@@ -87,7 +90,7 @@ class NotFoundError extends Error {}
 
 function loadStore(ctx: Ctx, overrides?: Partial<PortfolioPolicyConfig>): PortfolioStore {
   try {
-    return loadPortfolioStore(ctx.repoRoot, overrides);
+    return loadPortfolioStore(process.env.FLOW_DATA_DIR || ctx.repoRoot, overrides);
   } catch (err) {
     process.stderr.write(
       `flowiq: could not load the CSV exports: ${err instanceof Error ? err.message : String(err)}\n` +
@@ -321,7 +324,7 @@ async function runAsk(ctx: Ctx, args: ParsedArgs): Promise<number> {
       latencyMs: llmTurn.latencyMs,
     };
   } else {
-    turn = await askFlowIqCopilot(kitRecord ?? question, { store });
+    turn = await askFlowIqCopilot(kitRecord ?? question, { store, session: ctx.session });
   }
 
   if (ctx.json) {
@@ -663,7 +666,7 @@ function agentContext(repoRoot: string): Record<string, unknown> {
       NO_COLOR: "disable colour",
       FORCE_COLOR: "force colour",
       FLOW_DATA_DIR: "directory holding the six CSV exports",
-      FLOW_CAD_RATE: "default USD per CAD (0.73)",
+      FLOW_CAD_RATE: "default USD per CAD (pinned live rate, dated)",
       XAI_API_KEY: "only for --llm with provider xai",
     },
     mcp: {
@@ -772,7 +775,7 @@ async function runRepl(ctx: Ctx): Promise<number> {
   const { s } = ctx;
   const interactive = process.stdin.isTTY === true;
   let store = loadStore(ctx);
-  const replCtx: Ctx = { ...ctx, json: false, quiet: false };
+  const replCtx: Ctx = { ...ctx, json: false, quiet: false, session: { refusedEarlier: false } };
   if (interactive) {
     out(...s.banner(FLOWIQ_VERSION), ...replDeck(s), "");
   }

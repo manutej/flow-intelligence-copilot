@@ -9,6 +9,10 @@ import { parseArgs, UsageError } from '../src/cli/args.ts';
 import { colorEnabled, createStyle, terminalWidth } from '../src/cli/style.ts';
 import { WORDMARK } from '../src/cli/wordmark.ts';
 import { closest } from '../src/util/suggest.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 function flowiq(args: string[], env: Record<string, string> = {}) {
   const r = spawnSync('node', ['--no-warnings', 'src/cli.ts', ...args], {
@@ -68,7 +72,7 @@ describe('flowiq CLI contract', () => {
     const r = flowiq(['ask', 'How much did we spend on paid sources that signed no leases from April to September 2026?']);
     assert.equal(r.code, 0);
     for (const line of r.stdout.split('\n')) assert.ok(line.length <= 80, line);
-    assert.ok(r.stdout.includes('$46,599.90'));
+    assert.ok(r.stdout.includes(usd(DEAD_USD)));
   });
 
   it('describes itself to agents as versioned JSON', () => {

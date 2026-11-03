@@ -40,7 +40,8 @@ export interface PropertyRecord {
   readonly propertyId: string;
   readonly name: string;
   readonly aka: readonly string[];
-  readonly decodedEasterEggUrls: readonly string[];
+  /** Alias values withheld because they are not display names; never decoded or shown. */
+  readonly withheldAliasCount: number;
   readonly address: string;
   readonly neighborhood: string;
   readonly yearBuilt: number;
@@ -175,7 +176,8 @@ export interface PortfolioStore {
   readonly organicSources: readonly string[];
   readonly signedLeases: readonly SignedLeaseAttribution[];
   readonly decisions: readonly DecisionRecord[];
-  readonly primaryKeyIndex: ReadonlySet<CitationId>;
+  /** Every row's citation id, mapped to the property that owns the row. */
+  readonly primaryKeyIndex: ReadonlyMap<CitationId, string>;
 }
 
 export interface QuestionRecord {
@@ -191,4 +193,25 @@ export interface AnswerEnvelope {
   readonly answer: string;
   readonly result: Readonly<Record<string, unknown>>;
   readonly citations: readonly CitationId[];
+  /**
+   * L3: the typed query the answer was computed from. The verifier re-runs it
+   * against the store and accepts only figures the recompute produces.
+   */
+  readonly query?: TypedQuery;
+  /** S2-L3: binds the answer text to the typed query and its result. */
+  readonly proof?: AnswerProof;
+}
+
+export interface AnswerProof {
+  /** The fixed renderer the answer came from: domain.measure.aggregation. */
+  readonly template_id: string;
+  readonly query_hash: string;
+  readonly result_hash: string;
+  readonly row_ids: readonly string[];
+}
+
+export interface TypedQuery {
+  readonly question: string;
+  readonly intent: unknown;
+  readonly result_schema?: Readonly<Record<string, string>>;
 }

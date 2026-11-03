@@ -39,6 +39,10 @@
       "destination": "/llms.txt"
     },
     {
+      "source": "/help",
+      "destination": "/help.html"
+    },
+    {
       "source": "/",
       "destination": "/index.html"
     }

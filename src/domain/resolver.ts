@@ -1,3 +1,4 @@
+import { isFiscalToken, maskFiscalTokens, maskNonLocativeFy } from './fiscal.ts';
 import type {
   CitationId,
   PortfolioStore,
@@ -34,7 +35,7 @@ export interface PropertyResolutionResult {
  * amenity strings if those canonical strings exist in the loaded PortfolioStore.
  * Every distinct amenity in `properties.csv` is ALSO indexed dynamically from `pool`.
  */
-const AMENITY_SYNONYMS: ReadonlyArray<{
+export const AMENITY_SYNONYMS: ReadonlyArray<{
   readonly canonical: string;
   readonly patterns: readonly RegExp[];
 }> = [
@@ -271,7 +272,7 @@ export function resolveProperties(
     const subMatches = candidates.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
-        p.aka.some((alias) => alias.toLowerCase().includes(q)) ||
+        p.aka.some((alias) => !isFiscalToken(alias) && alias.toLowerCase().includes(q)) ||
         p.neighborhood.toLowerCase().includes(q),
     );
     if (subMatches.length > 0) {
@@ -324,6 +325,9 @@ export function resolvePropertiesFromText(
     candidatePool?: readonly PropertyRecord[];
   },
 ): PropertyResolutionResult {
+  // A fiscal token outranks an alias spelled the same way, and bare FY names
+  // the property only after at/for/in ("at FY"); elsewhere it binds nothing.
+  text = maskNonLocativeFy(maskFiscalTokens(text));
   const pool =
     options?.candidatePool ??
     (options?.includeOnboarding ? store.properties : store.operatingProperties);
@@ -427,6 +431,7 @@ export function resolvePropertiesFromText(
       registerLabel(strippedTheName, 'name', prop);
     }
     for (const alias of prop.aka) {
+      if (isFiscalToken(alias)) continue;
       registerLabel(alias, 'alias', prop);
       const strippedTheAlias = alias.replace(/^the\s+/i, '').trim();
       if (strippedTheAlias !== alias && strippedTheAlias.length >= 3) {

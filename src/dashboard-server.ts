@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import http from "node:http";
+import http, { type Server } from "node:http";
 import path from "node:path";
 import askHandler from "../api/ask.js";
 import stateHandler from "../api/state.js";
@@ -17,7 +17,7 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
   ".csv": "text/csv; charset=utf-8",
 };
 
-export function createDashboardServer(repoRootDir?: string): http.Server {
+export function createDashboardServer(repoRootDir?: string): Server {
   const repoRoot = path.resolve(
     repoRootDir ?? new URL("..", import.meta.url).pathname,
   );

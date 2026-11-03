@@ -61,7 +61,7 @@ export const PROVIDERS = ['xai', 'anthropic', 'openai', 'openrouter', 'ollama', 
 export const BUCKETS = ['lease_start_date', 'lead_created_date'] as const;
 
 const WHAT_IF_FLAGS: readonly FlagSpec[] = [
-  { name: '--cad-rate', value: 'N', summary: 'what-if: USD per Canadian dollar (default 0.73)' },
+  { name: '--cad-rate', value: 'N', summary: 'what-if: USD per Canadian dollar (default: pinned live rate, dated)' },
   { name: '--exclude-notice', summary: 'what-if: count units on notice as not occupied' },
   { name: '--bucket-by', value: 'F', enum: BUCKETS, summary: 'what-if: which date puts a lease in a period' },
   { name: '--beta0', value: 'N', summary: 'what-if: prior cost per signed lease (default 3250)' },

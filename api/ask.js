@@ -1,5 +1,6 @@
 import path from "node:path";
 import { askFlowIqCopilot } from "../src/agent/copilot.ts";
+import { liveCadOverrides, noteCadStatus } from "../src/agent/live-cad.ts";
 import { loadPortfolioStore } from "../src/data/loader.ts";
 
 function parsePolicyOverrides(raw = {}) {
@@ -92,7 +93,11 @@ export default async function handler(req, res) {
         "Which of my buildings is bleeding money on marketing right now, and why?",
     ).trim();
 
-    const policyOverrides = parsePolicyOverrides(body.policy || body);
+    // D-24: the fixed dated CAD rate by default; FLOWIQ_LIVE_FX=1 opts in to the live ECB rate.
+    const live = process.env.FLOWIQ_LIVE_FX !== "1"
+      ? { overrides: parsePolicyOverrides(body.policy || body), status: "fixed" }
+      : await liveCadOverrides(parsePolicyOverrides(body.policy || body));
+    const policyOverrides = live.overrides;
     const store = loadPortfolioStore(repoRoot, policyOverrides);
 
     // Client-supplied apiKey and baseUrl are never read: a public endpoint must
@@ -139,7 +144,8 @@ export default async function handler(req, res) {
       ok: true,
       id: turn.envelope.id,
       question,
-      answer: turn.envelope.answer,
+      answer: noteCadStatus(turn.envelope.answer, live.status),
+      cadRate: { rate: store.policy.cadToUsdRate, date: store.policy.cadRateDate, source: store.policy.cadRateSource, status: live.status },
       result: turn.envelope.result,
       citations: turn.envelope.citations,
       toolCalls: turn.toolCalls,

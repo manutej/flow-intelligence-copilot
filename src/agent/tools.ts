@@ -1,4 +1,5 @@
 import type { CitationId, PortfolioStore } from '../data/schema.ts';
+import { cadRateLine } from '../config/fx-pinned.ts';
 import {
   type DecisionQueryFilter,
   evaluateBudgetDecisionsAndLearn,
@@ -328,7 +329,7 @@ export function buildFlowIqToolDefinitions(
     },
     {
       name: 'query_marketing_spend_and_funnel',
-      description: `Marketing spend, leads, tours and signed leases by source, and what each signed lease cost. A source with spend and no signed leases has no cost per lease (null), never $0. Joins ILS/ad spend (1 CAD = ${store?.policy.cadToUsdRate ?? 0.73} USD, void invoices = $0), deduplicated CRM leads (notes quarantined), and PMS signed leases (bucketed by ${store?.policy.leaseBucketBy ?? 'lease.start_date'}, credited to earliest lead). Computes Cost Per Signed Lease (CPSL), Cost Per Lead (CPL), Cost Per Tour (CPT), apply rate, tour-to-lease conversion, dead-spend pairs, portfolio reallocation math, and data-quality audits across sources (${distinctSources.join(', ')}).`,
+      description: `Marketing spend, leads, tours and signed leases by source, and what each signed lease cost. A source with spend and no signed leases has no cost per lease (null), never $0. Joins ILS/ad spend (${store ? cadRateLine(store.policy) : 'CAD at the dated policy rate'}, void invoices = $0), deduplicated CRM leads (notes quarantined), and PMS signed leases (bucketed by ${store?.policy.leaseBucketBy ?? 'lease.start_date'}, credited to earliest lead). Computes Cost Per Signed Lease (CPSL), Cost Per Lead (CPL), Cost Per Tour (CPT), apply rate, tour-to-lease conversion, dead-spend pairs, portfolio reallocation math, and data-quality audits across sources (${distinctSources.join(', ')}).`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -512,6 +513,12 @@ export function executeAgentTool(
           typeof args.bedrooms === 'number' ? args.bedrooms : undefined,
         bathrooms:
           typeof args.bathrooms === 'number' ? args.bathrooms : undefined,
+        bedroomsMin: typeof args.bedroomsMin === 'number' ? args.bedroomsMin : undefined,
+        bedroomsMax: typeof args.bedroomsMax === 'number' ? args.bedroomsMax : undefined,
+        bathroomsMin: typeof args.bathroomsMin === 'number' ? args.bathroomsMin : undefined,
+        bathroomsMax: typeof args.bathroomsMax === 'number' ? args.bathroomsMax : undefined,
+        rentMin: typeof args.rentMin === 'number' ? args.rentMin : undefined,
+        rentMax: typeof args.rentMax === 'number' ? args.rentMax : undefined,
         sqftMin: typeof args.sqftMin === 'number' ? args.sqftMin : undefined,
         sqftMax: typeof args.sqftMax === 'number' ? args.sqftMax : undefined,
         floorMin: typeof args.floorMin === 'number' ? args.floorMin : undefined,
@@ -521,6 +528,9 @@ export function executeAgentTool(
           typeof args.status === 'string'
             ? (args.status as 'occupied' | 'notice' | 'vacant')
             : undefined,
+        statusIn: Array.isArray(args.statusIn)
+          ? (args.statusIn as Array<'occupied' | 'notice' | 'vacant'>)
+          : undefined,
       });
       return {
         toolName,
@@ -545,6 +555,10 @@ export function executeAgentTool(
           typeof args.bedrooms === 'number' ? args.bedrooms : undefined,
         bathrooms:
           typeof args.bathrooms === 'number' ? args.bathrooms : undefined,
+        bedroomsMin: typeof args.bedroomsMin === 'number' ? args.bedroomsMin : undefined,
+        bedroomsMax: typeof args.bedroomsMax === 'number' ? args.bedroomsMax : undefined,
+        bathroomsMin: typeof args.bathroomsMin === 'number' ? args.bathroomsMin : undefined,
+        bathroomsMax: typeof args.bathroomsMax === 'number' ? args.bathroomsMax : undefined,
         view: typeof args.view === 'string' ? args.view : undefined,
         floorMin: typeof args.floorMin === 'number' ? args.floorMin : undefined,
         floorMax: typeof args.floorMax === 'number' ? args.floorMax : undefined,

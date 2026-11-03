@@ -4,6 +4,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { askFlowIqCopilot } from '../agent/copilot.ts';
+import type { FairHousingSession } from '../domain/fair-housing.ts';
 import { type AgentToolName, executeAgentTool } from '../agent/tools.ts';
 import { type PortfolioPolicyConfig, resolvePolicyConfig } from '../config/rules.ts';
 import { loadPortfolioStore } from '../data/loader.ts';
@@ -17,6 +18,22 @@ import {
   listMcpTools,
 } from './catalog.ts';
 import { validateToolArguments } from './validate.ts';
+
+/**
+ * Tool data as it leaves the server. Any property record, wherever it sits
+ * in a tool's output, is cut to its public fields, so aliases, addresses
+ * and onboarding diagnostics never reach the client.
+ */
+export function publicView(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(publicView);
+  if (value === null || typeof value !== 'object') return value;
+  const o = value as Record<string, unknown>;
+  if ('propertyId' in o && 'onboardingReadiness' in o) {
+    return { propertyId: o.propertyId, name: o.name, neighborhood: o.neighborhood, buildingClass: o.buildingClass, status: o.isOperating ? 'operating' : 'onboarding' };
+  }
+  return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, publicView(v)]));
+}
+
 
 export interface JsonRpcRequest {
   readonly jsonrpc: '2.0';
@@ -37,6 +54,25 @@ export interface JsonRpcResponse {
 }
 
 /** Protocol versions this server speaks, newest first. */
+/**
+ * One shape rule for both transports. A message with no method but with a
+ * result or error is the client answering us: no reply. Anything else that
+ * is not a 2.0 request with a string method is -32600, echoing a readable id.
+ */
+export type IncomingMessage =
+  | { readonly kind: 'request'; readonly request: JsonRpcRequest }
+  | { readonly kind: 'client_response' }
+  | { readonly kind: 'invalid'; readonly id: string | number | null };
+
+export function classifyIncoming(parsed: unknown): IncomingMessage {
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { kind: 'invalid', id: null };
+  const msg = parsed as Record<string, unknown>;
+  const id = typeof msg.id === 'string' || typeof msg.id === 'number' ? msg.id : null;
+  if (!('method' in msg) && ('result' in msg || 'error' in msg)) return { kind: 'client_response' };
+  if (msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') return { kind: 'invalid', id };
+  return { kind: 'request', request: msg as unknown as JsonRpcRequest };
+}
+
 export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const;
 
 /** Every tool only reads the exports; clients can call them without approval prompts. */
@@ -136,12 +172,16 @@ const RESOURCES = [
   },
 ] as const;
 
+/** One MCP connection is one conversation; initialize starts a new one. */
+const stdioSession: FairHousingSession = { refusedEarlier: false };
+
 /**
  * Handles a single JSON-RPC 2.0 MCP request (exported for unit tests and stdio loop).
  * Resolves dataDir relative to `src/data/loader.ts` when `process.cwd()` is outside the repo.
  */
 export async function handleMcpJsonRpcRequest(
   req: JsonRpcRequest,
+  session: FairHousingSession = stdioSession,
 ): Promise<JsonRpcResponse | null> {
   const id = req.id ?? null;
 
@@ -160,6 +200,7 @@ export async function handleMcpJsonRpcRequest(
 
   switch (req.method) {
     case 'initialize': {
+      session.refusedEarlier = false;
       const requested = req.params?.protocolVersion;
       const clientProtocol =
         typeof requested === 'string' &&
@@ -286,7 +327,7 @@ export async function handleMcpJsonRpcRequest(
         const askStore = Object.keys(assumptions).length > 0 ? loadPortfolioStore(undefined, assumptions) : store;
         // Deterministic planner only: no provider option is passed, so no
         // model is called and no key is needed.
-        const turn = await askFlowIqCopilot(question, { store: askStore });
+        const turn = await askFlowIqCopilot(question, { store: askStore, session });
         // "I don't know", a refusal, or a clarifying question is a normal
         // answer, so it comes back as tool text, never as an error.
         const structured = {
@@ -296,6 +337,7 @@ export async function handleMcpJsonRpcRequest(
           result: turn.envelope.result,
           citations: turn.envelope.citations,
           clarificationNeeded: turn.clarificationNeeded,
+          fallbackReason: turn.llmFallbackReason,
           toolCalls: turn.toolCalls.map((tc) => ({
             toolName: tc.toolName,
             args: tc.args,
@@ -333,7 +375,7 @@ export async function handleMcpJsonRpcRequest(
         toolName: trace.toolName,
         summary: trace.outputSummary,
         citations: trace.citations,
-        data: trace.rawOutput,
+        data: publicView(trace.rawOutput),
       };
       return ok({
         content: [
@@ -374,7 +416,13 @@ if (isExecutedDirectly()) {
     }
     let req: JsonRpcRequest;
     try {
-      req = JSON.parse(trimmed) as JsonRpcRequest;
+      const incoming = classifyIncoming(JSON.parse(trimmed));
+      if (incoming.kind === 'client_response') return;
+      if (incoming.kind === 'invalid') {
+        process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: incoming.id, error: { code: -32600, message: 'Invalid Request: jsonrpc must be "2.0" and method a string' } })}\n`);
+        return;
+      }
+      req = incoming.request;
     } catch (err) {
       // Only an unparseable line has no id to echo back.
       const errResp: JsonRpcResponse = {
@@ -396,7 +444,7 @@ if (isExecutedDirectly()) {
     } catch (err) {
       const errResp: JsonRpcResponse = {
         jsonrpc: '2.0',
-        id: req.id ?? null,
+        id: req?.id ?? null,
         error: {
           code: -32603,
           message: err instanceof Error ? err.message : 'Internal error',

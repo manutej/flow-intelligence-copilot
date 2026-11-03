@@ -27,6 +27,10 @@ import {
   resolvePropertiesFromText,
 } from '../src/domain/resolver.ts';
 import { handleMcpJsonRpcRequest } from '../src/mcp/server.ts';
+import { spendUsd, usd, usdRe, round2, cpl, FX } from './fixtures/fx-expect.ts';
+// Every CAD row (P06 and P07 Facebook Ads) sits in a dead pair, so the kit figure moves by the whole CAD delta.
+const DEAD_USD = round2(46599.9 - spendUsd({}, 0.73) + spendUsd({}));
+const YTD_USD = spendUsd({from:'2026-01',to:'2026-09'});
 
 const repoRoot = path.resolve(new URL('..', import.meta.url).pathname);
 const store = loadPortfolioStore(repoRoot);
@@ -41,9 +45,8 @@ describe('FLOW-103 & FLOW-106 · Data Sanitization, Trust Boundaries, and P09 Qu
     assert.equal(p09.propertyId, 'P09');
     assert.equal(p09.actualUnitCount, 0);
     assert.equal(p09.pms, 'AppFolio');
-    assert.ok(
-      p09.decodedEasterEggUrls.includes('join.ormus.solutions/ninth-house'),
-    );
+    assert.equal(p09.withheldAliasCount, 1);
+    assert.doesNotMatch(JSON.stringify(p09), /ormus\.solutions|ninth-house/);
     assert.equal(p09.onboardingReadiness.readyForOperatingPool, false);
     assert.equal(p09.onboardingReadiness.hasUnitsInUnitsCsv, false);
     assert.equal(p09.onboardingReadiness.noBase64TokensInAka, false);
@@ -141,7 +144,7 @@ describe('FLOW-102 · Dead Spend, CAD Conversion, Reallocation, and Live Policy 
     });
     const realloc = mkt.deadSpendReallocation;
     assert.equal(realloc.deadPairs.length, 9);
-    assert.equal(realloc.totalDeadSpendUsd, 46599.9);
+    assert.equal(realloc.totalDeadSpendUsd, DEAD_USD);
     assert.equal(realloc.bestPortfolioPaidSource, 'Apartments.com');
     assert.equal(realloc.bestSourcePortfolioCpslUsd, 2915.86);
     assert.equal(realloc.projectedAdditionalWholeLeases, 15);
@@ -258,13 +261,13 @@ describe('FLOW-105 · Conjugate Gamma-Poisson Outcome Learner & Exact Window Inv
 });
 
 describe('Anti-Hardcoding & Dynamic Ablation + 25-Query Unseen Red-Team Suite', () => {
-  it('pins the rule ablation on dev.jsonl: rules off 3/10, data rules only 8/10, all rules 10/10', async () => {
+  it('pins the rule ablation on dev.jsonl: rules off 4/10, data rules only 9/10, all rules 10/10', async () => {
     const devQuestions = loadQuestionsFile(
       path.join(repoRoot, 'questions', 'dev.jsonl'),
     );
     const ablation = await runDynamicAblation(repoRoot, devQuestions);
-    assert.equal(ablation.v0PassCount, 3);
-    assert.equal(ablation.v1PassCount, 8);
+    assert.equal(ablation.v0PassCount, 4);
+    assert.equal(ablation.v1PassCount, 9);
     assert.equal(ablation.v2PassCount, 10);
   });
 

@@ -1,5 +1,7 @@
 import type { DateWindowSpec } from '../config/rules.ts';
 import type { PortfolioStore } from '../data/schema.ts';
+import { resolvePropertiesFromText } from '../domain/resolver.ts';
+import { isDataWord } from '../domain/vocabulary.ts';
 
 /**
  * Recognition checks that run before the planner commits to an answer.
@@ -31,6 +33,28 @@ function knownLabels(store: PortfolioStore): Set<string> {
   return known;
 }
 
+/** Every word of a property's name, aliases and neighbourhood. */
+function propertyWords(p: PortfolioStore['properties'][number]): Set<string> {
+  return new Set([p.name, ...p.aka, p.neighborhood].flatMap((l) => l.toLowerCase().replace(/^the\s+/, '').split(/\s+/)));
+}
+
+/**
+ * The one property an unknown building phrase most likely means: the only
+ * property whose name or alias holds the phrase's distinctive words (not a
+ * generic building word such as "Park" or "Tower"). "Kedzie Park" points to
+ * Kedzie Works; "Lakeview Tower" points to none.
+ */
+export function partialBuildingMatch(phrase: string, store: PortfolioStore): { propertyId: string; name: string } | null {
+  const words = phrase.toLowerCase().split(/\s+/).filter((w) => w !== 'the' && !BUILDING_SUFFIX_RE.test(w));
+  if (words.length === 0) return null;
+  const nameWords = (p: PortfolioStore['properties'][number]) => new Set([p.name, ...p.aka].flatMap((l) => l.toLowerCase().replace(/^the\s+/, '').split(/\s+/)));
+  const owners = store.properties.filter((p) => words.some((w) => nameWords(p).has(w)));
+  if (owners.length !== 1) return null;
+  // Every distinctive word must be that property's or no property's.
+  if (!words.every((w) => nameWords(owners[0]).has(w) || !store.properties.some((p) => propertyWords(p).has(w)))) return null;
+  return { propertyId: owners[0].propertyId, name: owners[0].name };
+}
+
 /** Returns a building-like proper name that matches no property, alias, or neighborhood. */
 export function findUnknownBuildingReference(
   question: string,
@@ -50,11 +74,111 @@ export function findUnknownBuildingReference(
       .replace(/['’]s$/i, '');
     if (!BUILDING_SUFFIX_RE.test(phrase)) continue;
     if (known.has(phrase.toLowerCase())) continue;
-    // Descriptive combinations of known words ("South Loop Point") are fine;
-    // a word no property uses ("Lakeview Tower") is not.
-    const words = phrase.toLowerCase().split(/\s+/);
-    if (words.every((w) => knownWords.has(w))) continue;
+    // Descriptive combinations of one property's words ("South Loop Point":
+    // its neighbourhood and its name) are fine; a word no property uses
+    // ("Lakeview Tower"), or words of different properties ("Kedzie Park":
+    // a P06 name word and a P05 or P09 neighbourhood word), are not.
+    const words = phrase.toLowerCase().split(/\s+/).filter((w) => w !== 'the');
+    if (words.every((w) => knownWords.has(w)) && store.properties.some((p) => words.every((w) => propertyWords(p).has(w)))) continue;
     return phrase;
+  }
+  return null;
+}
+
+const LOCATIVE_RE =
+  /\b(?:[Aa]t|[Ff]or|[Dd]oes|[Ii]n|[Oo]f|[Ff]rom|[Tt]o|[Aa]bout|[Nn]ear|[Bb]y)\s+(?:[Tt]he\s+)?((?:[A-Z][\w&'.-]*\s+)*[A-Z][\w&'.-]*)/g;
+
+/**
+ * The planner's last check before it scopes a figure: a capitalised place
+ * the question names that resolves to no building. Wider than
+ * findUnknownBuildingReference, which also gates the clarifier's readings:
+ * it reads title case ("At The Clarendon Annex In Q3"), "at <Name>" without
+ * a building suffix ("at Printer Row"), and name words from two different
+ * buildings ("Clarendon Annex"). Any of these would otherwise fall back to
+ * one building or the whole portfolio.
+ */
+export function findUnresolvedPlace(question: string, store: PortfolioStore): string | null {
+  const plain = findUnknownBuildingReference(question, store);
+  if (plain) return plain;
+  if (/\bP\d{2,3}\b/.test(question)) return null;
+  const known = knownLabels(store);
+  const knownWords = new Set([...known].flatMap((label) => label.split(/\s+/)));
+  for (const m of question.matchAll(LOCATIVE_RE)) {
+    const phrase = m[1]
+      .split(/[?.,!;:](?:\s|$)/)[0]
+      .replace(/[?.,!;:]+$/, '')
+      .replace(/['’]s$/i, '')
+      .split(/\s+(?:in|for|at|of|from|to|about|on|during|by|with|over|and|or|vs\.?|versus)\b/i)[0];
+    if (!phrase || known.has(phrase.toLowerCase())) continue;
+    const words = phrase.toLowerCase().split(/\s+/);
+    const owners = words
+      .filter((w) => w !== 'the')
+      .map((w) => store.properties.filter((p) => [p.name, ...p.aka].some((n) => n.toLowerCase().split(/\s+/).includes(w))))
+      .filter((o) => o.length > 0);
+    if (owners.length > 1 && !owners[0].some((p) => owners.every((o) => o.includes(p)))) return phrase;
+    if (BUILDING_SUFFIX_RE.test(phrase)) {
+      if (words.every((w) => knownWords.has(w))) continue;
+      return phrase;
+    }
+    if (!/^at\b/i.test(m[0])) continue;
+    if (words.some((w) => w.length > 1 && !knownWords.has(w) && !isDataWord(store, w))) return phrase;
+  }
+  return findLowerCasePlace(question, store, known, knownWords);
+}
+
+const LOWER_LOCATIVE_RE =
+  /\b(?:at|for|in|of|from|about|near)\s+(?:the\s+)?([\p{L}&'’.-]+(?:\s+[\p{L}&'’.-]+){0,3})/giu;
+const GENERIC_PLACE_WORD = /^(?:the|and|&|buildings?|apartments?|units?|propert(?:y|ies)|communit(?:y|ies)|homes?)$/i;
+const PLACE_STOP_RE =
+  /^(?:in|for|at|of|from|to|about|on|during|by|with|over|and|or|vs\.?|versus|than|per|across|this|last|next|since|between|before|after|as|when|vs)$/i;
+
+/**
+ * Case does not decide whether a phrase names a place: "at printer row"
+ * names one as surely as "at Printer Row". A phrase that uses a building
+ * name word ("row", "annex", "clarendon") but does not resolve to exactly
+ * one property, because a word in it belongs to no property or its name
+ * words belong to different properties, is unresolved.
+ */
+function findLowerCasePlace(
+  question: string,
+  store: PortfolioStore,
+  known: Set<string>,
+  knownWords: Set<string>,
+): string | null {
+  const nameWords = (w: string) =>
+    store.properties.filter((p) => [p.name, ...p.aka].some((n) => n.toLowerCase().split(/\s+/).includes(w)));
+  for (const m of question.normalize('NFKC').matchAll(LOWER_LOCATIVE_RE)) {
+    const raw = m[1].split(/[?,!;:]|\.(?:\s|$)/u)[0].replace(/['’]s\b/gi, '').trim();
+    const words: string[] = [];
+    for (const w of raw.toLowerCase().split(/\s+/)) {
+      if (!w || PLACE_STOP_RE.test(w)) break;
+      words.push(w.replace(/[.'’]+$/u, ''));
+    }
+    if (words.length === 0) continue;
+    const phrase = words.join(' ');
+    if (known.has(phrase)) continue;
+    // A trailing generic noun ("the Lake property") is not part of the name.
+    while (words.length > 1 && GENERIC_PLACE_WORD.test(words[words.length - 1]) && words[words.length - 1] !== 'the') words.pop();
+    // Only a phrase that ends on a word of some building's name reads as a
+    // place; a generic noun ("apartments", "building") or "the" does not.
+    const last = words[words.length - 1];
+    if (GENERIC_PLACE_WORD.test(last) || nameWords(last).length === 0) continue;
+    // The place is the run of words up to that name word; earlier data
+    // words ("occupancy at kedzie works") are not part of it.
+    let start = words.length - 1;
+    while (start > 0 && (knownWords.has(words[start - 1]) || !isDataWord(store, words[start - 1]))) start--;
+    const place = words.slice(start);
+    if (known.has(place.join(' '))) continue;
+    const owners = place.map(nameWords).filter((o) => o.length > 0);
+    if (owners.length > 1 && !owners[0].some((p) => owners.every((o) => o.includes(p)))) return place.join(' ');
+    if (place.some((w) => w.length > 1 && !knownWords.has(w) && !isDataWord(store, w))) return place.join(' ');
+    // Every word fits one building, but the resolver bound none of the
+    // buildings it fits ("the Lake property"): the figure would fall back
+    // to the whole portfolio.
+    if (owners.length > 0) {
+      const matched = new Set(resolvePropertiesFromText(store, question, { includeOnboarding: true }).matched.map((p) => p.propertyId));
+      if (!owners[0].some((p) => matched.has(p.propertyId))) return place.join(' ');
+    }
   }
   return null;
 }
