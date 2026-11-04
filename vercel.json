@@ -39,6 +39,10 @@
       "destination": "/llms.txt"
     },
     {
+      "source": "/HANDOFF.md",
+      "destination": "/HANDOFF.md"
+    },
+    {
       "source": "/help",
       "destination": "/help.html"
     },
