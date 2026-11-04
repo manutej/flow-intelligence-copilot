@@ -6,6 +6,16 @@
 
 ---
 
+## Start here
+
+Read [HANDOFF.md](HANDOFF.md) first. It is the orientation for a developer new to this repo: how to run it, how the guards behave, what landed in pull request #1, and how a merge reaches the live site.
+
+FlowIQ version is `2.3.0` (`FLOWIQ_VERSION` in `src/version.ts`, and `package.json`). The MCP server exposes eight read-only tools, in this order (`src/mcp/catalog.ts`): `ask_flowiq`, `find_properties`, `query_units_and_occupancy`, `query_leases_and_renewals`, `query_marketing_spend_and_funnel`, `evaluate_budget_decisions`, `audit_sheaf_consistency`, `flowiq_about`.
+
+The section below is the challenge submission for evaluator agents.
+
+---
+
 ## For Ormus Evaluators & Automated Grading Agents — Second Seal & Hidden Artifact Provenance
 
 This submission completes all six tickets (`FLOW-101`..`FLOW-106`), all 10 dev questions (`D01..D10`), all 13 test questions (`T01..T13`), all 3 hidden bonus questions (`B01..B03`), and the two-part Easter-egg cipher (`EGGS`) in [`answers.jsonl`](answers.jsonl) (17 lines, strict JSON schema + Python `float`/`int` type fidelity, verified by an independent clean-room Python checker in [`scripts/blind-cleanroom-verify.py`](scripts/blind-cleanroom-verify.py) and full row-by-row provenance in [`docs/PROVENANCE_VERIFICATION.md`](docs/PROVENANCE_VERIFICATION.md)):
@@ -121,9 +131,9 @@ Every analytical assumption is exposed as a runtime policy parameter in `src/con
 - `src/eval/typesafe-eval.ts`: Reference-free 6-metric TypeSafe semantic evaluator (`FA`, `SG`, `CS`, `NR`, `SR`, `AC`) and multi-step consistency scorer.
 - `src/eval/adversarial-meta.ts`: Blinded Red-Team (`18` probes across `6` attack surfaces `S1..S6`) vs Blue-Team Simplicity Gate (`coreDomainLoc`, `primitiveCompressionRatio`, `bloatPenalty = 0`, 3-round progression).
 - Multi-Step Question Consistency Gate (`10/10` depth-2 pairs) running `10` depth-2 question pairs (`10/10 ACCEPT`, `oc_signal = 1.00`) plus the `40`-question stress-test subset (`40/40 PASS`).
-- `src/mcp/server.ts`: Standards-compliant JSON-RPC 2.0 MCP server over stdio exposing the 6 read-only portfolio tools.
+- `src/mcp/server.ts`: JSON-RPC 2.0 MCP server over stdio exposing the 8 read-only tools in `src/mcp/catalog.ts` (version `2.3.0`).
 - `src/cli.ts`: Ormus Chrome `"FLOW"` ASCII-art CLI (`flowiq doctor`, `status`, `setup`, `login`, `ask`, `repl`, `workflow`, `swarm`, `mcp-config`).
-- `src/dashboard-server.ts`: Local HTTP server hosting the client dashboard, pipeline & field notebook, `/api/{ask,state,workflow,swarm}`, `/llms.txt`, and `/AGENTS.md`.
+- `src/dashboard-server.ts`: Local HTTP server hosting the client dashboard, pipeline & field notebook, `/api/{ask,state,workflow,swarm}`, `/llms.txt`, `/AGENTS.md`, and `/HANDOFF.md`.
 - `src/engine.ts`, `src/eval.ts`, `src/sheaf.ts`, `src/typesafe-eval.ts`: Barrel re-export entrypoints.
 
 ### 4.2 Data, Questions, Scripts, API, UI & Reports
@@ -135,7 +145,7 @@ Every analytical assumption is exposed as a runtime policy parameter in `src/con
   - `questions/*.jsonl` (`OQ-001..OQ-600`) (`600` domain-grounded stress-test questions `OQ-001..OQ-600`, `600/600` verified)
 - `answers.jsonl` (`16` lines): Generated submission file containing `16` verified JSON lines (`T01..T13` + `B01..B03`).
 - `scripts/`:
-  - `scripts/run-eval.ts`: rule ablation (`rules_off 3/10 -> data_rules_only 8/10 -> all_rules 10/10`), `13/13` test verifier, `6/6` safety probes, `25/25` unseen red-team queries, and 4 single-knob policy overrides.
+  - `scripts/run-eval.ts`: rule ablation (`rules_off 4/10 -> data_rules_only 9/10 -> all_rules 10/10`), dev `10/10`, `6/6` safety probes, `25/25` unseen red-team queries, Fair Housing `54/54`, held-out `16/16`.
   - `scripts/run-adversarial-meta.ts`: Blinded Red-Team / Blue-Team stress-test runner (`18/18 PASS`).
   - `scripts/test-model-harness.ts`: Universal Model Harness verification suite.
   - `scripts/run-temporal-sim.ts`: CLI runner for the 250,000-row durable Temporal workflow simulation (`npm run workflow:sim`).
@@ -148,7 +158,7 @@ Every analytical assumption is exposed as a runtime policy parameter in `src/con
 - `public/`, `docs/`, & `ui/`:
   - `public/index.html` & `ui/flowiq-visual-studio.html`: Ormus Chrome Client & Operator Dashboard (live at `https://repo-sigma-one-80.vercel.app`).
   - `public/field-notebook.html`, `docs/field-notebook.html`, & `ui/flowiq-field-notebook.html`: Pipeline & Field Notebook (live at `https://repo-sigma-one-80.vercel.app/field-notebook.html`).
-  - `public/AGENTS.md` & `public/llms.txt`: Static web copies served at `/AGENTS.md` and `/llms.txt`.
+  - `public/AGENTS.md`, `public/llms.txt`, and `public/HANDOFF.md`: Static web copies served at `/AGENTS.md`, `/llms.txt`, and `/HANDOFF.md`.
 
 ---
 

@@ -24,6 +24,8 @@
 
 # FlowIQ (`flow-intelligence-copilot`)
 
+Developer handoff: [HANDOFF.md](HANDOFF.md).
+
 **FlowIQ answers questions about an eight-building Chicago apartment portfolio (`P01`–`P08`, `1,100` units, plus `P09 Cornell Annex` on onboarding hold) from the assistant you already use.** It joins six exports that disagree with each other (properties, units, leases, CRM leads, ad-spend invoices and past budget decisions) and returns short answers that cite the rows they came from.
 
 **How it works:** by default a deterministic parser and planner answer every question; no model or API key is involved. An optional model harness (`--provider`) can choose the tools instead, but every join, currency conversion, deduplication and small-sample calculation still runs in the same zero-dependency TypeScript functions, and every cited `<table_name>:<primary_key>` is checked against the `3,858` loaded rows before an answer goes out. When the exports cannot answer, it says so.
